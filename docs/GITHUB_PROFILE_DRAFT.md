@@ -1,34 +1,30 @@
-# GitHub profile README — review before publishing
+# Sane Hajiha | صانع حاجیها 👋
 
-This draft draws on an older user-provided CV. It intentionally excludes phone numbers, referees, birth date, private infrastructure details, unverifiable current employment claims and formal certification claims.
+**IT & Network Infrastructure Manager • Consultant • Security & VoIP Specialist**
 
----
+I manage and advise on enterprise IT infrastructure, communications, network modernization and secure operations. I focus on building dependable systems that are practical to operate, monitor and grow.
 
-# Sane Hajiha 👋
+### What I work on
 
-**Network Infrastructure & Security Engineer | VoIP & Unified Communications | Automation**
+- **Enterprise networking:** Cisco Catalyst, VLAN segmentation, 10GbE/fiber uplinks, MikroTik, Ubiquiti UniFi, secure inter-site networking.
+- **Systems & virtualization:** Windows Server, Active Directory, Linux, VMware vSphere, backup and disaster recovery.
+- **Unified communications:** Asterisk/Issabel, SIP, queue design, VoIP troubleshooting and call center operations.
+- **Security & observability:** network access controls, firewalls, monitoring platforms, incident response and automation.
+- **Engineering:** Python, Docker, software integrations, operational dashboards and open-source tools.
 
-I design, modernize and operate enterprise networking and communications infrastructure, with a focus on reliability, security and operational visibility.
+### Featured project
 
-### Areas of experience
+**[SaneQueue — Live Call Center Operations](https://github.com/SaneHajiha/sanequeue)**
 
-- **Networking:** Cisco switching, network segmentation, VLANs, routing, MikroTik and UniFi wireless.
-- **VoIP:** Asterisk / Issabel, SIP, call centers, monitoring and troubleshooting.
-- **Infrastructure:** Linux, Windows Server, Active Directory, VMware and backup.
-- **Security & monitoring:** VPN, firewalls, access control and ManageEngine monitoring.
-- **Automation:** Python and operational tooling.
+A bilingual Persian/English, role-aware real-time Asterisk / Issabel queue monitoring and supervisor dashboard based on the MIT-licensed QPanel project. Currently in beta development.
 
-### Open source
+### Find me
 
-- **[SaneQueue](https://github.com/SaneHajiha/sanequeue)** — Persian/English Asterisk & Issabel call-center monitoring and supervisor dashboard. Beta development, based on [QPanel](https://github.com/roramirez/qpanel).
-
-### Connect
-
-- 🌐 [Website / Résumé](https://sanehajiha.ir)
-- 💼 [LinkedIn](https://www.linkedin.com/in/sanehajiha)
-
-*Customer data and sensitive enterprise infrastructure are intentionally not shared.*
+- [sanehajiha.ir](https://sanehajiha.ir)
+- [LinkedIn](https://www.linkedin.com/in/sanehajiha)
 
 ---
 
-To use this as a GitHub profile README, create the public repository `SaneHajiha/SaneHajiha` and add its `README.md`. This document itself does not alter account settings.
+> I share reproducible engineering ideas and public software. Internal IP addresses, client information, credentials, and confidential infrastructure details remain private.
+
+_This is a draft for the public profile repository named `SaneHajiha/SaneHajiha`. Publishing it requires creating that repository._
