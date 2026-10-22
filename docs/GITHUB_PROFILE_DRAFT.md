@@ -1,20 +1,34 @@
-# Suggested public GitHub profile README
+# GitHub profile README — review before publishing
 
-> Copy this content into a dedicated repository named **SaneHajiha/SaneHajiha** (profile README), after reviewing it. This file is only a draft and does not change GitHub account settings.
+This draft draws on an older user-provided CV. It intentionally excludes phone numbers, referees, birth date, private infrastructure details, unverifiable current employment claims and formal certification claims.
 
-# Hi, I'm Sane Hajiha 👋
+---
 
-**Network Infrastructure & Security Engineer | VoIP · Automation · Open Source**
+# Sane Hajiha 👋
 
-I design and improve enterprise networks, secure infrastructure and real-time operational tools. My interests include Cisco switching, MikroTik routing/firewalls, UniFi wireless, Linux, virtualization, Asterisk/Issabel, monitoring, automation and practical software engineering.
+**Network Infrastructure & Security Engineer | VoIP & Unified Communications | Automation**
 
-### Building
+I design, modernize and operate enterprise networking and communications infrastructure, with a focus on reliability, security and operational visibility.
 
-- **[SaneQueue](https://github.com/SaneHajiha/sanequeue)** — Persian/English Asterisk & Issabel call-center monitoring and supervisor dashboard, under active development.
+### Areas of experience
+
+- **Networking:** Cisco switching, network segmentation, VLANs, routing, MikroTik and UniFi wireless.
+- **VoIP:** Asterisk / Issabel, SIP, call centers, monitoring and troubleshooting.
+- **Infrastructure:** Linux, Windows Server, Active Directory, VMware and backup.
+- **Security & monitoring:** VPN, firewalls, access control and ManageEngine monitoring.
+- **Automation:** Python and operational tooling.
+
+### Open source
+
+- **[SaneQueue](https://github.com/SaneHajiha/sanequeue)** — Persian/English Asterisk & Issabel call-center monitoring and supervisor dashboard. Beta development, based on [QPanel](https://github.com/roramirez/qpanel).
 
 ### Connect
 
-- [Website / Resume](https://sanehajiha.ir)
-- [LinkedIn](https://www.linkedin.com/in/sanehajiha)
+- 🌐 [Website / Résumé](https://sanehajiha.ir)
+- 💼 [LinkedIn](https://www.linkedin.com/in/sanehajiha)
 
-*The profile focuses on public professional work. Employer-sensitive network diagrams, internal IPs and customer data are intentionally excluded.*
+*Customer data and sensitive enterprise infrastructure are intentionally not shared.*
+
+---
+
+To use this as a GitHub profile README, create the public repository `SaneHajiha/SaneHajiha` and add its `README.md`. This document itself does not alter account settings.
