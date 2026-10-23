@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+<title id="title">SaneQueue — Live Call Center Operations</title><desc id="desc">Blue and teal network-themed SaneQueue project header</desc>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0b172c"/><stop offset=".55" stop-color="#132c43"/><stop offset="1" stop-color="#052d36"/></linearGradient><linearGradient id="accent" x1="0" y1="0" x2="1"><stop stop-color="#29b6ef"/><stop offset="1" stop-color="#23dab6"/></linearGradient><pattern id="grid" width="35" height="35" patternUnits="userSpaceOnUse"><path d="M35 0H0V35" fill="none" stroke="#7ab0d7" stroke-width=".7" opacity=".15"/></pattern></defs>
+<rect width="1200" height="300" rx="22" fill="url(#bg)"/><rect width="1200" height="300" fill="url(#grid)"/>
+<g fill="none" stroke="#20d5bf" opacity=".2" stroke-width="2"><path d="M950 30L1030 80 970 150 1130 235 1190 140"/><path d="M770 210L860 120 950 180 1060 50"/></g>
+<g fill="#32d8cd" opacity=".65"><circle cx="950" cy="30" r="6"/><circle cx="1030" cy="80" r="4"/><circle cx="970" cy="150" r="5"/><circle cx="1130" cy="235" r="8"/><circle cx="1190" cy="140" r="3"/><circle cx="860" cy="120" r="5"/></g>
+<rect x="58" y="83" width="134" height="134" rx="30" fill="url(#accent)" opacity=".95"/>
+<text x="125" y="179" font-family="DejaVu Sans,Arial,sans-serif" text-anchor="middle" font-weight="800" font-size="95" fill="#082235">S</text>
+<text x="230" y="139" fill="#f2f8fc" font-family="DejaVu Sans,Arial,sans-serif" font-size="58" font-weight="700">SaneQueue</text>
+<text x="232" y="184" fill="#a8d5df" font-family="DejaVu Sans,Arial,sans-serif" font-size="25">LIVE CALL CENTER OPERATIONS</text>
+<rect x="231" y="210" width="260" height="38" rx="19" fill="#194c56"/><text x="361" y="235" font-size="19" text-anchor="middle" fill="#69efdb" font-family="DejaVu Sans,Arial,sans-serif">ASTERISK  /  ISSABEL</text>
+</svg>
