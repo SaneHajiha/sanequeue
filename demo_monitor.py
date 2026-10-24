@@ -408,6 +408,12 @@ module.app.config['SANEQUEUE_TEST_CONTROL_GUARD'] = _test_control_guard
 module.app.config['SANEQUEUE_TEST_CONTROLS_STATUS'] = _gate_is_active
 
 @module.app.before_request
+def _server_landing():
+    if SERVER_MODE and request.path in ('/', '/all_queues'):
+        from flask import redirect
+        return redirect('/operations')
+
+@module.app.before_request
 def _secure_local_control_post():
     if request.method != 'POST':
         return
