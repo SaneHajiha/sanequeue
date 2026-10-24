@@ -4,7 +4,7 @@
 
 Persian and English live queue monitoring for Asterisk-based contact centers, built on [QPanel](https://github.com/roramirez/qpanel). MIT licensed.
 
-**2.1.0-beta.18 · monitoring validation release · [راهنمای فارسی](README.fa.md)**
+**2.1.0-beta.19 · monitoring validation release · [راهنمای فارسی](README.fa.md)**
 
 ![English operations dashboard with synthetic demonstration data](docs/images/dashboard-en.png)
 

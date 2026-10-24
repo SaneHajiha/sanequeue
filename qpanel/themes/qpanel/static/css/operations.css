@@ -481,3 +481,12 @@ body.wallboard .wallboard-stage:not(:fullscreen){position:fixed;inset:0;z-index:
 .sq-monitor-shortcuts{display:flex;flex-wrap:wrap;gap:9px;margin:10px 0 19px}
 .sq-monitor-shortcuts button{background:var(--panel,#102a43);border:1px solid var(--line,#35506b);color:inherit;border-radius:11px;padding:10px 13px;cursor:pointer;font-weight:650;font-size:12px}
 .sq-monitor-shortcuts button:hover,.sq-monitor-shortcuts button:focus-visible{border-color:#28a8d8;outline:2px solid #28a8d855;outline-offset:1px}
+
+/* Direct access to every authorized section on small screens. */
+.mobile-view-jump{display:none}
+@media(max-width:760px){
+ .sidebar .mobile-view-jump{display:grid;gap:5px;margin-top:12px;font-size:12px;color:#d9e9fa}
+ .mobile-view-jump select{display:block;width:100%;min-width:0;min-height:44px;font:inherit;font-size:14px;color:#edf6ff;background:#102b46;border:1px solid #426180;border-radius:10px;padding:8px 12px}
+ .mobile-view-jump select:focus-visible{outline:3px solid #62caff;outline-offset:2px}
+ .sidebar nav.sq-full-nav{display:none}
+}

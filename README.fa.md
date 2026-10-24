@@ -2,7 +2,7 @@
 
 مانیتورینگ زندهٔ صف برای مراکز تماس مبتنی بر Asterisk، بر پایهٔ QPanel و با مجوز MIT.
 
-**نسخهٔ 2.1.0-beta.18 · [English](README.md)**
+**نسخهٔ 2.1.0-beta.19 · [English](README.md)**
 
 ![داشبورد فارسی با داده ساختگی](docs/images/dashboard-fa.png)
 

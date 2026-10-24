@@ -8,9 +8,10 @@
 <a class="skip" href="#main">{{ t('رفتن به محتوا','Skip to content') }}</a>
 <aside class="sidebar">
  <a class="brand" href="/operations"><span class="mark">S</span><span><b>{{ t('صانع','SaneQueue') }}</b><small>CONTACT CENTER</small></span></a>
+ <label class="mobile-view-jump">{{ t('رفتن به بخش','Go to section') }}<select id="view-jump" aria-label="{{ t('رفتن به بخش','Go to section') }}"></select></label>
  <p class="nav-caption">{{ t('فضای کاری','WORKSPACE') }}</p>
  <nav aria-label="{{ t('ناوبری اصلی','Main navigation') }}" class="sq-full-nav">
-  <button type="button" class="nav-item active" data-view="live"><span>◈</span>{{ t('مرکز عملیات','Overview') }}</button>
+  <button type="button" class="nav-item active" data-view="live" aria-current="page"><span>◈</span>{{ t('مرکز عملیات','Overview') }}</button>
   <button type="button" class="nav-item" data-view="queues"><span>▦</span>{{ t('صف‌ها','Queues') }}</button>
   <button type="button" class="nav-item" data-view="calls"><span>◔</span>{{ t('تماس‌های جاری','Active calls') }}<b id="calls-count">—</b></button>
   <button type="button" class="nav-item" data-view="waiting"><span>◷</span>{{ t('تماس‌های منتظر','Waiting calls') }}<b id="waiting-nav-count">—</b></button>
