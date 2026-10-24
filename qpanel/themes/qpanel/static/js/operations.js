@@ -443,7 +443,7 @@ $('test-controls-disable').onclick=async()=>{
  const capabilities=[
   ['monitor', t('مانیتورینگ لحظه‌ای صف','Live queue monitoring'),t('دریافت صف، اعضا، SLA و انتظار از AMI','Queue members, SLA and waiting via AMI'),'beta'],
   ['staff',t('Pause، Penalty و عضویت پویا','Pause, penalty and dynamic members'),t('آزمایشی؛ فقط با گیت کنترل و تماس تست','Staged: test queue and control gate only'),'beta'],
-  ['supervision',t('شنود، نجوا و ورود به مکالمه','Listen, whisper, barge'),t('مسیر اولیه موجود؛ هنوز روی تماس واقعی تأیید نشده','Initial path; not verified on real calls'),'beta'],
+  ['supervision',t('شنود، نجوا و ورود به مکالمه','Listen, whisper, barge'),t('اتصال و دریافت صدای کارشناس آزموده شده؛ تأیید کامل مسیر صدا لازم است','Connection and agent audio tested; full audio acceptance still required'),'beta'],
   ['dashboard',t('داشبورد، هشدار، Wallboard و نمودار زنده','Dashboard, alerts, wallboard, live charts'),t('نمودار بر اساس نمونه‌های همین مرورگر','Charts from current browser samples only'),'ready'],
   ['pbx',t('کانال‌های فعال، PJSIP و ParkedCalls','Channels, PJSIP and parked calls'),t('فقط خواندنی؛ با مجوز AMI مناسب','Read-only, optional AMI privileges'),'beta'],
   ['transfer',t('انتقال Blind / Attended و Pickup','Blind/attended transfer and pickup'),t('نیازمند پیاده‌سازی و تست ARI/AMI','Requires new AMI/ARI implementation'),'planned'],

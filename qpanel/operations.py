@@ -321,7 +321,7 @@ def install(app, cfg, backend, get_data, render):
                 except ValueError as exc:
                     return jsonify(error=str(exc)), 409
                 mode = {'spy': 'q', 'whisper': 'qw', 'barge': 'qB'}[action]
-                return ami_action('Originate', {'Channel': destination, 'Application': 'ChanSpy', 'Data': str(target) + ',' + mode, 'Async': 'true'})
+                return ami_action('Originate', {'Channel': destination, 'Application': 'ChanSpy', 'Data': str(target) + ',' + mode, 'Async': 'true', 'Timeout': '60000', 'CallerID': 'SaneQueue <'+destination.split('/',1)[1]+'>'})
             if action in ('add', 'remove', 'penalty'):
                 if not re.match(r'^(SIP|PJSIP|Local)/[A-Za-z0-9_.@/+-]{1,100}$', agent):
                     abort(400)

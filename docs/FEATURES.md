@@ -11,7 +11,7 @@ Status describes implemented behavior, not a promise of universal PBX compatibil
 | Dynamic membership / عضویت پویا | Live tested | Added/removed test supervisor endpoint |
 | Caller priority / اولویت | Live tested | Synthetic internal caller moved to front; actual priority checked |
 | Hangup / قطع تماس | Live tested | Only the synthetic test caller leg ended |
-| Listen/whisper/barge / نظارت صوتی | Beta | ChanSpy request accepted; audio needs manual confirmation |
+| Listen/whisper/barge / نظارت صوتی | Beta | Live ChanSpy connection and agent audio confirmed; directional audio/isolation incomplete |
 | Minimum readiness / حداقل آمادگی | Automated | Per-queue absolute/percentage guard; does not cover external changes |
 | Caller name/number/state / اطلاعات منتظر | Live tested | Queue-scoped details and role masking |
 | Queue alerts / هشدار | Implemented beta | Thresholds, cooldown, optional Bale integration; outbound delivery not tested here |

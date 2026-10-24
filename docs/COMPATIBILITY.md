@@ -9,7 +9,7 @@
 | Issabel 4 | Separate dashboard runtime supported architecturally | Actual host; use a sidecar host if modern Python is unsafe |
 | SIP | Parser, hint resolution and real health inventory | Real SIP agent call/control scenarios |
 | PJSIP / Local | Actual test PBX queues and endpoints | Each site's contexts and unusual endpoint naming |
-| Python 3.11 | Local 221-test pytest suite + Linux deployment | Python 3.10/3.12 CI runs after publication |
+| Python 3.11 | Local 222-test pytest suite + Linux deployment | Python 3.10/3.12 CI runs after publication |
 | Docker | Configuration only | Image build, network and volume ownership validation |
 
 No OS distribution or all-version compatibility guarantee is implied. Capability checks return unsupported/permission errors instead of inventing values. No SIP/PJSIP migration or dialplan change is performed.

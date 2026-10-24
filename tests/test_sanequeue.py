@@ -180,6 +180,24 @@ class AccessTest(unittest.TestCase):
             self.assertEqual(response.status_code,202)
             self.assertTrue(response.get_json()['ok'])
 
+    def test_supervision_modes_use_assigned_phone_and_explicit_caller_id(self):
+        self.login('supervisor')
+        self.module.cfg.config.add_section('supervisor_extensions')
+        self.module.cfg.config.set('supervisor_extensions','supervisor','PJSIP/300')
+        self.fake['sales']['members']['SIP/100']['InCall']='1'
+        for action,mode in [('spy','q'),('whisper','qw'),('barge','qB')]:
+            with self.subTest(action=action), patch.object(self.module.backend,'_connect') as connect:
+                manager=connect.return_value.connection
+                manager._translate_response.return_value={'Response':'Success'}
+                response=self.client.post('/api/control',data={'queue':'sales','agent':'SIP/100','action':action},headers={'X-CSRF-Token':'test-csrf'})
+                self.assertEqual(response.status_code,202)
+                command,fields=manager._write_action.call_args.args
+                self.assertEqual(command,'Originate')
+                self.assertEqual(fields['Channel'],'PJSIP/300')
+                self.assertEqual(fields['Data'],'SIP/100,'+mode)
+                self.assertEqual(fields['CallerID'],'SaneQueue <300>')
+                self.assertEqual(fields['Timeout'],'60000')
+
     def test_ami_rejection_is_reported(self):
         from Asterisk.Manager import ActionFailed
         self.login('supervisor')
