@@ -10,6 +10,7 @@ from .config import QPanelConfig
 from flask_babel import format_timedelta
 from .utils import timedelta_from_field_dict, realname_queue_rename
 from .asterisk import AsteriskAMI
+from Asterisk.Manager import ActionFailed, PermissionDenied, CommunicationError, GoneAwayError, InternalError
 import six
 # In case use Asterisk dont crash with ESL not in system
 try:
@@ -60,8 +61,11 @@ class Backend(object):
     def _get_data_queue_from_backend(self):
         self.connection = self._connect()
         try:
-            return self.connection.queueStatus()
-        except Exception as e:
+            data = self.connection.queueStatus()
+            self.last_error = False
+            return data
+        except (Exception, ActionFailed, PermissionDenied, CommunicationError, GoneAwayError, InternalError) as e:
+            self.last_error = True
             print(str(e))
             return {}
 
@@ -98,7 +102,8 @@ class Backend(object):
         """
         enables = self.config.queue_enables_for_username(user)
         not_enable = list(set(data.keys()) - set(enables))
-        map(data.pop, not_enable)
+        for name in not_enable:
+            data.pop(name, None)
         return data
 
     def parse_fs(self, data):

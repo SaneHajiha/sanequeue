@@ -1,7 +1,7 @@
 import os
 import unittest
 from qpanel import job
-import mock
+from unittest import mock
 from datetime import datetime
 
 

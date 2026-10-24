@@ -1,0 +1,10 @@
+SaneQueue - third-party notices
+
+Parts of this distribution incorporate or derive from QPanel,
+Copyright (c) 2015-2020 Rodrigo Ramírez Norambuena.
+Original license: MIT. See the included LICENSE file.
+The MIT terms require preservation of the original copyright and license
+notice in copies or substantial portions. SaneQueue branding and development
+changes do not remove this obligation.
+
+All newer SaneQueue modules retain their applicable rights separately.

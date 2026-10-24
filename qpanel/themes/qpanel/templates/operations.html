@@ -1,0 +1,339 @@
+{% macro t(fa, en) %}{{ fa if ui_language == 'fa' else en }}{% endmacro %}
+<!doctype html>
+<html lang="{{ ui_language }}" dir="{{ ui_direction }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ t('صانع | مرکز عملیات تماس', 'SaneQueue | Contact center') }}</title>
+<link rel="stylesheet" href="{{ theme_static('css/operations.css') }}?v={{ current_version() }}"></head>
+<body>
+<a class="skip" href="#main">{{ t('رفتن به محتوا','Skip to content') }}</a>
+<aside class="sidebar">
+ <a class="brand" href="/operations"><span class="mark">S</span><span><b>{{ t('صانع','SaneQueue') }}</b><small>CONTACT CENTER</small></span></a>
+ <p class="nav-caption">{{ t('فضای کاری','WORKSPACE') }}</p>
+ <nav aria-label="{{ t('ناوبری اصلی','Main navigation') }}" class="sq-full-nav">
+  <button type="button" class="nav-item active" data-view="live"><span>◈</span>{{ t('مرکز عملیات','Overview') }}</button>
+  <button type="button" class="nav-item" data-view="queues"><span>▦</span>{{ t('صف‌ها','Queues') }}</button>
+  <button type="button" class="nav-item" data-view="calls"><span>◔</span>{{ t('تماس‌های جاری','Active calls') }}<b id="calls-count">—</b></button>
+  <button type="button" class="nav-item" data-view="waiting"><span>◷</span>{{ t('تماس‌های منتظر','Waiting calls') }}<b id="waiting-nav-count">—</b></button>
+  <button type="button" class="nav-item" data-view="agents"><span>♙</span>{{ t('کارشناسان','Agents') }}<b id="agent-count">—</b></button>
+  <button type="button" class="nav-item" data-view="presence"><span>☎</span>{{ t('داخلی‌ها و حضور','Extensions & presence') }}</button>
+  <button type="button" class="nav-item" data-view="pbx"><span>◫</span>{{ t('سلامت و داخلی‌های PBX','PBX health') }}</button>
+  <button type="button" class="nav-item" data-view="features"><span>✦</span>{{ t('امکانات و توسعه','Capabilities') }}</button>
+  <button type="button" class="nav-item" data-view="control"><span>⌁</span>{{ t('کنترل تماس','Call controls') }}</button>
+  <button type="button" class="nav-item" data-view="wallboard"><span>▣</span>{{ t('دیوار نمایش','Wallboard') }}</button>
+  <button type="button" class="nav-item" data-view="alerts"><span>♢</span>{{ t('هشدارها','Alerts') }}<b id="alerts-nav-count">—</b></button>
+  {% if user_role in ('admin','supervisor') %}<button type="button" class="nav-item" data-view="audit"><span>≡</span>{{ t('ثبت عملیات','Audit trail') }}</button>{% endif %}
+  {% if user_role == 'admin' %}
+  <p class="nav-caption">{{ t('مدیریت','ADMIN') }}</p>
+  <button type="button" class="nav-item" data-view="policies"><span>⚖</span>{{ t('قوانین صف و دسترسی','Queue policies & access') }}</button>
+  <button type="button" class="nav-item" data-view="users"><span>♧</span>{{ t('کاربران و دسترسی‌ها','Users & permissions') }}</button>
+  <button type="button" class="nav-item" data-view="settings"><span>⚙</span>{{ t('اتصال AMI و تنظیمات','AMI & settings') }}</button>
+  {% endif %}
+ <button type="button" class="nav-item" data-view="shifts"><span>◷</span>{{ t('برنامه شیفت','Shift planning') }}</button>
+ <button type="button" class="nav-item" data-view="directory"><span>▤</span>{{ t('دفترچه تلفن','Directory') }}</button>
+ </nav>
+ <div class="sidebar-note"><span class="pulse"></span> {{ t('همراه تیم پاسخ‌گویی شما','Your team, in focus') }}<p>{{ t('همه امکانات مانیتورینگ و مدیریتی در دسترس است.','All monitoring and management views remain accessible.') }}</p></div>
+ <div class="sidebar-foot">SaneQueue <span>{{ current_version() }}</span><small>Contact center monitoring</small></div>
+</aside>
+<div class="workspace" data-product-edition="2.1.0-beta.17">
+ <header class="topbar"><div><span class="breadcrumb">{{ t('مرکز تماس','Contact center') }}</span><span class="separator">/</span><b id="view-title">{{ t('مرکز عملیات','Overview') }}</b></div>
+ <div class="top-actions"><span class="logged-user">{{ ops_config.logged_in_user }}{% if ops_config.assigned_phone %} · <bdi dir="ltr">{{ ops_config.assigned_phone }}</bdi>{% endif %}</span><time id="clock"></time><button id="theme-toggle" title="{{ t('تغییر پوسته','Toggle theme') }}" aria-label="{{ t('تغییر پوسته','Toggle theme') }}">◐</button><button id="language-toggle">{{ 'EN' if ui_language == 'fa' else 'فا' }}</button>{% if has_users() %}<a href="{{ url_for('logout') }}">{{ t('خروج','Sign out') }}</a>{% endif %}<span class="avatar">S</span></div></header>
+ <main id="main">
+ <div class="command-strip"><div class="command-dot"></div><span>{{ t('SaneQueue · مرکز عملیات زنده','SaneQueue · Live operations') }}</span><span class="command-spacer"></span><kbd>/</kbd><small>{{ t('جست‌وجو','Search') }}</small><kbd>R</kbd><small>{{ t('بازخوانی','Refresh') }}</small><span class="command-version">v{{ current_version() }}</span></div>
+ <section class="page-heading"><div><p class="eyebrow">{{ t('دید روشن، پاسخ بهتر','CLARITY FOR EVERY CALL') }}</p><h1>{{ t('نبض مرکز تماس شما','Your contact center, live') }}</h1><p class="muted">{{ t('وضعیت پاسخ‌گویی و سلامت صف‌ها را همین لحظه دنبال کنید.','A clear view of your queues and the people behind every call.') }}</p></div><div class="heading-actions"><span id="connection" class="badge pending" role="status" aria-live="polite">{{ t('در حال اتصال…','Connecting…') }}</span><button id="refresh">↻ {{ t('به‌روزرسانی','Refresh') }}</button></div></section>
+ <div id="error" class="notice danger" role="alert" hidden></div>
+ <section class="toolbar" aria-label="{{ t('فیلترها','Filters') }}"><label class="search"><span>⌕</span><input id="search" type="search" placeholder="{{ t('جست‌وجوی صف یا کارشناس…','Search queues or agents…') }}" aria-label="{{ t('جست‌وجو','Search') }}"></label><label>{{ t('صف','Queue') }} <select id="queue-filter"><option value="">{{ t('همه صف‌ها','All queues') }}</option></select></label><label>{{ t('هشدار انتظار','Wait alert') }} <input id="threshold" type="number" min="5" max="3600" step="5" value="{{ ops_config.wait_threshold }}"> {{ t('ثانیه','sec') }}</label><button id="wallboard" title="Wallboard / Escape">⛶ {{ t('نمای دیواری','Wallboard') }}</button></section>
+ <div class="monitor-options"><button id="sound-toggle" aria-pressed="false">{{ t('هشدار صوتی: خاموش','Sound alerts: off') }}</button><label>{{ t('هشدار تعداد منتظر','Waiting count alert') }} <input id="waiting-threshold" type="number" min="1" max="1000" value="5"></label><label>{{ t('هشدار استراحت (دقیقه)','Pause alert (min)') }} <input id="pause-threshold" type="number" min="1" max="480" value="15"></label><span id="staffing-info" class="muted"></span></div>
+ <section id="live-view" class="view">
+  <div class="section-label"><h2>{{ t('در یک نگاه','At a glance') }}</h2><span>{{ t('شمارنده‌ها از آخرین بازنشانی صف','Counters since last queue reset') }} · <span id="updated">—</span></span></div>
+  <div id="metrics" class="metrics" aria-live="polite"></div>
+
+  <div class="reference-three-panel" role="region" aria-label="{{ t('داشبورد صف و انتظار و کارشناسان','Queue, waiting and agent dashboard') }}">
+   <section class="panel ref-queues"><div class="panel-heading"><div><h2>{{ t('وضعیت صف‌ها','Queue status') }}</h2><p>{{ t('درصد آمادگی و ظرفیت لحظه‌ای','Readiness percentage and live capacity') }}</p></div><span class="tag" id="queue-count">—</span></div><div id="queue-cards" class="queue-cards"></div></section>
+   <section class="panel ref-waiting"><div class="panel-heading"><div><h2>{{ t('تماس‌های منتظر','Waiting calls') }}</h2><p>{{ t('جایگاه، زمان انتظار و صف','Position, wait time and queue') }}</p></div><span class="tag waiting-count-chip" id="waiting-count">—</span></div><div class="table-wrap"><table class="compact-table"><thead><tr><th>{{ t('تماس‌گیرنده','Caller') }}</th><th>{{ t('صف','Queue') }}</th><th>{{ t('ترانک ورودی','Ingress trunk') }}</th><th>{{ t('موقعیت','Position') }}</th><th>{{ t('انتظار','Wait') }}</th><th>{{ t('اولویت','Priority') }}</th></tr></thead><tbody id="call-rows"></tbody></table></div></section>
+   <section class="panel ref-agents dashboard-team"><div class="panel-heading"><div><h2>{{ t('کارشناسان','Agents') }}</h2><p>{{ t('وضعیت آنلاین و حضور در صف','Availability and queue membership') }}</p></div><button class="subtle-link" data-open="agents">{{ t('همه','All') }} ↗</button></div><div class="agent-filter-summary" id="overview-agent-totals">—</div><div id="overview-agent-list" class="dashboard-agent-list"></div></section>
+  </div>
+  <div class="dashboard-bottom">
+   <section class="panel ref-active"><div class="panel-heading"><div><h2>{{ t('تماس‌های جاری','Current calls') }}</h2><p>{{ t('عضویت‌های درگیر مکالمه یا زنگ؛ معادل تعداد تماس یکتا نیست','Busy/ringing memberships, not unique calls') }}</p></div><span class="tag" id="dashboard-active-count">—</span></div><div class="table-wrap"><table class="compact-table"><thead><tr><th>{{ t('کارشناس','Agent') }}</th><th>{{ t('صف','Queue') }}</th><th>{{ t('وضعیت','State') }}</th><th>{{ t('مدت','Duration') }}</th></tr></thead><tbody id="dashboard-active-rows"></tbody></table></div></section>
+   <section class="panel action-overview"><div class="panel-heading"><div><h2>{{ t('عملیات سریع','Quick operations') }}</h2><p>{{ t('پیش از ارسال دستور، عضو یا تماس آزمایشی را انتخاب کن','Select a verified test target first') }}</p></div></div><div class="quick-grid">
+    <button data-open="calls"><span>◉</span>{{ t('شنود','Listen') }}</button>
+    <button data-open="calls"><span>◎</span>{{ t('نجوا','Whisper') }}</button>
+    <button data-open="calls"><span>♙</span>{{ t('ورود به مکالمه','Barge') }}</button>
+    <button data-open="control"><span>⇄</span>{{ t('مرکز کنترل','Controls') }}</button>
+    <button data-open="waiting"><span>⌁</span>{{ t('انتظار','Waiting') }}</button>
+    <button data-open="agents"><span>Ⅱ</span>{{ t('توقف/ادامه','Pause/Resume') }}</button>
+    <button data-open="wallboard"><span>▣</span>{{ t('Wallboard','Wallboard') }}</button>
+    <button data-open="pbx"><span>◫</span>{{ t('سلامت PBX','PBX health') }}</button>
+   </div><p class="quick-note">{{ t('وضعیت واقعی AMI و فعال بودن موقت کنترل قبل از هر فرمان بررسی می‌شود.','Live AMI state and temporary control authorization are checked before any command.') }}</p></section>
+  </div>
+  <section class="panel sq-journey-panel"><div class="panel-heading"><div><h2>{{ t('تماس‌های انتقال‌یافته','Transferred calls') }}</h2><p>{{ t('تماس‌های مرتبط با صف، حتی پس از خروج از صف','Queue-related calls, even after transfer') }}</p></div><button class="subtle-link" type="button" data-open="calls">{{ t('تایم‌لاین کامل','Full journey') }} ↗</button></div><div id="dashboard-journey-cards" class="sq-journey-list compact" aria-live="polite"></div></section>
+  <section class="panel ref-alerts"><div class="panel-heading"><div><h2>{{ t('هشدارهای عملیاتی','Operational alerts') }}</h2><p>{{ t('فقط صف‌های دارای عضویت یا تماس بررسی می‌شوند','Only active/configured queues trigger staffing alerts') }}</p></div><button type="button" data-open="alerts" class="subtle-link">{{ t('نمایش همه','View all') }} ↗</button></div><div id="alerts" class="ref-alert-items"></div><div class="legend"><span><i class="dot ready"></i>{{ t('آماده','Ready') }}</span><span><i class="dot busy"></i>{{ t('مشغول','Busy') }}</span><span><i class="dot paused"></i>{{ t('استراحت','Paused') }}</span><span><i class="dot offline"></i>{{ t('خارج از دسترس','Offline') }}</span></div></section>
+  <div class="insights-strip"><div class="source-caption"><span class="soft-dot"></span><b>{{ t('نمودارهای زنده','Live charts') }}</b><small>{{ t('از نمونه‌های مشاهده‌شده توسط همین مرورگر، بدون داده تاریخی ساختگی','Only browser-observed samples, no fabricated historical data') }}</small></div><button type="button" class="subtle-link" data-open="pbx">{{ t('سلامت مرکز تلفن','PBX health') }} ↗</button></div>
+  <section class="realtime-graphs" aria-label="{{ t('نمودارهای زنده','Live charts') }}">
+    <article class="panel trend-panel"><div class="panel-heading"><div><h2>{{ t('روند تماس‌های منتظر','Waiting trend') }}</h2><p>{{ t('از لحظه بازشدن صفحه','From page opening') }} · <span id="trend-points">—</span></p></div><span class="live-chip">LIVE</span></div><div id="trend-wait" class="trend-svg"></div><div class="chart-legend"><span><i class="dot busy"></i>{{ t('تعداد منتظر','Waiting') }}</span><span id="trend-time-label">—</span></div></article>
+    <article class="panel trend-panel"><div class="panel-heading"><div><h2>{{ t('ظرفیت کارشناسان','Agent capacity') }}</h2><p>{{ t('آماده / مشغول / استراحت / آفلاین','Ready / busy / paused / offline') }}</p></div></div><div class="capacity-chart"><div id="capacity-donut" class="donut"><span id="capacity-donut-label">—</span></div><div id="capacity-counts" class="capacity-stat-lines"></div></div></article>
+    <article class="panel trend-panel"><div class="panel-heading"><div><h2>{{ t('روند ظرفیت پاسخ‌گویی','Ready agents trend') }}</h2><p>{{ t('تغییرات کوتاه‌مدت و بدون ذخیره تاریخچه','Temporary samples; no history saved') }}</p></div><span class="live-chip">LIVE</span></div><div id="trend-ready" class="trend-svg"></div><div class="chart-legend"><span><i class="dot ready"></i>{{ t('اعضای آماده','Ready') }}</span><span>{{ t('حداکثر ۶۰ نمونه','Up to 60 points') }}</span></div></article>
+  </section>
+ </section>
+ <section id="queues-view" class="view" hidden>
+  <div class="detail-hero detail-hero--queues" data-detail-view="queues">
+    <div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol" aria-hidden="true">◫</span><div><span class="hero-kicker">SANEQUEUE / LIVE OPERATIONS</span><h2>{{ t('فرماندهی صف‌ها','Queue command center') }}</h2><p>{{ t('جریان تماس‌ها، ظرفیت پاسخ‌گویی و صف‌های نیازمند توجه','Observe backlog, capacity and queues needing attention') }}</p></div></div><span class="source-pill" data-source-label>{{ t('در حال بررسی داده','Checking source') }}</span></div>
+    <div class="detail-hero-kpis" aria-live="polite"><div class="page-metric"><small>{{ t('صف‌های مجاز','Queues') }}</small><strong id="queues-score-0">—</strong></div><div class="page-metric"><small>{{ t('تماس منتظر','Waiting') }}</small><strong id="queues-score-1">—</strong></div><div class="page-metric"><small>{{ t('کارشناس آماده','Ready members') }}</small><strong id="queues-score-2">—</strong></div><div class="page-metric"><small>{{ t('صف بدون ظرفیت','No ready staff') }}</small><strong id="queues-score-3">—</strong></div></div>
+  </div>
+
+ <div class="sq-monitor-shortcuts" aria-label="{{ t('بخش‌های مکمل مانیتورینگ','Additional monitoring panels') }}">
+  <button type="button" data-open="calls">◉ {{ t('تماس‌های جاری','Active calls') }}</button>
+  <button type="button" data-open="waiting">◷ {{ t('تماس‌های منتظر و شماره‌ها','Waiting callers') }}</button>
+  <button type="button" data-open="presence">☎ {{ t('داخلی‌ها و حضور','Extensions & presence') }}</button>
+  <button type="button" data-open="pbx">◫ {{ t('سلامت PBX','PBX health') }}</button>
+  <button type="button" data-open="wallboard">▣ {{ t('وال‌برد','Wallboard') }}</button>
+ </div>
+ <div class="section-label"><h2>{{ t('کنترل وضعیت صف‌ها','Queue health & capacity') }}</h2><span>{{ t('فقط اطلاعات لحظه‌ای — بدون گزارش تاریخی','Live operational state · no historical reports') }}</span></div>
+ <div class="detail-section-head"><h3>{{ t("مقایسه صف‌ها","Queue comparison") }}</h3><p>{{ t("عرض نوار نسبت به بیشترین مقدار همین لحظه است","Bars scale against the highest current queue value") }}</p></div><div id="queue-comparison" class="queue-comparison" aria-live="polite"></div>
+<div id="queue-focus-cards" class="queue-focus-grid" aria-live="polite"></div>
+ <section class="panel sq-journey-panel"><div class="panel-heading"><div><h2>{{ t('مسیر تماس و انتقال‌ها','Call journeys & transfers') }}</h2><p>{{ t('تماس‌های صف پس از انتقال هم تا پایان قابل پیگیری می‌مانند؛ رویدادها فقط از زمان اتصال شنودگر ثبت می‌شوند.','Queue calls remain visible after transfer; events are observed only after listener connects.') }}</p></div><span id="queue-journey-status" class="tag">—</span></div><div id="queue-journey-cards" class="sq-journey-list" aria-live="polite"></div><p class="muted">{{ t('نمای کامل تماس‌های جاری و انتظار از همین بخش قابل دسترسی است.','All current calls and waiting lists remain accessible.') }} <button class="subtle-link" type="button" data-open="calls">{{ t('تماس‌های جاری و منتظر','Active and waiting calls') }} ↗</button></p></section>
+
+ <section class="panel explainer"><div class="panel-heading"><div><h2>{{ t('راهنمای ظرفیت صف','How queue capacity works') }}</h2><p>{{ t('شمارش اعضای هر صف مستقل است؛ یک کارشناس ممکن است عضو چند صف باشد.','Queue membership counts are independent; agents can belong to multiple queues.') }}</p></div></div><div class="explainer-body"><span><i class="dot ready"></i>{{ t('آماده: قابل فراخوانی','Ready: can take a call') }}</span><span><i class="dot busy"></i>{{ t('مشغول: در مکالمه یا زنگ','Busy: talking or ringing') }}</span><span><i class="dot paused"></i>{{ t('استراحت: موقتاً خارج از صف','Paused: temporarily unavailable') }}</span><span><i class="dot offline"></i>{{ t('خارج از دسترس: دستگاه یا عضو نامعتبر','Unavailable: disconnected or invalid') }}</span></div></section>
+</section>
+<section id="calls-view" class="view" hidden>
+  <div class="detail-hero detail-hero--calls" data-detail-view="calls">
+    <div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol" aria-hidden="true">◉</span><div><span class="hero-kicker">SANEQUEUE / LIVE OPERATIONS</span><h2>{{ t('مرکز تماس‌های فعال','Active call center') }}</h2><p>{{ t('وضعیت کانال و اعضای در مکالمه؛ تماس‌های یکتا ممکن است کمتر باشند','Queue memberships in call; not necessarily distinct calls') }}</p></div></div><span class="source-pill" data-source-label>{{ t('در حال بررسی داده','Checking source') }}</span></div>
+    <div class="detail-hero-kpis" aria-live="polite"><div class="page-metric"><small>{{ t('مشغول','Busy memberships') }}</small><strong id="calls-score-0">—</strong></div><div class="page-metric"><small>{{ t('زنگ‌خور','Ringing') }}</small><strong id="calls-score-1">—</strong></div><div class="page-metric"><small>{{ t('کانال تأییدشده','Enriched channels') }}</small><strong id="calls-score-2">—</strong></div><div class="page-metric"><small>{{ t('آماده','Ready memberships') }}</small><strong id="calls-score-3">—</strong></div></div>
+  </div>
+
+ <div class="call-primer"><span class="call-primer-symbol">◉</span><p>{{ t("برای شنود یا نجوا ابتدا یک مکالمه آزمایشی فعال و داخلی سرپرست مجاز لازم است. وضعیت مشغول همیشه به معنی یک تماس یکتا نیست.","Supervisor listen/whisper needs an active consenting test call and allowed supervisor extension. Busy membership is not a unique call count.") }}</p></div>
+<section class="panel"><div class="panel-heading"><div><h2>{{ t('تماس‌های در جریان','Calls in progress') }}</h2><p>{{ t('براساس وضعیت اعضای صف و اطلاعات کانال‌های AMI در صورت وجود مجوز','Queue-member state, enriched with AMI channel information when permitted') }}</p></div><span class="tag" id="active-count">—</span></div><div class="table-wrap"><table><thead><tr><th>{{ t('کارشناس','Agent') }}</th><th>{{ t('صف','Queue') }}</th><th>{{ t('وضعیت تماس','Call state') }}</th><th>{{ t('طرف تماس','Connected party') }}</th><th>{{ t('زمان کانال','Channel age') }}</th><th>{{ t('کنترل سرپرست','Supervisor') }}</th></tr></thead><tbody id="active-call-rows"></tbody></table></div></section>
+ <section class="panel"><div class="panel-heading"><div><h2>{{ t('صف انتظار زنده','Waiting room') }}</h2><p>{{ t('صف، موقعیت، اولویت و زمان انتظار به‌روز','Real-time queue, position, priority and wait time') }}</p></div><span class="tag" id="waiting-room-count">—</span></div><div class="table-wrap"><table><thead><tr><th>{{ t('تماس‌گیرنده','Caller') }}</th><th>{{ t('صف','Queue') }}</th><th>{{ t('ترانک ورودی','Ingress trunk') }}</th><th>{{ t('موقعیت','Position') }}</th><th>{{ t('زمان انتظار','Wait time') }}</th><th>{{ t('عملیات','Actions') }}</th></tr></thead><tbody id="waiting-room-rows"></tbody></table></div></section>
+
+<section class="panel sq-journey-panel"><div class="panel-heading"><div><h2>{{ t('ردیابی تماس از ترانک تا پایان','Trace calls from ingress to end') }}</h2><p>{{ t('مراحل تماس و انتقال Blind/Attended با Linkedid و رویدادهای Bridge دنبال می‌شود؛ رویداد از‌دست‌رفته ممکن است تاریخچه را ناقص کند.','Blind/attended transfer lifecycle from AMI Linkedid and Bridge events; missed events may produce gaps.') }}</p></div><span id="call-journey-status" class="tag">—</span></div><div id="call-journey-cards" class="sq-journey-list" aria-live="polite"></div></section>
+</section>
+<section id="agents-view" class="view" hidden>
+  <div class="detail-hero detail-hero--agents" data-detail-view="agents">
+    <div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol" aria-hidden="true">♙</span><div><span class="hero-kicker">SANEQUEUE / LIVE OPERATIONS</span><h2>{{ t('عملیات تیم پاسخ‌گویی','Agent operations') }}</h2><p>{{ t('آمادگی، مکالمه، توقف و خروج از دسترس به تفکیک عضویت صف','Ready, busy, paused and offline by queue membership') }}</p></div></div><span class="source-pill" data-source-label>{{ t('در حال بررسی داده','Checking source') }}</span></div>
+    <div class="detail-hero-kpis" aria-live="polite"><div class="page-metric"><small>{{ t('آماده','Ready') }}</small><strong id="agents-score-0">—</strong></div><div class="page-metric"><small>{{ t('مشغول','Busy') }}</small><strong id="agents-score-1">—</strong></div><div class="page-metric"><small>{{ t('استراحت','Paused') }}</small><strong id="agents-score-2">—</strong></div><div class="page-metric"><small>{{ t('خارج از دسترس','Offline') }}</small><strong id="agents-score-3">—</strong></div></div>
+  </div>
+<div class="detail-section-head"><h3>{{ t("نقشه حضور کارشناسان","Agent presence map") }}</h3><p>{{ t("هر عضویت در صف یک کارت جداست","One card per queue membership") }}</p></div><div id="agent-presence-tiles" class="agent-presence-tiles"></div>
+
+<section class="panel"><div class="panel-heading"><div><h2>{{ t('تیم پاسخ‌گویی','Your response team') }}</h2><p>{{ t('وضعیت هر عضویت کارشناس در صف؛ ممکن است یک نفر در چند صف باشد.','One row per queue membership; an agent may appear in multiple queues.') }}</p></div><select id="status-filter" aria-label="{{ t('فیلتر وضعیت','Status filter') }}"><option value="">{{ t('همه وضعیت‌ها','All statuses') }}</option><option value="ready">{{ t('آماده','Ready') }}</option><option value="busy">{{ t('مشغول','Busy') }}</option><option value="paused">{{ t('استراحت','Paused') }}</option><option value="offline">{{ t('خارج از دسترس','Unavailable') }}</option></select></div><div class="table-wrap"><table><thead><tr><th>{{ t('کارشناس','Agent') }}</th><th>{{ t('صف','Queue') }}</th><th>{{ t('وضعیت','Status') }}</th><th>{{ t('پاسخ‌داده','Answered') }}</th><th>{{ t('آخرین تماس','Last call') }}</th><th>{{ t('عملیات','Actions') }}</th></tr></thead><tbody id="agent-rows"></tbody></table></div></section><p class="muted">{{ t('توقف و ادامه کار فقط برای نقش سرپرست یا مدیر فعال است.','Pause and resume require the supervisor or admin role.') }}</p></section>
+ <section id="audit-view" class="view" hidden>
+  <div class="detail-hero detail-hero--audit" data-detail-view="audit">
+    <div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol" aria-hidden="true">≡</span><div><span class="hero-kicker">SANEQUEUE / LIVE OPERATIONS</span><h2>{{ t('ثبت کنترل‌های سرپرست','Supervisor audit') }}</h2><p>{{ t('ثبت عملیات مجاز و ردشده؛ این بخش گزارش عملکرد تاریخی تماس نیست','Action activity only; not historical call reporting') }}</p></div></div><span class="source-pill" data-source-label>{{ t('در حال بررسی داده','Checking source') }}</span></div>
+    <div class="detail-hero-kpis" aria-live="polite"><div class="page-metric"><small>{{ t('سطح دسترسی','Current role') }}</small><strong id="audit-score-0">—</strong></div><div class="page-metric"><small>{{ t('دروازه کنترل','Action gate') }}</small><strong id="audit-score-1">—</strong></div><div class="page-metric"><small>{{ t('صف تست','Test queue') }}</small><strong id="audit-score-2">—</strong></div><div class="page-metric"><small>{{ t('آخرین به‌روزرسانی','Last update') }}</small><strong id="audit-score-3">—</strong></div></div>
+  </div>
+<section class="panel"><div class="panel-heading"><div><h2>{{ t('ردپای عملیات سرپرستان','Supervisor audit trail') }}</h2><p>{{ t('آخرین ۱۰۰ رویداد مجاز؛ شامل عملیات موفق و ناموفق','Last 100 accessible events, including failed actions') }}</p></div><button id="audit-refresh">{{ t('به‌روزرسانی','Refresh') }}</button></div><div class="table-wrap"><table><thead><tr><th>{{ t('زمان','Time') }}</th><th>{{ t('کاربر','User') }}</th><th>{{ t('عملیات','Action') }}</th><th>{{ t('صف','Queue') }}</th><th>{{ t('نتیجه','Result') }}</th></tr></thead><tbody id="audit-rows"></tbody></table></div></section></section>
+<section id="waiting-view" class="view" hidden>
+  <div class="detail-hero detail-hero--waiting" data-detail-view="waiting">
+    <div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol" aria-hidden="true">◷</span><div><span class="hero-kicker">SANEQUEUE / LIVE OPERATIONS</span><h2>{{ t('صف انتظار لحظه‌ای','Waiting room') }}</h2><p>{{ t('تماس‌های قابل مشاهده و اولویت بر اساس داده ارسالی Asterisk','Visible calls and priorities received from Asterisk') }}</p></div></div><span class="source-pill" data-source-label>{{ t('در حال بررسی داده','Checking source') }}</span></div>
+    <div class="detail-hero-kpis" aria-live="polite"><div class="page-metric"><small>{{ t('در انتظار','Waiting') }}</small><strong id="waiting-score-0">—</strong></div><div class="page-metric"><small>{{ t('بیشترین انتظار','Longest wait') }}</small><strong id="waiting-score-1">—</strong></div><div class="page-metric"><small>{{ t('صف‌های دارای انتظار','Queues with backlog') }}</small><strong id="waiting-score-2">—</strong></div><div class="page-metric"><small>{{ t('عبور از آستانه','Over threshold') }}</small><strong id="waiting-score-3">—</strong></div></div>
+  </div>
+
+ <div id="waiting-spotlight" class="waiting-spotlight" aria-live="polite"></div>
+<section class="panel"><div class="panel-heading"><div><h2>{{ t('صف انتظار لحظه‌ای','Live waiting room') }}</h2><p>{{ t('جایگاه، زمان انتظار و اولویت تماس در صف‌های مجاز','Position, wait time, and priority in authorized queues') }}</p></div><span class="tag" id="waiting-page-count">—</span></div><div class="table-wrap"><table><thead><tr><th>{{ t('تماس‌گیرنده','Caller') }}</th><th>{{ t('صف','Queue') }}</th><th>{{ t('ترانک ورودی','Ingress trunk') }}</th><th>{{ t('نوبت','Position') }}</th><th>{{ t('انتظار','Wait') }}</th><th>{{ t('عملیات آزمایشی','Test actions') }}</th></tr></thead><tbody id="waiting-only-rows"></tbody></table></div></section>
+</section>
+<section id="presence-view" class="view" hidden>
+  <div class="detail-hero detail-hero--presence" data-detail-view="presence">
+    <div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol" aria-hidden="true">☎</span><div><span class="hero-kicker">SANEQUEUE / LIVE OPERATIONS</span><h2>{{ t('وضعیت حضور و داخلی‌ها','Presence workspace') }}</h2><p>{{ t('در این فاز فقط اعضای صف و StateInterface نشان داده می‌شوند','Only queue members and StateInterface in current beta') }}</p></div></div><span class="source-pill" data-source-label>{{ t('در حال بررسی داده','Checking source') }}</span></div>
+    <div class="detail-hero-kpis" aria-live="polite"><div class="page-metric"><small>{{ t('اعضای صف','Memberships') }}</small><strong id="presence-score-0">—</strong></div><div class="page-metric"><small>{{ t('آماده','Ready') }}</small><strong id="presence-score-1">—</strong></div><div class="page-metric"><small>{{ t('متوقف','Paused') }}</small><strong id="presence-score-2">—</strong></div><div class="page-metric"><small>{{ t('بدون دسترسی','Unavailable') }}</small><strong id="presence-score-3">—</strong></div></div>
+  </div>
+
+ <div id="presence-summary" class="detail-explainer"></div>
+<section class="panel"><div class="panel-heading"><div><h2>{{ t('حضور اعضای صف','Queue member presence') }}</h2><p>{{ t('فقط اعضای صف‌ها؛ نمایش همه داخلی‌های PBX نیازمند آداپتور جداست','Queue members only; full PBX extension presence needs a separate adapter') }}</p></div></div><div id="presence-cards" class="presence-grid"></div></section>
+</section>
+
+<section id="pbx-view" class="view" hidden>
+  <div class="detail-hero detail-hero--pbx" data-detail-view="pbx">
+    <div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol" aria-hidden="true">◫</span><div><span class="hero-kicker">SANEQUEUE / LIVE OPERATIONS</span><h2>{{ t('مرکز سلامت تلفنی','PBX diagnostics') }}</h2><p>{{ t('تست خواندنی کانال‌ها، داخلی‌های PJSIP و تماس‌های پارک‌شده','Read-only channel, PJSIP and parked-call inspections') }}</p></div></div><span class="source-pill" data-source-label>{{ t('در حال بررسی داده','Checking source') }}</span></div>
+    <div class="detail-hero-kpis" aria-live="polite"><div class="page-metric"><small>{{ t('منبع داده','Data source') }}</small><strong id="pbx-score-0">—</strong></div><div class="page-metric"><small>{{ t('صف‌های نمایان','Visible queues') }}</small><strong id="pbx-score-1">—</strong></div><div class="page-metric"><small>{{ t('آخرین داده','Latest snapshot') }}</small><strong id="pbx-score-2">—</strong></div><div class="page-metric"><small>{{ t('وضعیت اتصال','Connection') }}</small><strong id="pbx-score-3">—</strong></div></div>
+  </div>
+
+  <section class="panel feature-panel"><div class="panel-heading"><div><h2>{{ t('سلامت و ظرفیت مرکز تلفن','PBX live health') }}</h2><p>{{ t('دریافت اطلاعات واقعی و فقط خواندنی از AMI؛ اگر مجوز کافی نباشد، نتیجه نامشخص می‌ماند.','On-demand read-only AMI inventory; no inferred values when permissions are missing.') }}</p></div><span class="tag">AMI • READ ONLY</span></div>
+   <div class="pbx-actions"><button type="button" data-pbx-check="channels">{{ t('کانال‌های فعال','Active channels') }}</button><button type="button" data-pbx-check="extensions">{{ t('وضعیت PJSIP','PJSIP endpoints') }}</button><button type="button" data-pbx-check="parking">{{ t('تماس‌های پارک‌شده','Parked calls') }}</button>
+   <button type="button" data-pbx-check="contacts">{{ t('تماس‌های رجیستر PJSIP','PJSIP contacts') }}</button>
+   <button type="button" data-pbx-check="registrations">{{ t('رجیستری خروجی SIP','Outbound registrations') }}</button>
+   <button type="button" data-pbx-check="permissions" class="primary">{{ t('مجوزهای واقعی AMI','AMI action permissions') }}</button></div>
+   <div class="pbx-info" id="pbx-health-status">{{ t('پس از اتصال داده زنده، یکی از تست‌های فقط‌خواندنی را انتخاب کنید.','Enable live AMI data and choose a read-only test.') }}</div><div id="pbx-health-results" class="pbx-health-results"></div><p class="muted">{{ t('در بخش «مجوزهای واقعی AMI»، سرور Actionهای مجاز همان کاربر را نشان می‌دهد. اگر فرمان موجود باشد ولی پاسخ رویدادی نرسد، دسترسی read مربوط به رویداد را بررسی می‌کنیم. بدون تشخیص علت، مجوز command اضافه نکن.','The AMI permissions probe lists actions authorized for this account. If an action is allowed but list events do not arrive, inspect the matching read event class. Do not add command privilege without review.') }}</p>
+  </section>
+</section>
+<section id="features-view" class="view" hidden>
+  <div class="detail-hero detail-hero--features" data-detail-view="features">
+    <div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol" aria-hidden="true">✦</span><div><span class="hero-kicker">SANEQUEUE / LIVE OPERATIONS</span><h2>{{ t('نقشه قابلیت‌های محصول','Product capability map') }}</h2><p>{{ t('تفکیک روشن عملکرد آماده آزمایش از امکاناتی که هنوز پیاده‌سازی نشده‌اند','Transparent separation of built and planned capabilities') }}</p></div></div><span class="source-pill" data-source-label>{{ t('در حال بررسی داده','Checking source') }}</span></div>
+    <div class="detail-hero-kpis" aria-live="polite"><div class="page-metric"><small>{{ t('گروه امکانات','Modules') }}</small><strong id="features-score-0">—</strong></div><div class="page-metric"><small>{{ t('آماده آزمایش','Available') }}</small><strong id="features-score-1">—</strong></div><div class="page-metric"><small>{{ t('در حال آزمایش','Beta') }}</small><strong id="features-score-2">—</strong></div><div class="page-metric"><small>{{ t('در برنامه','Planned') }}</small><strong id="features-score-3">—</strong></div></div>
+  </div>
+
+  <div class="panel feature-panel"><div class="panel-heading"><div><h2>{{ t('نقشه امکانات مرکز تماس حرفه‌ای','Professional call center capabilities') }}</h2><p>{{ t('مقایسه با OpDesk، FOP2 و ویپینگ؛ وضعیت واقعی هر امکان مشخص است.','Feature scope inspired by OpDesk, FOP2 and VoiPing, with honest implementation status.') }}</p></div><span class="tag">ROADMAP</span></div><div class="feature-catalog" id="feature-catalog"></div><p class="muted">{{ t('نصب روی محیط مشتری و تماس عملیاتی تا زمان تکمیل احراز هویت، تست امنیت و پذیرش نسخه پایدار مجاز نیست.','Not production-ready. No customer deployments before real multiuser authentication, security review and a verified release.') }}</p></div>
+</section>
+
+<section id="control-view" class="view" hidden>
+  <div class="detail-hero detail-hero--control" data-detail-view="control">
+    <div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol" aria-hidden="true">⌁</span><div><span class="hero-kicker">SANEQUEUE / LIVE OPERATIONS</span><h2>{{ t('مرکز مدیریت تماس','Supervisor workspace') }}</h2><p>{{ t('فرمان‌ها فقط با مجوز محدود، تأیید و بر روی تماس آزمایشی مجازند','Scoped actions, confirmation and supervised test calls only') }}</p></div></div><span class="source-pill" data-source-label>{{ t('در حال بررسی داده','Checking source') }}</span></div>
+    <div class="detail-hero-kpis" aria-live="polite"><div class="page-metric"><small>{{ t('صف تست','Test queue') }}</small><strong id="control-score-0">—</strong></div><div class="page-metric"><small>{{ t('عضو تست','Test member') }}</small><strong id="control-score-1">—</strong></div><div class="page-metric"><small>{{ t('دروازه کنترل','Action gate') }}</small><strong id="control-score-2">—</strong></div><div class="page-metric"><small>{{ t('مدت اعتبار','Expiry') }}</small><strong id="control-score-3">—</strong></div></div>
+  </div>
+
+ <div id="control-safety-summary" class="control-safety-summary"></div>
+<section class="panel"><div class="panel-heading"><div><h2>{{ t('مرکز کنترل سرپرست','Supervisor action center') }}</h2><p>{{ t('اجرای کنترل فقط از روی تماس یا عضو واقعی و دارای مجوز','Actions run only on a selected, authorized live call or member') }}</p></div></div><div class="control-hub">
+ <button data-open="agents"><span>Ⅱ</span><b>{{ t('Pause / Resume','Pause / Resume') }}</b><small>{{ t('کنترل وضعیت عضویت صف','Member state control') }}</small></button>
+ <button data-open="agents"><span>♙</span><b>{{ t('مدیریت اعضا','Queue membership') }}</b><small>{{ t('افزودن، حذف، وزن توزیع','Add, remove, penalty') }}</small></button>
+ <button data-open="calls"><span>◉</span><b>{{ t('شنود و نجوا','Listen & Whisper') }}</b><small>{{ t('فقط مکالمه آزمایشی با رضایت','Consent-based test calls only') }}</small></button>
+ <button data-open="waiting"><span>↥</span><b>{{ t('مدیریت انتظار','Waiting management') }}</b><small>{{ t('اولویت، ابتدای صف و قطع','Priority, front, hangup') }}</small></button>
+ </div><p class="feature-limit">{{ t('انتقال Blind/Attended، Park، Pickup و کنفرانس هنوز در این نسخه پیاده‌سازی نشده‌اند؛ اضافه‌کردن کنترل نمایشی بدون اتصال واقعی گمراه‌کننده است.','Blind/attended transfer, Park, Pickup, and Conference are not implemented in this beta. Placeholder controls would be misleading.') }}</p></section>
+</section>
+<section id="wallboard-view" class="view" hidden>
+ <div id="wallboard-stage" class="wallboard-stage" aria-label="{{ t('وال‌برد مرکز تماس','Call center wallboard') }}">
+  <div class="wallboard-header"><div><span class="wallboard-kicker">SANEQUEUE / SUPERVISOR WALLBOARD</span><h2>{{ t('پایش زنده صف‌ها','Live queue monitor') }}</h2><p>{{ t('آخرین نمونه معتبر AMI','Last verified AMI snapshot') }}: <time id="wb-updated">—</time> · <span id="wb-connection">—</span></p></div><div class="wallboard-header-tools"><time id="wb-clock">—</time><button id="wallboard-fullscreen" class="primary" type="button">⛶ {{ t('تمام‌صفحه','Fullscreen') }}</button><button id="wallboard-exit" type="button">✕ {{ t('خروج','Exit') }}</button></div></div>
+  <div class="wallboard-toolbar"><strong>{{ t('صف‌های نمایشگر','Visible queues') }}</strong><div id="wallboard-queue-picker" class="wallboard-queue-picker"></div><button id="wb-select-all" type="button">{{ t('انتخاب همه','Select all') }}</button><span class="wallboard-privacy">{{ t('شماره تماس‌گیرنده در حالت نمایشگر عمومی پنهان است','Caller numbers hidden on public screens') }}</span></div>
+  <div id="wallboard-summary" class="wallboard-summary"></div>
+  <div id="wallboard-queues" class="wallboard-grid" aria-live="polite"></div>
+  <section class="wb-journey-area"><div class="wb-journey-heading"><h3>{{ t('تماس‌های جاری و منتقل‌شده','Active and transferred calls') }}</h3><span id="wb-journey-status">—</span></div><div id="wb-journey-rows" class="wb-journey-grid"></div><p class="wallboard-privacy">{{ t('شماره مشتری و شناسه کانال روی نمایشگر عمومی نمایش داده نمی‌شوند.','Caller numbers and channel IDs are never shown on public wallboards.') }}</p></section>
+  <div class="wallboard-bottom">{{ t('شمارنده پاسخ‌داده و رهاشده از آخرین بازنشانی Asterisk هستند؛ تعداد منتظر و وضعیت کارشناسان لحظه‌ای‌اند.','Answered and abandoned are since Asterisk queue reset; waiting and member presence are live.') }}</div>
+ </div>
+</section>
+<section id="alerts-view" class="view" hidden>
+  <div class="detail-hero detail-hero--alerts" data-detail-view="alerts">
+    <div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol" aria-hidden="true">♢</span><div><span class="hero-kicker">SANEQUEUE / LIVE OPERATIONS</span><h2>{{ t('هشدار و تریاژ لحظه‌ای','Live alert triage') }}</h2><p>{{ t('هشدارهای واقعی از آستانه‌های همین نشست؛ نه تحلیل هوش مصنوعی','Session thresholds and rule-based alerts, not AI') }}</p></div></div><span class="source-pill" data-source-label>{{ t('در حال بررسی داده','Checking source') }}</span></div>
+    <div class="detail-hero-kpis" aria-live="polite"><div class="page-metric"><small>{{ t('هشدار فعال','Active alerts') }}</small><strong id="alerts-score-0">—</strong></div><div class="page-metric"><small>{{ t('ازدحام','Congested queues') }}</small><strong id="alerts-score-1">—</strong></div><div class="page-metric"><small>{{ t('انتظار زیاد','Long waits') }}</small><strong id="alerts-score-2">—</strong></div><div class="page-metric"><small>{{ t('بدون ظرفیت','No capacity') }}</small><strong id="alerts-score-3">—</strong></div></div>
+  </div>
+<div id="alert-severity-strip" class="alert-severity-strip"></div>
+<section class="panel"><div class="panel-heading"><div><h2>{{ t('هشدارهای عملیاتی','Live operational alerts') }}</h2><p>{{ t('فقط براساس آستانه‌های تعریف‌شده؛ AI نیست','Based on configured thresholds; not AI-generated') }}</p></div><span class="tag" id="alerts-page-count">—</span></div><div id="alerts-full" class="alerts-full"></div></section></section>
+<section id="policies-view" class="view" hidden>
+ <div class="detail-hero detail-hero--policies"><div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol">⚖</span><div><span class="hero-kicker">SANEQUEUE / OPERATIONS GOVERNANCE</span><h2>{{ t('قوانین و هشدارهای صف','Queue policies and alerts') }}</h2><p>{{ t('هشدارها، دلایل توقف و حداقل ظرفیت پاسخ‌گویی','Alerts, pause reasons and minimum staffing') }}</p></div></div><span class="source-pill">{{ t('تنظیمات محلی نسخه آزمایشی','Local beta configuration') }}</span></div></div>
+ <section class="panel policy-panel"><div class="panel-heading"><div><h2>{{ t('انتخاب صف','Choose queue') }}</h2><p>{{ t('همه تنظیمات زیر فقط برای همین صف ذخیره می‌شوند','All settings below apply only to the selected queue') }}</p></div><select id="policy-queue" aria-label="Queue"><option value="">—</option></select></div>
+ <div class="policy-layout">
+  <form id="policy-queue-form" class="policy-card" autocomplete="off">
+   <h3>{{ t('خلاصه و آستانه‌های هشدار','Overview and alert thresholds') }}</h3>
+   <div class="policy-form-grid">
+    <label>{{ t('عنوان صف','Queue label') }}<input id="pq-label" maxlength="65" placeholder="فروش"></label>
+    <label>{{ t('هشدار وقتی تعداد منتظر بیشتر از','Alert when waiting exceeds') }}<input id="pq-waiting" type="number" min="0" max="10000"></label>
+    <label>{{ t('هشدار وقتی انتظار بیشتر از (ثانیه)','Alert when wait exceeds (seconds)') }}<input id="pq-seconds" type="number" min="0" max="86400"></label>
+    <label>{{ t('هشدار کمبود کارشناس آماده (کمتر از)','Alert when ready agents below') }}<input id="pq-ready" type="number" min="0" max="1000"></label>
+    <label>{{ t('تکرار مجاز اعلان (ثانیه)','Notification cooldown (seconds)') }}<input id="pq-cooldown" type="number" min="60" max="86400"></label>
+    <label class="policy-check"><input id="pq-bale" type="checkbox">{{ t('ارسال اعلان بله (نیازمند تنظیم امن توکن)','Send Bale alert (requires secure token setup)') }}</label>
+   </div>
+   <h3>{{ t('حداکثر خروج/توقف از صف','Maximum concurrent departures / pauses') }}</h3>
+   <div class="policy-form-grid">
+    <label>{{ t('تعداد کل افراد برنامه‌ریزی‌شده صف','Fixed staffed roster size') }}<input id="pq-roster" type="number" min="0" max="1000" required></label>
+    <label>{{ t('سقف خروج به درصد','Maximum absent percentage') }}<input id="pq-percent" type="number" min="0" max="100" required></label>
+    <label>{{ t('سقف خروج به تعداد','Maximum absent count') }}<input id="pq-count" type="number" min="0" max="1000" required></label>
+    <label>{{ t('حداقل افراد حاضر/فعال','Minimum on-duty members') }}<input id="pq-min" type="number" min="0" max="1000" required></label>
+   </div>
+   <p id="pq-capacity-preview" class="policy-preview"></p>
+   <h3>{{ t('علت‌های قابل انتخاب Pause','Agent pause reasons') }}</h3>
+   <label>{{ t('هر خط: شناسه انگلیسی | عنوان فارسی','One per line: english_id | Persian label') }}<textarea id="pq-reasons" rows="7" spellcheck="false" dir="auto"></textarea></label>
+   <p class="muted">{{ t('دلایل Pause مانند استراحت، جلسه و پیگیری قابل تعریف هستند؛ این فرم هیچ تماس جدیدی برقرار نمی‌کند.','Pause reasons are configurable and do not originate calls.') }}</p>
+   <div class="policy-save-actions"><button type="button" id="policy-queue-save" class="primary">{{ t('ذخیره قوانین این صف','Save queue policy') }}</button><span id="policy-feedback" role="status"></span></div>
+  </form>
+  <div class="policy-side">
+   <section class="policy-card"><h3>{{ t('ارسال اعلان از طریق بله','Bale notifications') }}</h3><p>{{ t('برای جلوگیری از ذخیره توکن در پروژه، توکن ربات و شناسه گفتگو فقط از Environment ویندوز خوانده می‌شوند. اعلان‌ها پیش‌فرض خاموش‌اند.','Token and chat ID are loaded only from local process environment; off by default.') }}</p><div id="policy-bale-status" class="policy-preview">—</div><p class="muted">{{ t('ارسال اعلان هنگام گذر از آستانه است و تا رفع هشدار و عبور دوباره، ارسال مکرر انجام نمی‌شود.','Delivery is edge-triggered and deduplicated; it is not a persistent background service.') }}</p></section>
+  </div>
+ </div></section>
+ </section>
+{% if user_role == 'admin' %}
+<section id="users-view" class="view" hidden>
+ <div class="detail-hero detail-hero--users"><div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol">♧</span><div><span class="hero-kicker">SANEQUEUE / ACCESS MANAGEMENT</span><h2>{{ t('مرکز کاربران و دسترسی‌ها','User and access center') }}</h2><p>{{ t('حساب، رمز، داخلی تلفن، صف‌های مجاز و سطح عملیات در یک صفحه','Manage account, phone, queue scope and action permissions together') }}</p></div></div><span class="source-pill">RBAC / ADMIN</span></div></div>
+ <div class="users-intro panel"><div><strong>{{ t('مدیریت حساب‌ها','Accounts') }}</strong><p>{{ t('برای ویرایش روی نام کاربر در فهرست کلیک کن؛ رمز جدید برای ویرایش اختیاری است.','Select a user to edit. Leave password blank to keep existing password.') }}</p></div><button id="user-clear" type="button">{{ t('کاربر جدید','New user') }} +</button></div>
+ <div class="users-layout">
+  <div class="users-main">
+  <section class="panel accounts-panel" id="accounts-admin-panel"><div class="panel-heading"><div><h2>{{ t('کاربران و داخلی‌های مجاز','Local users & phone mapping') }}</h2><p>{{ t('ایجاد حساب محلی با رمز هش‌شده؛ هر داخلی فقط به حساب مربوط متصل می‌شود. صف‌های مجاز در بخش قوانین تعریف می‌شوند.','Create hashed local accounts with their assigned phone. Queue grants are configured in policies.') }}</p></div></div>
+    <form id="account-create-form" class="account-grid">
+      <label>{{ t('نام کاربری','Username') }}<input id="account-user" autocomplete="off" required pattern="[A-Za-z0-9_.@-]{2,64}"></label>
+      <label>{{ t('نقش','Role') }}<select id="account-role"><option value="supervisor">Supervisor</option><option value="agent">Agent</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select></label>
+      <label>{{ t('داخلی کاربر','Assigned phone') }}
+       <select id="account-phone" dir="ltr"><option value="">{{ t('انتخاب داخلی از ایزابل / AMI','Select extension from PBX') }}</option></select>
+       <small id="account-phone-status" role="status">{{ t('ابتدا به AMI متصل شوید؛ فهرست داخلی‌ها خودکار خوانده می‌شود.','Connect AMI to load PBX extensions.') }}</small>
+      </label>
+      <label>{{ t('رمز جدید؛ حداقل ۱۲ نویسه','New password (min 12 chars)') }}<input id="account-password" type="password" autocomplete="new-password" minlength="12"></label>
+      <fieldset class="user-full-row sq-pick-field" id="user-queues-field"><legend>{{ t('انتخاب صف‌های مجاز','Choose permitted queues') }}</legend>
+      <div id="user-queues" class="sq-choice-grid"><span class="muted">{{ t('دریافت صف‌ها از AMI...','Loading queues...') }}</span></div>
+      <small>{{ t('صف‌ها از اتصال زنده AMI خوانده می‌شوند؛ انتخاب چندتایی با تیک.','Queues are loaded from AMI; check one or more.') }}</small>
+      </fieldset>
+      <fieldset id="user-permission-select" class="user-permission-checks user-full-row"><legend>{{ t('مجوزهای این کاربر','Allowed operations') }}</legend>
+       <label><input type="checkbox" value="view" checked> {{ t('مشاهده','View') }}</label>
+       <label><input type="checkbox" value="pause"> Pause / Resume</label>
+       <label><input type="checkbox" value="membership"> {{ t('عضویت و وزن','Membership') }}</label>
+       <label><input type="checkbox" value="monitor"> {{ t('شنود و نجوا','Listen / Whisper') }}</label>
+       <label><input type="checkbox" value="hangup"> Hangup</label>
+       <label><input type="checkbox" value="priority"> {{ t('نوبت و اولویت','Priority') }}</label>
+       <label><input type="checkbox" value="caller_details"> {{ t('نمایش شماره مشتری','Caller number') }}</label>
+      </fieldset>
+
+      <button type="submit" class="primary">{{ t('ثبت یا به‌روزرسانی حساب','Create or update account') }}</button>
+    </form><div id="account-feedback" role="status"></div><div class="account-directory-head"><h3>{{ t('حساب‌های ثبت‌شده','Existing accounts') }}</h3><span id="user-account-count">—</span></div><div id="account-list" class="account-list"></div>
+  </section>
+
+</div>
+  <div class="users-permissions"><section class="panel sq-user-help">
+    <h3>{{ t('سه مرحله تعریف دسترسی','Three steps to assign access') }}</h3>
+    <p>{{ t('۱. حساب و نقش را انتخاب کن. ۲. داخلی را از لیست AMI انتخاب کن. ۳. صف‌ها و مجوزها را تیک بزن و یک‌بار ذخیره کن.','1. Choose account and role. 2. Pick an AMI extension. 3. Check queues and permissions, then save once.') }}</p>
+    <button type="button" id="refresh-user-catalog">↻ {{ t('بازخوانی داخلی‌ها و صف‌ها','Reload PBX extensions & queues') }}</button>
+    <p class="muted" id="user-catalog-info" role="status">{{ t('پس از اتصال AMI، فهرست‌ها آماده می‌شوند.','Lists load after AMI connection.') }}</p>
+    <p class="muted">{{ t('حساب admin به‌صورت ذاتی مدیر همه صف‌ها است. برای سرپرست، مجوز صف و عمل باید جداگانه انتخاب شود.','Admin has all-queue privileges; supervisors require explicit queue and action grants.') }}</p>
+   </section></div>
+ </div>
+ <p class="users-caution">{{ t('مجوز مشاهده شماره مشتری جداگانه است. نقش و انتخاب صف در سمت سرور کنترل می‌شود؛ برای شنود داخلی اختصاصی سرپرست لازم است.','Caller detail is separately permissioned. Scope is enforced server-side; listening requires the supervisor’s own phone.') }}</p>
+</section>
+{% endif %}
+
+<section id="settings-view" class="view" hidden>
+  <div class="detail-hero detail-hero--settings" data-detail-view="settings">
+    <div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol" aria-hidden="true">⚙</span><div><span class="hero-kicker">SANEQUEUE / LIVE OPERATIONS</span><h2>{{ t('مرکز اتصال و تنظیمات','Connection setup') }}</h2><p>{{ t('ابتدا ارتباط خواندنی را تست کنید، سپس داده زنده را فعال کنید','Test read-only AMI first, then activate live monitoring') }}</p></div></div><span class="source-pill" data-source-label>{{ t('در حال بررسی داده','Checking source') }}</span></div>
+    <div class="detail-hero-kpis" aria-live="polite"><div class="page-metric"><small>{{ t('AMI','AMI status') }}</small><strong id="settings-score-0">—</strong></div><div class="page-metric"><small>{{ t('اتصال','Source') }}</small><strong id="settings-score-1">—</strong></div><div class="page-metric"><small>{{ t('صف هدف','Selected queue') }}</small><strong id="settings-score-2">—</strong></div><div class="page-metric"><small>{{ t('فرمان‌های تست','Test actions') }}</small><strong id="settings-score-3">—</strong></div></div>
+  </div>
+
+ <div class="settings-grid">
+  <section class="panel settings-panel">
+   <div class="panel-heading"><div><h2>{{ t('اتصال محلی به AMI','Local AMI connection') }}</h2><p>{{ t('تست AMI مستقل از فعال‌سازی داشبورد است و تنظیمات در صورت خطا حفظ می‌شوند.','AMI diagnostics are separate from activating the dashboard, and failed tests do not reset input.') }}</p></div><span class="tag" id="ami-mode-tag">{{ t('داده ساختگی','Sample data') }}</span></div>
+   <form id="ami-settings-form" class="settings-form">
+     <label>{{ t('انتخاب اتصال ایزابل / AMI','Select PBX connection') }}
+      <select id="ami-preset"><option value="lan">{{ t('ایزابل آزمایشی — اتصال داخلی شبکه','Test Issabel — Local LAN') }}</option><option value="tunnel">{{ t('تونل امن SSH — همین کامپیوتر','SSH tunnel — this computer') }}</option><option value="custom">{{ t('تنظیمات پیشرفته (سرور دیگر)','Advanced — different PBX') }}</option></select>
+      <small>{{ t('انتخاب اتصال، آدرس و پورت را تنظیم می‌کند؛ فقط رمز حساب AMI باید وارد شود.','Selecting the connection fills host and port; the AMI password is still required.') }}</small></label>
+     <div id="ami-manual" class="sq-advanced-ami" hidden><label>{{ t('آدرس AMI','AMI host') }}<input name="host" id="ami-host" dir="ltr" placeholder="127.0.0.1" required></label>
+     <label>{{ t('پورت AMI / تونل','AMI / tunnel port') }}<input name="port" id="ami-port" type="number" min="1" max="65535" value="15038" required></label></div>
+     <label>{{ t('نام کاربری','Username') }}<input name="user" id="ami-user" dir="ltr" placeholder="sq_readonly" required></label>
+     <label>{{ t('رمز عبور AMI','AMI password') }}<input name="password" id="ami-password" type="password" dir="ltr" autocomplete="off" placeholder="{{ t('رمز روی دیسک ذخیره نمی‌شود','Never stored on disk') }}"></label>
+     <label>{{ t('صف مورد پایش','Monitored queue') }}<select name="queue" id="ami-queue" dir="ltr"><option value="*">{{ t('همه صف‌ها','All queues') }}</option></select></label>
+     <p class="scope-note">{{ t("برای همه صف‌ها گزینه «همه صف‌ها» را انتخاب کن؛ کنترل‌های تماس مجوز جداگانه می‌خواهند.","Use * to monitor all queues. Mutating controls require separate approval.") }}</p>
+     <label class="issabel-queues-control">{{ t('فیلتر نمایش صف‌ها','Queue visibility') }}<select name="visible_queues" id="ami-visible-queues" dir="ltr"><option value="!default">{{ t('همه به‌جز default (پیشنهادی)','All except default (recommended)') }}</option><option value="*">{{ t('همه صف‌ها (تست)','All queues (diagnostics)') }}</option></select></label>
+     <p class="scope-note issabel-filter-help">{{ t('فهرست صف‌ها پس از اتصال از AMI خوانده می‌شود. در حالت پیش‌فرض تمام صف‌ها به‌جز default نمایش داده می‌شوند؛ این تنظیم چیزی را در PBX حذف نمی‌کند.', 'Queues are loaded after AMI connects. By default all queues except default are visible; this filter changes nothing on the PBX.') }}</p>
+     <p class="credential-note">{{ t('رمز فقط تا بسته‌شدن برنامه در حافظه نگهداری می‌شود؛ روی دیسک ذخیره نمی‌شود.','The password is held in memory only until the app closes; never written to disk.') }}</p>
+     <div class="settings-actions">
+       <button type="button" id="ami-save" class="ghost">{{ t('ذخیره','Save') }}</button>
+       <button type="button" id="ami-diagnose" class="ghost">{{ t('عیب‌یابی مرحله‌ای AMI','Diagnose AMI stages') }}</button>
+       <button type="button" id="ami-test">{{ t('تست اتصال','Test connection') }}</button>
+       <button type="button" id="ami-enable" class="primary">{{ t('فعال‌سازی داده زنده','Enable live data') }}</button>
+       <button type="button" id="ami-disable">{{ t('بازگشت به داده ساختگی','Use sample data') }}</button>
+     </div>
+     <p class="muted">{{ t('دو روش اتصال: تونل SSH با 127.0.0.1:15038 (پیشنهادی) یا اتصال مستقیم در LAN با 192.168.2.2:5038. در روش مستقیم، IP کامپیوتر باید در permit کاربر AMI قرار گیرد و ترافیک بدون TLS است.','Use SSH tunnel 127.0.0.1:15038 (recommended), or direct LAN 192.168.2.2:5038. Direct LAN requires a per-host AMI permit and sends AMI without TLS.') }}</p>
+   </form>
+  </section>
+  <section class="panel settings-panel">
+   <div class="panel-heading"><div><h2>{{ t('وضعیت و نتیجه آخرین تست','Connection status & last snapshot') }}</h2><p>{{ t('خلاصهٔ پاک‌سازی‌شده از QueueStatus برای ادامه توسعه و تست','Sanitized QueueStatus summary used for development and testing') }}</p></div><span class="tag" id="ami-status-pill">{{ t('آماده','Ready') }}</span></div>
+   <div id="ami-connection-summary" class="ami-summary muted">{{ t('هنوز تستی اجرا نشده است.','No connection test has been run yet.') }}</div>
+   <div id="ami-feedback" class="ami-feedback" role="status" aria-live="polite">{{ t('ابتدا اتصال SSH را برقرار و سپس تست را اجرا کنید.','Start the SSH tunnel, then run a connection test.') }}</div><div class="diagnostic-panel"><h3>{{ t('نتیجه آزمون مرحله‌ای','Connection diagnosis') }}</h3><div id="ami-diagnose-status" role="status">{{ t('پس از واردکردن رمز، عیب‌یابی را اجرا کن.','Enter your password and run Diagnose AMI.') }}</div><div id="ami-diagnostic-stages" class="diagnostic-stages"></div><p class="muted">{{ t('عیب‌یابی فقط می‌خواند؛ تماس و وضعیت کارشناس را تغییر نمی‌دهد.','Read-only check; never modifies calls or agent state.') }}</p></div>
+   <pre id="ami-snapshot-output" class="snapshot-box">{}</pre>
+  </section>
+ </div>
+
+  <section class="panel staged-card" id="staged-controls-panel">
+   <div class="panel-heading"><div><h2>{{ t('کنترل‌های آزمایشی سرپرست','Staged supervisor controls') }}</h2><p>{{ t('فرمان‌ها فقط برای صف انتخاب‌شده و با هویت سرپرست واردشده؛ فعال‌سازی ۳۰ دقیقه‌ای','User-bound supervisor phone and explicit test queue; 30-minute temporary session') }}</p></div><span id="test-controls-badge" class="badge pending">{{ t('غیرفعال','Disabled') }}</span></div>
+   <div class="staged-body">
+    <div class="test-scope"><span>QUEUE <b id="test-scope-label">—</b></span><span>AGENT <b id="test-agent-label">—</b></span><span>SUPERVISOR <b>{{ ops_config.assigned_phone or "Not assigned" }}</b></span></div>
+    <p>{{ t('فرمان‌ها فقط روی یک صف انتخابی و اعضای شناسایی‌شده همان صف مجازند. شنود و قطع تماس فقط روی تماس آزمایشی و با رضایت.','Available test actions: Pause/Resume, dynamic membership, penalty, caller priority, Hangup, Listen, Whisper and Barge. Only test queue actions are authorized.') }}</p>
+    <p class="muted">{{ t('برای شنود/نجوا، مکالمه آزمایشی با رضایت طرفین ایجاد کن. این گزینه‌ها پس از خروج از برنامه یا ۳۰ دقیقه خودکار قفل می‌شوند.','For Listen/Whisper, create a consenting test call. Controls lock automatically after 30 minutes or on app restart.') }}</p>
+    <label class="confirm-label">{{ t('صف مجاز برای فرمان‌های آزمایشی','Selected queue for staged controls') }}<select id="test-scope-queue"><option value="">{{ t('صف را انتخاب کنید','Choose a queue') }}</option></select></label>
+    <label class="confirm-label">{{ t('برای فعال‌سازی عبارت اختصاصی را وارد کن','Type the exact queue-specific confirmation') }}<code id="test-confirm-target">ENABLE 8001</code><input id="test-confirm-phrase" dir="ltr" autocomplete="off" placeholder="ENABLE 8001"></label>
+    <div class="settings-actions"><button id="test-controls-enable" class="danger-action" type="button">{{ t('فعال‌سازی موقت کنترل‌ها','Enable controls for 30 min') }}</button><button id="test-controls-disable" type="button">{{ t('قفل‌کردن فوری کنترل‌ها','Lock controls now') }}</button></div>
+    <p id="test-controls-info" role="status" class="muted"></p>
+   </div>
+  </section>
+
+</section>
+ <dialog id="queue-summary-dialog" class="queue-summary-dialog"><div class="summary-dialog-head"><div><small>SANEQUEUE / QUEUE OVERVIEW</small><h2 id="qs-title">—</h2></div><button id="qs-close" type="button" aria-label="Close">×</button></div><div class="summary-metrics" id="qs-metrics"></div><div id="qs-foot" class="summary-foot"></div></dialog>
+ <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+ <dialog id="pause-reason-dialog" class="reason-dialog"><form id="pause-reason-form" method="dialog"><h2>{{ t('انتخاب فعالیت خارج از صف','Choose out-of-queue activity') }}</h2><p class="muted">{{ t('کارشناس موقتاً از دریافت تماس‌های ورودی این صف خارج می‌شود. این علت فقط وضعیت کارشناس را در صف مشخص می‌کند.','Agent pauses inbound queue membership. The reason is recorded for this queue membership.') }}</p><label>{{ t('علت خروج','Reason') }}<select id="pause-reason-select" required></select></label><p id="pause-reason-description" class="pause-reason-hint"></p><div class="dialog-actions"><button type="button" id="pause-reason-cancel">{{ t('انصراف','Cancel') }}</button><button type="submit" class="primary">{{ t('ثبت علت و خروج موقت','Pause with reason') }}</button></div></form></dialog>
+<dialog id="action-dialog"><form id="action-form"><h2 id="action-title"></h2><p id="action-description" class="muted"></p><div id="action-fields"></div><p id="action-error" role="alert" class="overdue"></p><div class="dialog-actions"><button type="button" id="action-cancel">{{ t('انصراف','Cancel') }}</button><button type="submit" class="primary">{{ t('اجرای عملیات','Apply action') }}</button></div></form></dialog>
+ <section id="shifts-view" class="view" hidden><section class="panel"><div class="panel-heading"><div><h2>{{ t('برنامه شیفت کارشناسان','Agent shift planning') }}</h2><p>{{ t('برنامه زمانی مستقل؛ وضعیت واقعی کارشناس را به‌صورت خودکار تغییر نمی‌دهد.','Scheduling only; never automatically changes an agent’s PBX state.') }}</p></div><button data-planning-load="shifts">{{ t('به‌روزرسانی','Refresh') }}</button></div><div id="shifts-content"></div></section></section>
+ <section id="directory-view" class="view" hidden><section class="panel"><div class="panel-heading"><div><h2>{{ t('دفترچه تلفن صف','Queue directory') }}</h2><p>{{ t('مخاطبان دارای محدوده دسترسی صف؛ این صفحه خودکار شماره‌گیری نمی‌کند.','Queue-scoped contacts; this page does not place calls.') }}</p></div><button data-planning-load="directory">{{ t('به‌روزرسانی','Refresh') }}</button></div><div id="directory-content"></div></section></section>
+ <footer><span>صانع · SaneQueue <strong>{{ current_version() }}</strong></span><span>{{ t('اطلاعات مجوز در فایل NOTICE','License information in NOTICE') }}</span></footer>
+ </main></div>
+<script id="ops-config" type="application/json">{{ ops_config|tojson }}</script>
+<script src="{{ theme_static('js/operations.js') }}?v={{ current_version() }}" defer></script>
+<script src="{{ theme_static('js/planning.js') }}?v={{ current_version() }}" defer></script>
+</body></html>

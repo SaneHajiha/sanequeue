@@ -1,7 +1,7 @@
 import os
 import unittest
 
-import mock
+from unittest import mock
 import pytest
 
 from qpanel import backend

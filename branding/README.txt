@@ -1,0 +1,1 @@
+The profile image is extracted unchanged from the user-supplied older CV; a newer headshot is recommended. The SaneQueue_UI_Concept.jpg is a concept image, NOT an application screenshot. Profile banner is original generated branding artwork. Do not upload personal headshot into the public project repo unless you explicitly intend to.

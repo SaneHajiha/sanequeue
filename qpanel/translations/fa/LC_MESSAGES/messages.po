@@ -1,0 +1,267 @@
+# Persian translations for QPanel.
+msgid ""
+msgstr "Project-Id-Version: QPanel 1.1.1\nLanguage: fa\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nPlural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "unavailable"
+msgstr "در دسترس نیست"
+
+msgid "free"
+msgstr "آزاد"
+
+msgid "in call"
+msgstr "در حال مکالمه"
+
+msgid "busy"
+msgstr "مشغول"
+
+msgid "Not found"
+msgstr "یافت نشد"
+
+msgid "404 Not Found"
+msgstr "خطای ۴۰۴ - صفحه یافت نشد"
+
+msgid "The request the was not found on this server."
+msgstr "درخواست مورد نظر در این سرور پیدا نشد."
+
+msgid "Consolidated view"
+msgstr "نمای یکپارچه"
+
+msgid "Consolidate view"
+msgstr "نمای کلی"
+
+msgid "Agents"
+msgstr "اپراتورها"
+
+msgid "Queue"
+msgstr "صف"
+
+msgid "Name"
+msgstr "نام"
+
+msgid "Interface"
+msgstr "داخلی / اینترفیس"
+
+msgid "Status"
+msgstr "وضعیت"
+
+msgid "Attend calls"
+msgstr "تماس‌های پاسخ داده شده"
+
+msgid "Calls"
+msgstr "تماس‌ها"
+
+msgid "Last call at"
+msgstr "آخرین تماس در"
+
+msgid "Callers"
+msgstr "تماس‌گیرندگان"
+
+msgid "Id Name"
+msgstr "نام تماس‌گیرنده"
+
+msgid "Id Number"
+msgstr "شماره تماس‌گیرنده"
+
+msgid "Position"
+msgstr "نوبت در صف"
+
+msgid "Wait"
+msgstr "زمان انتظار"
+
+msgid "was"
+msgstr "مدت"
+
+msgid "ago"
+msgstr "قبل"
+
+msgid "paused"
+msgstr "در حال استراحت"
+
+msgid "Developed by"
+msgstr "توسعه‌یافته توسط"
+
+msgid "with a Template by"
+msgstr "با قالب طراحی شده توسط"
+
+msgid "Version"
+msgstr "نسخه"
+
+msgid "New version available"
+msgstr "نسخه جدید موجود است"
+
+msgid "Exist a new version stable: "
+msgstr "نسخه پایدار جدیدی در دسترس است: "
+
+msgid ". Visit and update your QPanel <a href=\"https://github.com/roramirez/qpanel\" target=\"_blank\" style=\"color:#ffd777\">from GitHub</a>."
+msgstr ". برای به‌روزرسانی پنل خود به <a href=\"https://github.com/roramirez/qpanel\" target=\"_blank\" style=\"color:#ffd777\">گیت‌هاب QPanel</a> مراجعه کنید."
+
+msgid "Abandoned"
+msgstr "از دست رفته"
+
+msgid "Answered"
+msgstr "پاسخ‌داده‌شده"
+
+msgid "Stats"
+msgstr "آمار"
+
+msgid "Logged Out"
+msgstr "خارج شده"
+
+msgid "Available"
+msgstr "در دسترس"
+
+msgid "Available (On Demand)"
+msgstr "در دسترس (طبق تقاضا)"
+
+msgid "On Break"
+msgstr "در حال استراحت"
+
+msgid "Idle"
+msgstr "آماده‌باش"
+
+msgid "Waiting"
+msgstr "در انتظار"
+
+msgid "Receiving"
+msgstr "در حال دریافت تماس"
+
+msgid "In a queue call"
+msgstr "در مکالمه صف"
+
+msgid "Queues"
+msgstr "صف‌ها"
+
+msgid "Incoming"
+msgstr "ورودی"
+
+msgid "Service Level"
+msgstr "سطح سرویس (SL)"
+
+msgid "Abandoned:"
+msgstr "تماس از دست رفته:"
+
+msgid "English"
+msgstr "انگلیسی"
+
+msgid "Spanish"
+msgstr "اسپانیایی"
+
+msgid "German"
+msgstr "آلمانی"
+
+msgid "Russian"
+msgstr "روسی"
+
+msgid "Portuguese"
+msgstr "پرتغالی"
+
+msgid "Login"
+msgstr "ورود"
+
+msgid "Sign in"
+msgstr "ورود به سیستم"
+
+msgid "User id"
+msgstr "نام کاربری"
+
+msgid "Password"
+msgstr "رمز عبور"
+
+msgid "Logout"
+msgstr "خروج"
+
+msgid "Actions"
+msgstr "عملیات"
+
+msgid "Spy"
+msgstr "شنود"
+
+msgid "Whisper"
+msgstr "راهنمایی اپراتور"
+
+msgid "Barge"
+msgstr "ورود به مکالمه"
+
+msgid "Remove from queue"
+msgstr "حذف از صف"
+
+msgid "Insert where  you listen the call, example: <i>SIP/1001</i>"
+msgstr "داخلی مورد نظر برای گوش دادن را وارد کنید، مثلاً: <i>SIP/1001</i>"
+
+msgid "Listen "
+msgstr "شنود "
+
+msgid "Execute a "
+msgstr "اجرای "
+
+msgid "Insert where do need listen"
+msgstr "داخلی شنود را وارد کنید"
+
+msgid "Try..."
+msgstr "در حال تلاش..."
+
+msgid "Attended calls."
+msgstr "تماس‌های پاسخ داده شده."
+
+msgid "Calls not attended by agents."
+msgstr "تماس‌های بدون پاسخ اپراتورها."
+
+msgid "SL"
+msgstr "سطح سرویس"
+
+msgid "Service Level."
+msgstr "درصد سطح سرویس."
+
+msgid "Call on line."
+msgstr "تماس‌های فعال."
+
+msgid "Av. time"
+msgstr "میانگین مکالمه"
+
+msgid "Average time for answered calls."
+msgstr "میانگین زمان تماس‌های پاسخ‌داده‌شده."
+
+msgid "Av. Wait"
+msgstr "میانگین انتظار"
+
+msgid "Average time waiting for calls."
+msgstr "میانگین زمان انتظار تماس‌گیرندگان."
+
+msgid "From:"
+msgstr "از تاریخ:"
+
+msgid "To:"
+msgstr "تا تاریخ:"
+
+msgid "Inbound"
+msgstr "تماس‌های ورودی"
+
+msgid "Total incomming calls"
+msgstr "مجموع تماس‌های ورودی"
+
+msgid "Contact"
+msgstr "مخاطب"
+
+msgid "State"
+msgstr "وضعیت"
+
+msgid "About Us"
+msgstr "درباره ما"
+
+msgid "Home"
+msgstr "صفحه اصلی"
+
+msgid "Language"
+msgstr "زبان"
+
+msgid "Average time"
+msgstr "میانگین مکالمه"
+
+msgid "Average Wait"
+msgstr "میانگین انتظار"
+
+msgid "Persian"
+msgstr "فارسی"
+
+msgid "French"
+msgstr "فرانسوی"

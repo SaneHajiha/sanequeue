@@ -1,7 +1,7 @@
 import os
 import unittest
 from qpanel import asterisk
-import mock
+from unittest import mock
 from unittest.mock import call
 
 

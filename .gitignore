@@ -39,3 +39,37 @@ var/
 node_modules/
 */static/components
 npm-debug.log*
+
+# Local operational data and credentials
+.venv/
+*.sqlite*
+*.db
+*.log
+*.jsonl
+*.pem
+*.key
+.env
+.env.*
+!samples/.env.example
+
+# Local previews and runtime output
+*.pid
+*.log.*
+config.ini
+ssh_*
+**/ssh_*
+__pycache__/
+
+# Sanitized diagnostic snapshot remains local
+ami_snapshot.json
+
+local_ami_settings.json
+ami_snapshot.json
+.env.local
+# v2.1 beta.8 policy data is local and may reveal organizational queue layout
+local_queue_policies.json
+local_queue_policies.tmp
+logs/
+
+local_accounts.json
+local_accounts.tmp

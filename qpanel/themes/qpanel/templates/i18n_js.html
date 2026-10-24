@@ -3,7 +3,9 @@
         var lang  = $(this).data('value');
         window.location = '{{ url_for('.language') }}' + '/' + lang;
     });
-    $( "#language" ).val("{{ session['language'] }}")
+    $('#language').val({{ ui_language|tojson }}).on('change', function () {
+        window.location = {{ url_for('.language')|tojson }} + '/' + encodeURIComponent(this.value);
+    });
 
     String.prototype.toStrStatusAgent = function(args) {
         var value = this;
