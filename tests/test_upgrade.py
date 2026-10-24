@@ -35,12 +35,24 @@ class UpgradeTestClass(unittest.TestCase):
 
 
     def test_request_estable_version(self):
-        """
-            Test for request to stable version name
-            Maybe this can be a mockup but I used to check requests and get compatability
-        """
-        current_stable_version = get_stable_version()
-        self.assertIsNotNone(current_stable_version)
+        from unittest.mock import patch
+        with patch('qpanel.upgrader.requests.get') as get:
+            get.return_value.text='2.1.0\n'
+            self.assertEqual(get_stable_version(),'2.1.0')
+            get.assert_called_once_with('https://raw.githubusercontent.com/SaneHajiha/sanequeue/master/VERSION',timeout=(3,5))
+
+    def test_update_check_handles_network_failure(self):
+        from unittest.mock import patch
+        import requests
+        with patch('qpanel.upgrader.requests.get',side_effect=requests.Timeout):
+            self.assertIsNone(get_stable_version())
+
+    def test_update_check_rejects_html_and_beta_channel(self):
+        from unittest.mock import patch
+        for text in ['<html>error</html>','2.1.0-beta.18']:
+            with self.subTest(text=text), patch('qpanel.upgrader.requests.get') as get:
+                get.return_value.text=text
+                self.assertIsNone(get_stable_version())
 
 # runs the unit tests
 if __name__ == '__main__':

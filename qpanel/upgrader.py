@@ -11,8 +11,8 @@ import qpanel
 
 
 BRANCH = 'master'
-REPO = 'git@github.com:roramirez/qpanel.git'
-URL_STABLE_VERSION = 'https://rodrigoramirez.com/qpanel/version/' + BRANCH
+REPO = 'https://github.com/SaneHajiha/sanequeue.git'
+URL_STABLE_VERSION = 'https://raw.githubusercontent.com/SaneHajiha/sanequeue/' + BRANCH + '/VERSION'
 
 
 def require_upgrade():

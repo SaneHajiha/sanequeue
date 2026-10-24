@@ -34,7 +34,7 @@ The installer requires an isolated Python 3.10–3.12 runtime. Never replace Iss
 
 ## Verified scope
 
-222 pytest tests passed locally on Python 3.11. Live monitoring and queue controls were exercised on a test PBX running Rocky Linux 8.10 and Asterisk 20.12.0. Asterisk 16/18 event variants are fixture-tested; Issabel 4/5 and all customer installations are not universally certified. Docker configuration is supplied but has not been built in this validation environment. This release is beta, with explicit remaining acceptance work.
+224 pytest tests passed locally on Python 3.11. Live monitoring and queue controls were exercised on a test PBX running Rocky Linux 8.10 and Asterisk 20.12.0. Asterisk 16/18 event variants are fixture-tested; Issabel 4/5 and all customer installations are not universally certified. Docker configuration is supplied but has not been built in this validation environment. This release is beta, with explicit remaining acceptance work.
 
 Screenshots use synthetic data. Historical notes from earlier previews remain under `docs/` and root release notes for provenance; this README and the beta.18 validation guide describe the current release.
 

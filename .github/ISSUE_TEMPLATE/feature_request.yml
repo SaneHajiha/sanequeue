@@ -1,0 +1,15 @@
+name: Feature request / پیشنهاد قابلیت
+description: Describe a monitoring workflow and its acceptance criteria.
+body:
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow and user need / نیاز و گردش کار
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria and supported PBX versions / معیار پذیرش
+    validations:
+      required: true

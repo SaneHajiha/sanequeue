@@ -2,13 +2,13 @@
 
 ## Automated
 
-222 pytest tests and 55 subtests passed on Windows/Python 3.11 (15.69 seconds). Before the final supervision caller-ID regression was added, 221 tests and 52 subtests also passed on Rocky Linux/Python 3.11 (10.11 seconds). GitHub Actions passed Python 3.10, 3.11 and 3.12 for that preceding commit. Coverage includes queue event variants for Asterisk 16/18/20, concurrent snapshot collection, failure backoff, scope/CSRF rules, driver resolution, last-administrator protection, duplicate phones, scoped planning, overlapping shifts and successful/rejected AMI responses.
+224 pytest tests and 57 subtests passed on Windows/Python 3.11 (8.23 seconds) and Rocky Linux/Python 3.11 (7.99 seconds). GitHub Actions also passed the preceding 222-test code on Python 3.10, 3.11 and 3.12. The final update removes an old test's external-network dependency and adds timeout/malformed-version cases. Coverage includes queue event variants for Asterisk 16/18/20, concurrent snapshot collection, failure backoff, scope/CSRF rules, driver resolution, last-administrator protection, duplicate phones, scoped planning, overlapping shifts and successful/rejected AMI responses.
 
 The supplied archive's baseline had 33 failures and 10 errors among 230 tests. Tests with obsolete fixed beta versions/preview ports or assumptions that removed survey UI and unowned gates existed were migrated. Original copies are retained in `tests/historical/`; 31 obsolete assertions were retired. These counts do not mean the original 230 unchanged tests passed.
 
 ## Actual PBX
 
-Rocky Linux 8.10, Asterisk 20.12.0, Python 3.11, two queues and three test endpoints. Live QueueStatus and optional health inventories succeeded. Pause/resume, penalty change/restore, dynamic add/remove, caller priority and specific synthetic caller hangup were checked against actual PBX state. Existing queue member state was restored. No external telephone number was called and no dialplan was modified.
+Rocky Linux 8.10, Asterisk 20.12.0, Python 3.11, two queues and three test endpoints. Live QueueStatus and optional health inventories succeeded. Pause/resume, penalty change/restore, dynamic add/remove, caller priority and specific synthetic caller hangup were checked against actual PBX state. Existing queue member state was restored. The new service replaced the old dashboard listener after a private backup; Asterisk was not restarted. Login, both queues, planning APIs, metrics, local font delivery and locked controls were rechecked on the final listener. No external telephone number was called and no dialplan was modified.
 
 An actual pause command exposed a response-type bug: the PBX changed state but HTTP returned 500. The handler now returns a Flask response and has a regression test. A browser sweep found missing headings for the new shift/directory views; fixed.
 
