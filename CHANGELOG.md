@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.0-beta.19 — 2026-10-24
+
+- Product Design audit follow-up: derive capability status totals from the catalogue and localize their numbers.
+- Add a labeled mobile section selector with all authorized views, replacing the long horizontal menu below 760px.
+- Keep desktop navigation and existing call-control safeguards unchanged.
+
+
 ## 2.1.0-beta.18 — 2026-10-24
 
 - Add isolated Linux WSGI server deployment and external private state.
