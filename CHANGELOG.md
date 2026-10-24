@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0-beta.21 — 2026-10-25
+
+- Opt-in Redis-backed HTTP and authenticated WebSocket gateway; ordinary browser reads never fall back to AMI.
+- Separate read/control identities, shared session revocation, durable command ledger, fenced capacity reservations and optional alert outbox.
+- Exact scoped blind/attended transfer, park/retrieve, pickup, internal click-to-call and active hangup; phone acceptance for transfer/parking/pickup on the test PBX.
+- Fix Local channel provenance across bridges, ringing scope, transferred-device target discovery, RTCP sample direction and late command outcomes.
+- Audit and fix light/dark contrast, caption sizes, keyboard focus and narrow-screen controls across monitoring and management views.
+- Add bilingual deployment guidance and strict evidence-based audit. Reporting, WebRTC and AI remain deferred; broad PBX version certification is not claimed.
+
 ## 2.1.0-beta.20 — 2026-10-24
 
 - Add an opt-in independent asyncio AMI collector: bounded transport/state, event journal, heartbeat, reconnect/resync and Redis lease fencing.

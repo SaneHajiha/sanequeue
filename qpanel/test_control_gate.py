@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 import re
 import time
 
-ALLOWED_ACTIONS = frozenset({'pause_member','priority','first','hangup','spy','whisper','barge','add','remove','penalty'})
+ALLOWED_ACTIONS = frozenset({'pause_member','priority','first','hangup','spy','whisper','barge','add','remove','penalty','transfer','attended_transfer','cancel_transfer','park','retrieve','pickup','dial','hangup_active'})
 
 @dataclass
 class TestControlGate:
@@ -83,7 +83,8 @@ class TestControlGate:
         action = args.get('action', '')
         if action not in self.allowed_actions:
             return False
-        if action in ('priority', 'first', 'hangup'):
+        if action=='dial':return bool(args.get('extension'))
+        if action in ('priority', 'first', 'hangup','transfer','attended_transfer','cancel_transfer','park','retrieve','pickup','hangup_active'):
             # Application independently checks channel is *currently* in this queue.
             return bool(args.get('channel'))
         if args.get('agent') not in self.agents:

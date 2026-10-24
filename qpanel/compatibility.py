@@ -22,3 +22,13 @@ def spy_target(member, agent, channels=(), overrides=None):
     if not re.fullmatch(r'(SIP|PJSIP|Local)/[A-Za-z0-9_.@/+;-]{1,120}', state):
         raise ValueError('unsupported_state_interface')
     return state
+
+
+def device_channel(member, agent, channels, overrides=None):
+    """Resolve exactly one observed leg; never supervise an ambiguous prefix."""
+    target = spy_target(member, agent, channels, overrides)
+    found = {str(row.get('Channel','')) for row in channels
+             if row.get('Channel') == target or str(row.get('Channel','')).startswith(target+'-')}
+    if len(found) != 1:
+        raise ValueError('ambiguous_or_missing_device_channel')
+    return found.pop()

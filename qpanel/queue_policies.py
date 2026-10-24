@@ -16,7 +16,7 @@ import urllib.request
 QUEUE_ID = re.compile(r'^[A-Za-z0-9_-]{1,32}$')
 USER_ID = re.compile(r'^[A-Za-z0-9_.@-]{1,70}$')
 REASON_ID = re.compile(r'^[a-z][a-z0-9_-]{0,31}$')
-ALLOWED_GRANTS = frozenset({'view', 'pause', 'membership', 'monitor', 'hangup', 'priority', 'caller_details'})
+ALLOWED_GRANTS = frozenset({'view', 'pause', 'membership', 'monitor', 'hangup', 'priority', 'caller_details','transfer','park','pickup','dial'})
 DEFAULT_REASONS = [
     {'id':'break', 'label':'استراحت'},
     {'id':'lunch', 'label':'ناهار'},
@@ -76,7 +76,7 @@ def validate_config(raw):
     for username, grant in users.items():
         if not USER_ID.fullmatch(username) or not isinstance(grant,dict):raise ValueError('invalid_supervisor')
         qids=grant.get('queues',[]); actions=grant.get('actions',['view'])
-        if not isinstance(qids,list) or not isinstance(actions,list) or len(qids)>100 or len(actions)>7:
+        if not isinstance(qids,list) or not isinstance(actions,list) or len(qids)>100 or len(actions)>11:
             raise ValueError('invalid_supervisor_scope')
         if any(q not in cleaned['queues'] for q in qids) or any(a not in ALLOWED_GRANTS for a in actions):
             raise ValueError('invalid_supervisor_scope')
@@ -87,6 +87,7 @@ class QueuePolicyStore:
     def __init__(self,path):
         self.path=Path(path)
         self.lock=RLock()
+        self.reservation_backend=None
         self.state=deepcopy(DEFAULT_CONFIG)
         self._departure_reservations={}  # (queue, agent) -> monotonic expiry
         self._alert_previous=set()
@@ -138,7 +139,7 @@ class QueuePolicyStore:
 
     @staticmethod
     def on_duty(member):
-        return str(member.get('Paused', '0')).lower() in ('0','false') and str(member.get('Status','0')) not in ('0','4','5')
+        return str(member.get('Paused', '0')).lower() in ('0','false') and str(member.get('Status','0')) not in ('-1','0','4','5')
 
     def can_leave(self,queue,queue_data,agent):
         """Check live on-duty staffing against a configured *fixed roster*.
@@ -148,6 +149,8 @@ class QueuePolicyStore:
         without an explicit roster, membership shrink could circumvent quotas.
         """
         members=queue_data.get('members',{})
+        if self.reservation_backend is not None:
+            return self.reservation_backend.reserve(queue,agent,members,self.queue(queue)['staffing'],dry=True)
         matched=[m for key,m in members.items() if agent in (key,m.get('Location'))]
         if not matched: return False,'agent_not_in_queue'
         config=self.queue(queue)['staffing']
@@ -179,12 +182,16 @@ class QueuePolicyStore:
             return (after>=minimum, 'ok' if after>=minimum else 'queue_exit_limit_reached')
 
     def reserve_leave(self,queue,queue_data,agent):
+        if self.reservation_backend is not None:
+            return self.reservation_backend.reserve(queue,agent,queue_data.get('members',{}),self.queue(queue)['staffing'])
         with self.lock:
             permitted,reason=self.can_leave(queue,queue_data,agent)
             if permitted:self._departure_reservations[(queue,agent)]=time.monotonic()+60
             return permitted,reason
 
     def release_leave(self,queue,agent):
+        if self.reservation_backend is not None:
+            return self.reservation_backend.release(queue,agent)
         with self.lock:self._departure_reservations.pop((queue,agent),None)
 
     def summary(self,name,queue):
@@ -193,7 +200,7 @@ class QueuePolicyStore:
         status_counts={'ready':0,'busy':0,'paused':0,'offline':0}
         for m in members:
             if str(m.get('Paused','0')).lower() in ('1','true'): status_counts['paused']+=1
-            elif str(m.get('Status','0'))=='1':status_counts['ready']+=1
+            elif str(m.get('Status','0'))=='1' and m.get('Ready',True) is not False:status_counts['ready']+=1
             elif str(m.get('Status','0')) in ('2','3','6','7','8','9','10'):status_counts['busy']+=1
             else:status_counts['offline']+=1
         def val(k):

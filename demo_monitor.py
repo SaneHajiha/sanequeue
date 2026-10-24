@@ -122,6 +122,104 @@ AMI_RUNTIME = {'password': AMI_BOOTSTRAP if SERVER_MODE else '', 'enabled': SERV
 AMI_LOCK = threading.RLock()
 JOURNEY_LISTENER = JourneyListener()
 module.app.config['SANEQUEUE_CALL_JOURNEYS'] = lambda queue_names, numbers: JOURNEY_LISTENER.snapshot(queue_names, numbers=numbers)
+PERSISTENT_READER = None
+if os.environ.get('SANEQUEUE_COLLECTOR_CONFIG'):
+    from redis import Redis
+    from sanequeue.realtime.config import Settings
+    from sanequeue.api.state import StateReader, legacy_queues, journey_projection, scoped_channels
+    collector_settings = Settings.load(os.environ['SANEQUEUE_COLLECTOR_CONFIG'])
+    PERSISTENT_READER = StateReader(Redis.from_url(collector_settings.redis_url, decode_responses=True,
+        socket_timeout=2, socket_connect_timeout=2, max_connections=16), collector_settings.pbx_id)
+    def persistent_journeys(queue_names, numbers):
+        state, health = PERSISTENT_READER.read()
+        return journey_projection(state, queue_names, numbers)
+    def persistent_channels(queue_names):
+        state, health = PERSISTENT_READER.read()
+        now = time.time()
+        return [dict(Channel=c.get('channel',''), Uniqueid=uid,
+                     ChannelStateDesc=c.get('channelstatedesc',''),
+                     CallerIDNum=c.get('connectedlinenum') or c.get('calleridnum',''),
+                     Duration=str(max(0,int(now-c.get('answered_at',c.get('bridge_entered_at',c.get('created_at',now)))))),
+                     HoldSeconds=int(c.get('hold_seconds',0)+max(0,now-c['held_since']) if c.get('held_since') else c.get('hold_seconds',0)),
+                     Queues=c['queues']) for uid,c in scoped_channels(state,queue_names).items()]
+    module.app.config['SANEQUEUE_CALL_JOURNEYS'] = persistent_journeys
+    module.app.config['SANEQUEUE_CHANNEL_PROVIDER'] = persistent_channels
+    module.app.config['SANEQUEUE_REALTIME_PUSH'] = True
+    cfg.config.set('sanequeue','live_channels','true')
+    from sanequeue.actions.ledger import ActionLedger, QueueBusy
+    from sanequeue.actions.transport import send_action
+    ACTION_LEDGER=ActionLedger(STATE/'actions.sqlite3',reservation_seconds=collector_settings.reconcile_seconds+30)
+    POLICIES.reservation_backend=ACTION_LEDGER
+    module.app.config['SANEQUEUE_ACTION_LEDGER']=ACTION_LEDGER
+    def execute_persistent_action(name, fields):
+        state,health=PERSISTENT_READER.read(fresh=True)
+        if time.time()-health.get('published_at',0)>3:
+            return jsonify(error='collector_not_fresh_enough'),409
+        control=os.environ.get('SANEQUEUE_CONTROL_CONFIG')
+        if not control:return jsonify(error='separate_control_identity_required'),403
+        ident=ACTION_LEDGER.create(current_user.get_id(),request.form.get('queue',''),name,fields)
+        try:
+            accepted=send_action(control,name,fields,ident)
+        except PermissionError:
+            ACTION_LEDGER.update(ident,'rejected','control_identity_rejected')
+            return jsonify(error='control_identity_rejected',action_id=ident,state='rejected'),502
+        except Exception:
+            ACTION_LEDGER.update(ident,'unknown','transport_failed_no_automatic_retry')
+            return jsonify(error='command_outcome_unknown',action_id=ident,state='unknown'),502
+        if not accepted:
+            ACTION_LEDGER.update(ident,'rejected','ami_rejected')
+            return jsonify(error='asterisk_action_rejected',action_id=ident,state='rejected'),502
+        return jsonify(ok=True,action_id=ident,state='pending',confirmed=False),202
+    module.app.config['SANEQUEUE_ACTION_EXECUTOR']=execute_persistent_action
+    module.app.config['SANEQUEUE_PRIVATE_STATE']=lambda: PERSISTENT_READER.read(fresh=True)[0]
+    module.app.config['SANEQUEUE_INTERNAL_EXTENSIONS']=tuple(v.strip() for v in os.environ.get('SANEQUEUE_INTERNAL_EXTENSIONS','').split(',') if v.strip())
+    module.app.config['SANEQUEUE_TRANSFER_CONTEXT']=os.environ.get('SANEQUEUE_TRANSFER_CONTEXT','from-internal')
+    module.app.config['SANEQUEUE_PARKING_LOT']=os.environ.get('SANEQUEUE_PARKING_LOT','default')
+    module.app.config['SANEQUEUE_ADVANCED_ACTIONS']=tuple(v.strip() for v in os.environ.get('SANEQUEUE_ADVANCED_ACTIONS','').split(',') if v.strip())
+    from sanequeue.security.sessions import SessionRegistry
+    module.app.config['SANEQUEUE_AUTH_SESSIONS']=SessionRegistry(STATE/'sessions.sqlite3')
+    @module.app.errorhandler(QueueBusy)
+    def queue_busy(error):
+        return jsonify(error='queue_action_in_progress'),409
+    from sanequeue.api.state import StateUnavailable
+    @module.app.errorhandler(StateUnavailable)
+    def state_unavailable(error):
+        return jsonify(error='collector_unavailable'),503
+    from sanequeue.alerts.outbox import AlertOutbox
+    ACTION_OUTBOX=AlertOutbox(STATE/'alerts.sqlite3')
+    WORKER_HEALTH={'reconcile_last_ok':None,'reconcile_failures':0,'delivery_failures':0}
+    module.app.config['SANEQUEUE_WORKER_HEALTH']=WORKER_HEALTH
+    module.app.config['SANEQUEUE_ALERT_PROVIDER']=ACTION_OUTBOX.report
+    def bale_enabled():
+        return os.getenv('SANEQUEUE_ENABLE_BALE_ALERTS')=='1' and bool(os.getenv('SANEQUEUE_BALE_BOT_TOKEN') and os.getenv('SANEQUEUE_BALE_CHAT_ID'))
+    def reconcile_commands():
+        while True:
+            time.sleep(2)
+            try:
+                state,health=PERSISTENT_READER.read()
+                ACTION_LEDGER.reconcile(state)
+                report=POLICIES.evaluate(legacy_queues(state))
+                ACTION_OUTBOX.observe(report['alerts'],POLICIES,delivery_enabled=bale_enabled())
+                WORKER_HEALTH['reconcile_last_ok']=time.time()
+            except Exception:
+                WORKER_HEALTH['reconcile_failures']+=1
+                try:ACTION_LEDGER.reconcile({})
+                except Exception:pass
+    def deliver_notifications():
+        from qpanel.queue_policies import send_bale_alert
+        while True:
+            time.sleep(2)
+            if not bale_enabled():continue
+            try:
+                job=ACTION_OUTBOX.claim()
+                if job is None:continue
+                try:success=send_bale_alert(job['payload'],os.environ['SANEQUEUE_BALE_BOT_TOKEN'],os.environ['SANEQUEUE_BALE_CHAT_ID'])
+                except Exception:success=False
+                if not success:WORKER_HEALTH['delivery_failures']+=1
+                ACTION_OUTBOX.finish(job,success)
+            except Exception:
+                # No URLs, credentials, chat IDs or caller data in logs.
+                WORKER_HEALTH['delivery_failures']+=1
 # One process-wide short-lived snapshot for simultaneous dashboards. Not an
 # event-driven collector; replace with a persistent AMI listener for production.
 LIVE_CACHE = {'signature': None, 'time': 0.0, 'unix': 0.0, 'queues': None}
@@ -314,6 +412,24 @@ def _test_live(settings, *, persist=True):
 
 def _runtime_get_data(user=None):
     settings = _load_settings()
+    if PERSISTENT_READER is not None:
+        try:
+            from flask import has_request_context
+            fresh=has_request_context() and request.endpoint in ('ops_control','pause_member')
+            state, health = PERSISTENT_READER.read(fresh=fresh)
+            data = filter_queue_data(legacy_queues(state), settings.get('visible_queues','!default'))
+            module.backend.latest_sample_unix = health['published_at']
+            module.backend.realtime_health = health
+            module.backend.live_source, module.backend.last_error = 'ami-live', False
+            from flask import g, has_request_context
+            if has_request_context(): g.sanequeue_state_error = False
+            return data
+        except Exception:
+            module.backend.latest_sample_unix = None
+            module.backend.live_source, module.backend.last_error = 'collector-stale', True
+            from flask import g, has_request_context
+            if has_request_context(): g.sanequeue_state_error = True
+            return {}
     if settings.get('enabled'):
         try:
             JOURNEY_LISTENER.configure(settings, parse_trunk_map(os.getenv('SANEQUEUE_TRUNK_MAP_JSON','')))
@@ -354,6 +470,17 @@ module.backend.get_data_queues = _runtime_get_data
 
 
 def _conditional_connect():
+    if PERSISTENT_READER is not None:
+        import configparser
+        path = os.environ.get('SANEQUEUE_CONTROL_CONFIG')
+        if not path:
+            raise PermissionError('separate_control_identity_required')
+        control = configparser.ConfigParser(interpolation=None)
+        if not control.read(path):
+            raise PermissionError('control_configuration_unavailable')
+        from qpanel.asterisk import AsteriskAMI
+        a = control['ami']
+        return AsteriskAMI(a['host'],a.getint('port',5038),a['user'],a['password'])
     if _load_settings().get('enabled'):
         settings=_load_settings()
         from qpanel.asterisk import AsteriskAMI
@@ -417,6 +544,8 @@ def _server_landing():
 def _secure_local_control_post():
     if request.method != 'POST':
         return
+    if PERSISTENT_READER is not None and request.path in ('/api/ami/settings','/api/ami/connect'):
+        return jsonify(error='manage_collector_configuration_on_server'),409
     if request.path not in ('/api/ami/settings','/api/ami/test','/api/ami/connect','/api/ami/control-toggle','/api/ami/diagnose','/api/policies'):
         return
     from flask import abort
@@ -677,6 +806,8 @@ def ami_control_status():
                    live=AMI_RUNTIME['enabled'] and module.backend.live_source == 'ami-live')
 
 
+module.app.config['SANEQUEUE_CONTROL_STATE']=lambda: dict(enabled=_gate_is_active(),remaining_seconds=_gate_remaining(),queue=CONTROL_GATE.queue,allowed_agents=sorted(CONTROL_GATE.agents))
+
 @module.app.route('/api/ami/control-toggle', methods=['POST'])
 def ami_control_toggle():
     payload=request.get_json(silent=True) or {}
@@ -697,8 +828,12 @@ def ami_control_toggle():
         validate_target(_load_settings()['host'], _load_settings()['port'],selected_queue)
         # Refresh QueueStatus for this queue directly before authorizing writes.
         settings=_load_settings()
-        selected_data=read_queue_data(settings['host'],settings['port'],settings['user'],
-                                      settings['password'],selected_queue)
+        if PERSISTENT_READER is not None:
+            state,health=PERSISTENT_READER.read(fresh=True)
+            selected_data=legacy_queues(state)
+        else:
+            selected_data=read_queue_data(settings['host'],settings['port'],settings['user'],
+                                          settings['password'],selected_queue)
         member_data=selected_data[selected_queue].get('members',{})
         allowed=set(member_data)
         allowed.update(str(m.get('Location') or '') for m in member_data.values())
@@ -716,7 +851,9 @@ def ami_control_toggle():
             ('pause_member', 'pause'), ('add', 'membership'),
             ('remove', 'membership'), ('penalty', 'membership'),
             ('spy', 'monitor'), ('whisper', 'monitor'), ('barge', 'monitor'),
-            ('priority', 'priority'), ('first', 'priority'), ('hangup', 'hangup'))
+            ('priority', 'priority'), ('first', 'priority'), ('hangup', 'hangup'),
+            ('transfer','transfer'),('attended_transfer','transfer'),('cancel_transfer','transfer'),
+            ('park','park'),('retrieve','park'),('pickup','pickup'),('dial','dial'),('hangup_active','hangup'))
         if POLICIES.access(current_user.get_id() or '',
                            cfg.get_value_set_default('roles', current_user.get_id() or '', 'viewer'),
                            selected_queue, permission)
@@ -739,6 +876,17 @@ HEALTH_CACHE_LOCK = threading.Lock()
 @module.app.route('/api/pbx/health', methods=['GET'])
 def pbx_health():
     """On-demand and read-only; no fake PBX data and no exposed caller IDs."""
+    kind = request.args.get('kind','channels')
+    if kind not in ('channels','extensions','parking','contacts','registrations','permissions'):
+        return jsonify(error='unsupported_action'), 400
+    if PERSISTENT_READER is not None:
+        from sanequeue.api.state import StateUnavailable
+        from sanequeue.realtime.inventory import inventory_projection
+        try:
+            state, _ = PERSISTENT_READER.read()
+            return jsonify(inventory_projection(state,kind))
+        except StateUnavailable:
+            return jsonify(error='collector_unavailable',supported=False),503
     settings = _load_settings()
     if not AMI_RUNTIME['enabled'] or not settings.get('password'):
         return jsonify(error='live_ami_required', supported=False), 409
@@ -879,6 +1027,14 @@ def accounts_and_grants_api():
 @login_required
 def runtime_metrics():
     if cfg.get_value_set_default('roles',current_user.get_id() or '', 'viewer') != 'admin':abort(403)
+    if PERSISTENT_READER is not None:
+        try:
+            state, health = PERSISTENT_READER.read()
+            return jsonify(collector=health, redis_reads=PERSISTENT_READER.reads,
+                           snapshot_collections=0, cache_seconds=PERSISTENT_READER.cache_seconds,
+                           websocket_enabled=True, single_worker_required=True, workers=WORKER_HEALTH)
+        except Exception:
+            return jsonify(error='collector_unavailable'),503
     return jsonify(snapshot_collections=SNAPSHOTS.collections,cache_seconds=SNAPSHOTS.ttl,
                    consecutive_failures=SNAPSHOTS.failures,
                    retry_after_seconds=max(0,round(SNAPSHOTS.retry_at-time.monotonic(),1)),
@@ -912,7 +1068,10 @@ def planning_api(kind):
         else:rows=[row for row in rows if row['agent']==current_user.get_id()]
     return jsonify(rows=rows,queues=list(allowed),editable=role in ('admin','supervisor'))
 
-if os.getenv('SANEQUEUE_ENABLE_BALE_ALERTS') == '1':
+if PERSISTENT_READER is not None and SERVER_MODE:
+    threading.Thread(target=reconcile_commands,name='command-alert-reconcile',daemon=True).start()
+    threading.Thread(target=deliver_notifications,name='alert-delivery',daemon=True).start()
+elif os.getenv('SANEQUEUE_ENABLE_BALE_ALERTS') == '1':
     threading.Thread(target=_background_alert_loop, name='sanequeue-bale-alerts', daemon=True).start()
 
 

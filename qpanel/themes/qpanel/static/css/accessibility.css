@@ -1,0 +1,152 @@
+/* Shared theme contract for legacy and current monitoring components. */
+body {
+  --panel:var(--card);
+  --surface:var(--card);
+  --text:var(--ink);
+  --border:var(--line);
+  --input-bg:var(--card);
+  font-family:Vazirmatn,"Segoe UI",sans-serif;
+  font-size:14px;
+  line-height:1.8;
+}
+body:not(.dark) {
+  --muted:#4d6378;
+  --accent:#145fb6;
+  --danger:#b32d46;
+  --soft:#edf4fc;
+  --line:#cfdae7;
+}
+body.dark {
+  --muted:#b2c8dc;
+  --accent:#80caff;
+  --danger:#ff9bb0;
+}
+body .topbar .separator {color:var(--muted)!important}
+body.dark .health-pill.healthy {background:#164d40;color:#b0eed2}
+body .sidebar {background-color:#081b32}
+body :is(.logged-user,.logged-user bdi,.top-actions time,.command-strip,.command-strip kbd,.command-strip span,.build-version,.monitor-options>span,.lane-head span,.health-pill,.focus-strategy,.explainer-body span,.legend-pill,footer,footer span) {font-size:12px!important}
+body .lane-head span,body footer {color:var(--muted)}
+body:not(.dark) .badge:not(.offline):not(.pending) {background:#e1f3e9;color:#07543d}
+body:not(.dark) .health-pill.healthy {background:#e1f3e9;color:#07543d}
+body .command-strip {background-color:#10253c;color:#c9e3f5}
+body .command-strip kbd {background:#193c58;color:#ecf7ff;border-color:#52718a}
+body .metrics>.metric {background:#2448ae!important}
+body .metrics>.metric:nth-child(2) {background:#80500a!important}
+body .metrics>.metric:nth-child(3) {background:#086a4f!important}
+body .metrics>.metric:nth-child(4) {background:#ac2546!important}
+body .metrics>.metric:nth-child(5) {background:#155caa!important}
+body .metrics>.metric:nth-child(6) {background:#7134ae!important}
+body .metrics>.metric small {opacity:1}
+body .quick-grid button {background-color:#142b46}
+body .agent-avatar {background-color:#174c87}
+body :is(.queue-readiness-ring b,.agent-filter-summary span,.agent-filter-summary b,.dashboard-agent b,.live-chip,.chart-legend,.chart-legend span,.capacity-stat-lines>div,.capacity-stat-lines b) {font-size:12px!important}
+body:not(.dark) .insights-strip {background:var(--card);color:var(--ink);border-color:var(--line)}
+body:not(.dark) .source-caption small {color:var(--muted)}
+body:not(.dark) .live-chip {background:#e1f3e9;color:#07543d;border-color:#96cbb5}
+body:not(.dark) .donut:before {background:#173955}
+body:not(.dark) .capacity-stat-lines>div {color:var(--muted)}
+body:not(.dark) .capacity-stat-lines b {color:var(--ink)}
+body .command-strip {display:none}
+body .page-heading .eyebrow {display:none}
+body .detail-hero {box-shadow:var(--shadow)}
+body .detail-hero-top {padding:16px 20px}
+body .hero-kicker {display:none}
+body .page-heading {margin-bottom:18px}
+body:is([data-view=users],[data-view=policies],[data-view=settings],[data-view=shifts],[data-view=directory],[data-view=audit],[data-view=features],[data-view=control],[data-view=pbx]) :is(.toolbar,.monitor-options) {display:none}
+body .agent-tile-bottom :is(span,b),body .control-safety-summary :is(span,strong,small),body #overview-agent-list strong {font-size:12px!important}
+body main .agent-action-grid .agent-operation,body main .agent-primary-action {font-size:12px!important;min-height:40px!important}
+body .agent-primary-action {background:#15589a!important}
+body:not(.dark) .agent-tile-bottom button {color:var(--accent)}
+body:not(.dark) .call-primer p {color:var(--muted)}
+body:not(.dark) .call-primer-symbol {color:var(--accent)}
+body .presence-card {background:var(--card);color:var(--ink);border-color:var(--line)}
+body .presence-card h3 {color:var(--ink)}
+body .presence-card p {color:var(--muted)}
+body:not(.dark) .status {background:#e8f1fa;color:#214c73!important}
+body .status {font-size:12px!important}
+body #alerts .empty strong {color:var(--muted)}
+body:not(.dark) :is(.pbx-info,.cap-card p) {color:var(--muted)}
+body:not(.dark) .cap-card b {color:var(--ink)}
+body :is(.cap-pill,.alert-severity-strip>span,.user-grant-tags,.ami-summary,.snapshot-box,.test-scope span,.test-scope b) {font-size:12px!important}
+body:not(.dark) .alert-severity-strip b {color:var(--ink)}
+body:not(.dark) .settings-actions .ghost {background:var(--soft);color:var(--ink);border-color:var(--line)}
+/* Captions must remain readable at a normal browser zoom. */
+body :is(main,.topbar,dialog) :is(p,small,label,th,.tag,.badge,.sq-state,.source-pill,.hero-kicker,.eyebrow,.legend,.section-label>span,.queue-mini-summary,.sq-timeline time) {
+  font-size:12px!important;
+}
+body :is(main,dialog) :is(button,input,select,textarea),body .topbar :is(button,a) {
+  font-size:13px!important;
+  min-height:40px;
+}
+body :is(main,dialog) :is(td,.member-name,.sq-journey-ident,.sq-timeline) {font-size:13px!important}
+body .hero-identity h2 {font-size:23px;line-height:1.6}
+body h1 {font-size:clamp(24px,2.1vw,32px);line-height:1.55}
+body main h2 {font-size:18px}
+body main h3 {line-height:1.7}
+body .page-heading .eyebrow {color:var(--accent)}
+body:not(.dark) :is(.panel-heading p,.hero-identity p,.hero-kicker,.page-metric small) {color:var(--muted)!important}
+body .sq-monitor-shortcuts button {background:var(--card);color:var(--ink);border-color:var(--line)}
+body .sq-monitor-shortcuts button:hover {background:var(--soft);color:var(--accent)}
+body .sq-journey-card {background:var(--card);color:var(--ink);border-color:var(--line)}
+body .sq-journey-card.completed {opacity:1}
+body:not(.dark) .sq-journey-stage {background:#dff4ec;color:#075a43}
+body:not(.dark) .sq-journey-card.completed .sq-journey-stage {background:#e8eef5;color:#344e68}
+body.dark .sq-journey-stage {background:#174c46;color:#a5f0da}
+body.dark .sq-journey-card.completed .sq-journey-stage {background:#243949;color:#d5e4f2}
+body .sq-journey-card small,body .sq-journey-secondary,body .sq-timeline time {color:var(--muted)}
+body:not(.dark) .sq-timeline {border-color:#90abc4}
+body:not(.dark) .sq-state--ready {color:#086145;background:#e4f5ed;border-color:#96cbb5}
+body:not(.dark) .sq-state--talking {color:#164f94;background:#e8f1ff;border-color:#acc5ea}
+body:not(.dark) :is(.sq-state--ringing,.sq-state--busy,.sq-state--held) {color:#78500b;background:#fff2d8;border-color:#dac18a}
+body:not(.dark) .sq-state--paused {color:#634091;background:#f1eafa;border-color:#cbb5df}
+body:not(.dark) .sq-state--offline {color:#a12c46;background:#fceaf0;border-color:#e7b3c1}
+body.dark .sq-state--ready {color:#91e8c7}
+body.dark .sq-state--talking {color:#a8d2ff}
+body.dark :is(.sq-state--ringing,.sq-state--busy,.sq-state--held) {color:#ffd08a}
+body.dark .sq-state--paused {color:#d5baff}
+body.dark .sq-state--offline {color:#ffb0c0}
+body :is(button,a,input,select,textarea):focus-visible {outline:3px solid var(--accent)!important;outline-offset:3px}
+body button:disabled {opacity:1;color:var(--muted);background:var(--bg);border-color:var(--line);cursor:not-allowed}
+body :is(input,textarea)::placeholder {color:var(--muted);opacity:1}
+body .primary {background:#155fb8;color:#fff;border-color:#155fb8}
+body .primary:hover {background:#104c96;color:#fff}
+body .queue-focus-performance {grid-template-columns:repeat(auto-fit,minmax(108px,1fr))}
+body .queue-focus-performance>div {padding:12px;min-width:0}
+body .monitor-options {gap:14px;padding:14px 16px;align-items:center}
+body .monitor-options input {min-width:72px}
+body .toolbar {gap:12px;padding:16px}
+body .toolbar input[type=number] {width:82px}
+body .queue-focus-roster {gap:12px}
+body .table-wrap,body .table-scroll {overflow:auto;max-width:100%;overscroll-behavior-inline:contain}
+body .panel-heading {flex-wrap:wrap;gap:12px}
+body .panel-heading>div {min-width:0}
+body #quality-status,body #advanced-help {padding:14px 20px}
+body .advanced-control-grid button {align-self:end}
+body:not(.dark) .queue-summary-dialog {background:var(--card);color:var(--ink);border-color:var(--line)}
+body:not(.dark) :is(.summary-metrics>div,.summary-dialog-head button) {background:var(--soft);color:var(--ink);border-color:var(--line)}
+body:not(.dark) :is(.summary-dialog-head small,.summary-metrics small,.summary-foot) {color:var(--muted)}
+/* Public wallboards retain their deliberately dark, high-distance palette. */
+body .wb-journey-area .sq-journey-card {background:#173955;color:#f5f9ff;border-color:#52728a}
+body .wb-journey-area :is(.sq-journey-card small,.sq-journey-secondary,.sq-timeline time) {color:#c1d9e9}
+body .wallboard-stage :is(.sq-state--ready,.sq-state--talking,.sq-state--paused,.sq-state--ringing,.sq-state--busy,.sq-state--held,.sq-state--offline) {color:#f4f9ff}
+@media(max-width:760px) {
+ body main {padding:20px 14px}
+ body :is(main,.topbar,dialog) :is(button,input,select,textarea),body .topbar a {min-height:44px}
+ body .toolbar label {flex-wrap:wrap}
+ body .toolbar .search {min-width:0}
+ body .toolbar select {max-width:100%}
+ body .monitor-options>label {flex:1 1 180px;justify-content:space-between}
+ body .monitor-options>button {width:100%}
+ body .page-heading {flex-wrap:wrap}
+ body .heading-actions {flex-direction:row;flex-wrap:wrap}
+ body .queue-focus-performance {grid-template-columns:repeat(2,minmax(0,1fr))}
+ body .hero-identity {align-items:flex-start}
+ body .hero-identity h2 {font-size:20px}
+ body .sq-monitor-shortcuts {display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ body .sq-monitor-shortcuts button {white-space:normal;text-align:start}
+ body .queue-mini-summary {flex-wrap:wrap}
+ body .advanced-control-grid {padding:14px}
+}
+@media(prefers-reduced-motion:reduce) {
+ *,*::before,*::after {animation:none!important;transition:none!important}
+}

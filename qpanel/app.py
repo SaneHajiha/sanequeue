@@ -152,6 +152,9 @@ def user_loader(username):
     version = hashlib.sha256(user_config.password.encode('utf-8')).hexdigest()
     if (app.config.get('SANEQUEUE_REQUIRE_SESSION_VERSION') or session.get('_auth_version')) and session.get('_auth_version') != version:
         return None
+    registry=app.config.get('SANEQUEUE_AUTH_SESSIONS')
+    if registry and not registry.active(session.get('sq_auth_session'),username,version):
+        return None
     return set_data_user(user_config)
 
 
@@ -202,6 +205,9 @@ def login():
     if valid:
         session.clear()
         session['_auth_version'] = hashlib.sha256(stored.encode('utf-8')).hexdigest()
+        registry=app.config.get('SANEQUEUE_AUTH_SESSIONS')
+        if registry:
+            session['sq_auth_session']=registry.issue(username,session['_auth_version'])
         user = set_data_user(user_config)
         flask_login.login_user(user)
         return redirect(url_for('home'))
@@ -436,7 +442,10 @@ def check_new_version():
 
 @app.route('/logout')
 def logout():
+    registry=app.config.get('SANEQUEUE_AUTH_SESSIONS')
+    if registry:registry.revoke(session.get('sq_auth_session'))
     flask_login.logout_user()
+    session.clear()
     return redirect(url_for('login'))
 
 

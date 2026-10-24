@@ -206,6 +206,22 @@ class AccessTest(unittest.TestCase):
             response = self.client.post('/api/members/pause', data={'queue': 'sales', 'agent': 'SIP/100', 'paused': 'false'}, headers={'X-CSRF-Token': 'test-csrf'})
             self.assertEqual(response.status_code, 502)
 
+    def test_persistent_action_response_is_normalized_before_reservation_handling(self):
+        from flask import jsonify
+        self.login('supervisor')
+        policy=self.store.export()
+        policy['queues']['sales']['staffing'].update(roster_size=1,max_absent_count=1,max_absent_percent=100,min_on_duty=0)
+        self.store.replace(policy)
+        self.app.config['SANEQUEUE_ACTION_EXECUTOR']=lambda name,fields:(jsonify(state='pending',action_id='sq-'+'a'*32),202)
+        from contextlib import nullcontext
+        from unittest.mock import Mock
+        self.app.config['SANEQUEUE_ACTION_LEDGER']=Mock(queue_lock=lambda queue:nullcontext())
+        with patch.object(self.module.backend,'_connect') as connect:
+            response=self.client.post('/api/members/pause',data=dict(queue='sales',agent='SIP/100',paused='true',reason='break'),headers={'X-CSRF-Token':'test-csrf'})
+        self.assertEqual(response.status_code,202)
+        self.assertEqual(response.json['state'],'pending')
+        connect.assert_not_called()
+
     def test_monitoring_tabs_render_without_reports(self):
         self.login('supervisor')
         response = self.client.get('/operations')
@@ -232,6 +248,17 @@ class AccessTest(unittest.TestCase):
         self.assertEqual(member['LiveChannelState'], 'Up')
         self.assertEqual(member['LiveChannel'], 'PJSIP/100-000001')
         self.assertNotIn('PRIVATE', str(response.json))
+
+    def test_transferred_endpoint_remains_a_control_target_with_strict_queue_scope(self):
+        self.login('supervisor')
+        self.app.config['SANEQUEUE_PRIVATE_STATE']=lambda:dict(channels={
+            'transferred':dict(channel='PJSIP/300-aaa',queues=['sales']),
+            'other':dict(channel='PJSIP/999-bbb',queues=['private']),
+            'cross':dict(channel='PJSIP/888-ccc',queues=['sales','private'])})
+        response=self.client.get('/api/control/options?queue=sales')
+        self.assertEqual(response.status_code,200)
+        self.assertEqual([r['channel'] for r in response.json['targets']],['PJSIP/300-aaa'])
+        self.assertEqual(self.client.get('/api/control/options?queue=private').status_code,403)
 
     def test_preview_blocks_direct_control_requests(self):
         self.login('supervisor')

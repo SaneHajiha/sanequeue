@@ -172,19 +172,19 @@ body.dark{--bg:#061322;--card:#10253c;--ink:#e9f4ff;--muted:#acc4dc;--line:#2744
 .panel{border-radius:15px;border:1px solid var(--line);background:var(--card);box-shadow:var(--shadow);min-width:0}
 body:not(.dark) .panel-heading,body:not(.dark) .view:not(#live-view) .panel-heading{background:linear-gradient(90deg,#f6f9ff,#edf5fc)!important;border-bottom:1px solid var(--line)!important}
 body:not(.dark) .panel-heading h2,body:not(.dark) .view:not(#live-view) .panel-heading h2{color:#19354f!important}
-body:not(.dark) .panel-heading p,body:not(.dark) .view:not(#live-view) .panel-heading p{color:#617d97!important}
+body:not(.dark) .panel-heading p,body:not(.dark) .view:not(#live-view) .panel-heading p{color:var(--muted)!important}
 body:not(.dark) .detail-hero{background:linear-gradient(115deg,#e9f5ff,#dceafa)!important;border-color:#c8d8ec!important}
 body:not(.dark) .detail-hero .hero-identity h2{color:#112e4c!important}
-body:not(.dark) .detail-hero .hero-identity p,body:not(.dark) .hero-kicker{color:#50789b!important}
+body:not(.dark) .detail-hero .hero-identity p,body:not(.dark) .hero-kicker{color:var(--muted)!important}
 body:not(.dark) .detail-hero-kpis{background:#f5faff!important;border-top-color:#dae6f3!important}
 body:not(.dark) .page-metric{border-color:#d7e5f3!important}
 body:not(.dark) .page-metric strong{color:#173653!important}
-body:not(.dark) .page-metric small{color:#5e809d!important}
+body:not(.dark) .page-metric small{color:var(--muted)!important}
 body:not(.dark) .source-pill{background:#edf9f8;color:#117769;border-color:#bce6d9}
 body:not(.dark) .queue-lane,body:not(.dark) .agent-tile,body:not(.dark) .pbx-live-tile,body:not(.dark) .legend-pill,body:not(.dark) .control-safety-summary>span,body:not(.dark) .alert-severity-strip>span,body:not(.dark) .call-primer{background:#f7faff;border-color:#d8e6f2;color:#193653}
 body:not(.dark) .queue-lane strong,body:not(.dark) .agent-tile strong,body:not(.dark) .agent-tile-bottom,body:not(.dark) .pbx-live-tile strong,body:not(.dark) .legend-pill b{color:#173652}
 body:not(.dark) .lane-head{color:#234365}body:not(.dark) .lane-track{background:#dceafa}
-body:not(.dark) .agent-tile small,body:not(.dark) .agent-tile-bottom,body:not(.dark) .pbx-live-tile small{color:#5b7b98}
+body:not(.dark) .agent-tile small,body:not(.dark) .agent-tile-bottom,body:not(.dark) .pbx-live-tile small{color:var(--muted)}
 body:not(.dark) .waiting-spotlight{background:linear-gradient(110deg,#fff7e9,#f6fafc);border-color:#f5d9a2}
 body:not(.dark) .waiting-spotlight strong{color:#66410e}body:not(.dark) .waiting-spotlight span{color:#996518}
 body:not(.dark) .wallboard-summary{background:#ecf5ff;border-color:#d3e4f6}
@@ -490,3 +490,6 @@ body.wallboard .wallboard-stage:not(:fullscreen){position:fixed;inset:0;z-index:
  .mobile-view-jump select:focus-visible{outline:3px solid #62caff;outline-offset:2px}
  .sidebar nav.sq-full-nav{display:none}
 }
+
+/* SaneQueue supervisor actions: usable at desktop and narrow mobile widths. */
+.advanced-control-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:20px}.advanced-control-grid label{display:grid;gap:8px;font-weight:600}.advanced-control-grid select{width:100%;min-width:0;min-height:44px;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--card);color:inherit}.advanced-control-grid button{min-height:44px}.command-feedback{padding:16px;border:1px solid var(--accent);border-radius:12px;margin:16px 0;background:var(--card);line-height:1.8}.advanced-control-grid select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}@media(max-width:640px){.advanced-control-grid{grid-template-columns:minmax(0,1fr);padding:14px}.advanced-control-grid button{width:100%}}

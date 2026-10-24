@@ -4,13 +4,13 @@
 
 Persian and English live queue monitoring for Asterisk-based contact centers. MIT licensed.
 
-**2.1.0-beta.20 · collector pilot release · [راهنمای فارسی](README.fa.md)**
+**2.1.0-beta.21 · Redis and WebSocket monitoring beta · [راهنمای فارسی](README.fa.md)**
 
 ![English operations dashboard with synthetic demonstration data](docs/images/dashboard-en.png)
 
-## Collector pilot and strict audit
+## Redis-backed monitoring and strict audit
 
-This release adds an independent persistent read-only AMI collector with Redis leader fencing. It is **opt-in**; the existing web adapter has not migrated to it. See [architecture](docs/REALTIME_ARCHITECTURE.md), [strict audit and scores](docs/AUDIT_20261024.fa.md), [database plan](docs/DATABASE_PLAN.md) and [admin password recovery](docs/ADMIN_ACCESS.md). WebSocket and full historical reporting remain undelivered.
+The opt-in persistent mode now connects the existing dashboard to Redis and an authenticated ASGI WebSocket gateway. A separate read-only AMI collector handles queue events independently of browser count. See [deployment](docs/REALTIME_DEPLOYMENT.md), [architecture](docs/REALTIME_ARCHITECTURE.md), [beta.21 audit and scores](docs/AUDIT_BETA21.md) and [admin password recovery](docs/ADMIN_ACCESS.md). Reporting remains the next phase.
 
 ## What you can use
 
@@ -20,13 +20,13 @@ This release adds an independent persistent read-only AMI collector with Redis l
 - Staged pause/resume, penalty, dynamic membership, caller priority and hangup controls with CSRF checks and audit records.
 - SIP/PJSIP endpoint and registration inventory, active channel and parking inventory, capability detection.
 - Live call journey events, threshold alerts, optional Bale notifications, queue directory and shift planning with overlap validation.
-- Shared five-second AMI snapshots, bounded timeouts and failure backoff. Viewing the panel does not create an AMI connection per browser request.
+- Persistent collector mode: Redis-only normal reads, WebSocket push, scoped exact call targets, durable command/capacity state and optional alert outbox. Legacy five-second snapshots remain an explicit rollback mode.
 
-Listen/whisper/barge requests use ChanSpy and a configured supervisor extension. AMI acceptance is **not audio confirmation**. These controls remain beta and require a manual audio acceptance test on each installation. Transfer, pickup, parking controls, CRM, WebRTC, AI and historical reports are **not delivered features**. See the [feature matrix](docs/FEATURES.md).
+Listen/whisper/barge requests use ChanSpy and a configured supervisor extension. AMI acceptance is **not audio confirmation**. These controls remain beta and require a manual audio acceptance test on each installation. Transfer, park/retrieve and pickup have now passed test-PBX telephone acceptance; they remain installation-specific beta controls. CRM, WebRTC, AI and historical reports remain deferred. See the [feature matrix](docs/FEATURES.md).
 
 ## Install and operate
 
-[Installation](docs/INSTALL.md) · [Compatibility and performance](docs/COMPATIBILITY.md) · [User guide](docs/USER_GUIDE.md) · [Validation evidence](docs/VALIDATION.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
+[Persistent mode setup](docs/REALTIME_DEPLOYMENT.md) · [Base installation](docs/INSTALL.md) · [Compatibility and performance](docs/COMPATIBILITY.md) · [User guide](docs/USER_GUIDE.md) · [Validation evidence](docs/VALIDATION.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
 ```bash
 git clone https://github.com/SaneHajiha/sanequeue.git
