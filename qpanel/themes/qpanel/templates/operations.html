@@ -3,7 +3,8 @@
 <html lang="{{ ui_language }}" dir="{{ ui_direction }}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{ t('صانع | مرکز عملیات تماس', 'SaneQueue | Contact center') }}</title>
-<link rel="stylesheet" href="{{ theme_static('css/operations.css') }}?v={{ current_version() }}"></head>
+<link rel="stylesheet" href="{{ theme_static('css/operations.css') }}?v={{ current_version() }}">
+<link rel="stylesheet" href="{{ theme_static('css/accessibility.css') }}?v={{ current_version() }}"></head>
 <body>
 <a class="skip" href="#main">{{ t('رفتن به محتوا','Skip to content') }}</a>
 <aside class="sidebar">
@@ -175,7 +176,24 @@
  <button data-open="agents"><span>♙</span><b>{{ t('مدیریت اعضا','Queue membership') }}</b><small>{{ t('افزودن، حذف، وزن توزیع','Add, remove, penalty') }}</small></button>
  <button data-open="calls"><span>◉</span><b>{{ t('شنود و نجوا','Listen & Whisper') }}</b><small>{{ t('فقط مکالمه آزمایشی با رضایت','Consent-based test calls only') }}</small></button>
  <button data-open="waiting"><span>↥</span><b>{{ t('مدیریت انتظار','Waiting management') }}</b><small>{{ t('اولویت، ابتدای صف و قطع','Priority, front, hangup') }}</small></button>
- </div><p class="feature-limit">{{ t('انتقال Blind/Attended، Park، Pickup و کنفرانس هنوز در این نسخه پیاده‌سازی نشده‌اند؛ اضافه‌کردن کنترل نمایشی بدون اتصال واقعی گمراه‌کننده است.','Blind/attended transfer, Park, Pickup, and Conference are not implemented in this beta. Placeholder controls would be misleading.') }}</p></section>
+ </div></section>
+<section class="panel" id="advanced-controls" hidden>
+ <div class="panel-heading"><div><h2>{{ t('انتقال، پارک و پاسخ‌گویی سرپرست','Transfer, park & supervisor pickup') }}</h2><p>{{ t('کانال دقیق، مقصد داخلی مجاز و تأیید نتیجه؛ بدون شماره‌گیری آزاد','Exact channel, approved internal destination and observed outcomes') }}</p></div><button type="button" id="advanced-reload">{{ t('به‌روزرسانی هدف‌ها','Reload targets') }}</button></div>
+ <form id="advanced-form" class="advanced-control-grid">
+  <label>{{ t('صف','Queue') }}<select id="advanced-queue" required aria-label="{{ t('صف عملیات پیشرفته','Advanced action queue') }}"></select></label>
+  <label>{{ t('عملیات','Action') }}<select id="advanced-action" required></select></label>
+  <label>{{ t('تماس یا محل پارک','Call or parking slot') }}<select id="advanced-target" required></select></label>
+  <label>{{ t('مقصد داخلی','Internal destination') }}<select id="advanced-extension"></select></label>
+  <button type="submit" class="primary">{{ t('بررسی و تأیید عملیات','Review & confirm action') }}</button>
+ </form>
+ <p class="muted" id="advanced-help" role="status">{{ t('صف را انتخاب کنید؛ فقط تماس‌های دارای مجوز و مقصدهای پیکربندی‌شده نمایش داده می‌شوند.','Choose a queue. Only authorized calls and configured destinations appear.') }}</p>
+</section>
+<div id="command-feedback" class="command-feedback" role="status" aria-live="polite" hidden></div>
+<section class="panel" id="quality-panel" hidden>
+ <div class="panel-heading"><div><h2>{{ t('کیفیت رسانهٔ مشاهده‌شده','Observed media quality') }}</h2><p>{{ t('فقط نمونه‌های RTCP موجود؛ نبود نمونه به معنی سالم بودن صدا نیست.','Available RTCP samples only. Missing samples do not establish audio quality.') }}</p></div><button id="quality-reload" type="button">{{ t('بررسی کیفیت','Check quality') }}</button></div>
+ <p id="quality-status" role="status">{{ t('برای دریافت نمونه‌های مجاز، بررسی کیفیت را بزنید.','Check quality to read authorized samples.') }}</p>
+ <div class="table-scroll"><table><thead><tr><th>{{ t('صف','Queue') }}</th><th>{{ t('فناوری','Technology') }}</th><th>RTT (ms)</th><th>{{ t('افت بسته (%)','Packet loss (%)') }}</th><th>{{ t('جیتر (تیک RTP)','Jitter (RTP ticks)') }}</th><th>{{ t('تازگی','Freshness') }}</th></tr></thead><tbody id="quality-rows"></tbody></table></div>
+</section>
 </section>
 <section id="wallboard-view" class="view" hidden>
  <div id="wallboard-stage" class="wallboard-stage" aria-label="{{ t('وال‌برد مرکز تماس','Call center wallboard') }}">
@@ -253,6 +271,10 @@
        <label><input type="checkbox" value="hangup"> Hangup</label>
        <label><input type="checkbox" value="priority"> {{ t('نوبت و اولویت','Priority') }}</label>
        <label><input type="checkbox" value="caller_details"> {{ t('نمایش شماره مشتری','Caller number') }}</label>
+       <label><input type="checkbox" value="transfer"> {{ t('انتقال تماس','Transfer') }}</label>
+       <label><input type="checkbox" value="park"> {{ t('پارک و بازیابی','Park & retrieve') }}</label>
+       <label><input type="checkbox" value="pickup"> {{ t('پاسخ به زنگ دیگران','Pickup') }}</label>
+       <label><input type="checkbox" value="dial"> {{ t('تماس داخلی','Internal call') }}</label>
       </fieldset>
 
       <button type="submit" class="primary">{{ t('ثبت یا به‌روزرسانی حساب','Create or update account') }}</button>
@@ -282,6 +304,7 @@
   <section class="panel settings-panel">
    <div class="panel-heading"><div><h2>{{ t('اتصال محلی به AMI','Local AMI connection') }}</h2><p>{{ t('تست AMI مستقل از فعال‌سازی داشبورد است و تنظیمات در صورت خطا حفظ می‌شوند.','AMI diagnostics are separate from activating the dashboard, and failed tests do not reset input.') }}</p></div><span class="tag" id="ami-mode-tag">{{ t('داده ساختگی','Sample data') }}</span></div>
    <form id="ami-settings-form" class="settings-form">
+   {% if ops_config.realtime_push %}<p class="notice">{{ t('مانیتورینگ با Collector مستقل و Redis فعال است. تنظیمات اتصال روی سرور مدیریت می‌شود؛ فرمان‌های سرپرست از گیت کنترل همین صفحه فعال می‌شوند.','Monitoring uses the independent collector and Redis. Connection settings are managed on the server; supervisor actions use the control gate below.') }}</p>{% endif %}
      <label>{{ t('انتخاب اتصال ایزابل / AMI','Select PBX connection') }}
       <select id="ami-preset"><option value="lan">{{ t('ایزابل آزمایشی — اتصال داخلی شبکه','Test Issabel — Local LAN') }}</option><option value="tunnel">{{ t('تونل امن SSH — همین کامپیوتر','SSH tunnel — this computer') }}</option><option value="custom">{{ t('تنظیمات پیشرفته (سرور دیگر)','Advanced — different PBX') }}</option></select>
       <small>{{ t('انتخاب اتصال، آدرس و پورت را تنظیم می‌کند؛ فقط رمز حساب AMI باید وارد شود.','Selecting the connection fills host and port; the AMI password is still required.') }}</small></label>

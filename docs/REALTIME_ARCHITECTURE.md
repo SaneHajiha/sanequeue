@@ -1,10 +1,10 @@
 # SaneQueue real-time architecture
 
-Status: collector pilot, 2026-10-24. This document describes implemented boundaries and the remaining migration, not a production certification. The installed beta.19 web application still uses its legacy snapshot adapter and separate journey listener. The new collector has been tested independently against the test PBX; it is not silently enabled for existing installs.
+Status: integrated opt-in Redis/WebSocket beta.21, 2026-10-25. The existing Flask UI can now run behind the ASGI gateway with Redis-only ordinary reads. Legacy mode remains explicit for rollback. See [deployment](REALTIME_DEPLOYMENT.md) and [current audit](AUDIT_BETA21.md). This is not a production certification.
 
 ## Stack and process boundaries
 
-Retain Python 3.10–3.12 and the working Flask application during migration. Use `asyncio` for the read-only collector, Redis for expiring shared state and leader fencing, an authenticated ASGI WebSocket gateway for the next phase, and PostgreSQL for the future application event/report database. Existing MariaDB CDR remains read-only. SQLite remains appropriate for a single-node pilot, not shared high-availability state.
+Retain Python 3.10–3.12 and the working Flask application during migration. Use `asyncio` for the read-only collector, Redis for expiring shared state and leader fencing, the authenticated Starlette/a2wsgi/uvicorn WebSocket gateway, and PostgreSQL for the future application event/report database. Existing MariaDB CDR remains read-only. SQLite remains appropriate for a single-node pilot, not shared high-availability state.
 
 ```text
 sanequeue/
@@ -15,9 +15,9 @@ sanequeue/
     store.py                # Redis lease, fenced publish, TTL, stale detection
     config.py               # private configuration, verified TLS option
     __main__.py             # daemon and sanitized Redis-only status CLI
-  api/                      # NEXT: authenticated read API and scoped projections
-  actions/                  # NEXT: separate control identity, command lifecycle
-  gateway/                  # NEXT: authenticated WebSocket push and backpressure
+  api/                      # IMPLEMENTED: Redis-only scoped projections
+  actions/                  # IMPLEMENTED: separate control identity, durable command lifecycle
+  gateway/                  # IMPLEMENTED: authenticated WebSocket push and bounded sends
   history/                  # LATER: queue_log/CDR import and reporting
 qpanel/                     # existing application; staged replacement, legal lineage retained
 deploy/sanequeue-collector.service
@@ -27,24 +27,24 @@ tests/test_realtime_engine.py
 tests/test_realtime_redis.py
 ```
 
-Only `realtime/` is the new implementation in this phase. The proposed directories marked NEXT/LATER are not empty pretend modules. Existing product menus remain available while their internals migrate.
+`api/`, `actions/`, `gateway/`, `alerts/` and `security/` now contain working implementation. History remains the later reporting phase. SQLite WAL holds single-node commands, session revocation and optional notification outbox.
 
 ```mermaid
 flowchart LR
   PBX[Asterisk AMI] -->|one read connection per leader| C[asyncio collector]
   C -->|fenced state and health| R[(private Redis)]
-  R --> A[scoped authenticated API - next]
-  R --> W[WebSocket gateway - next]
+  R --> A[scoped authenticated API]
+  R --> W[WebSocket gateway]
   A --> UI[dashboard]
   W --> UI
-  UI --> S[authorized supervisor commands - migration next]
+  UI --> S[authorized supervisor commands]
   S -->|separate AMI control identity| PBX
 ```
 
 ## Implemented collector guarantees
 
 - One elected leader per `pbx_id`; standby processes do not connect to AMI. A Lua ownership check fences every state publication. Losing renewal cancels connection/login as well as an established session. This limits duplicates during network partitions; it cannot provide an instantaneous physical singleton across arbitrary process freezes.
-- A single connection carries Login, QueueStatus, optional CoreShowChannels and Ping. Its encoder rejects all other actions and CR/LF/NUL injection. Use a genuinely read-only AMI identity as a second boundary. The live pilot reused the existing private identity; production identity separation has not been deployed.
+- A single connection carries Login, QueueStatus, optional CoreShowChannels, Ping and allowlisted read-only inventory actions. Its encoder rejects mutating actions and CR/LF/NUL injection. The test installation now uses a dedicated loopback read identity; supervisor commands use a separate short-lived connection with an independent identity. Optional inventory is partial when action permissions are unavailable.
 - QueueStatus/CoreShowChannels run on startup, reconnect and reconciliation (default 120 seconds), not on viewer requests. Ping is default 10 seconds. Reload requests a resync with a five-second minimum interval.
 - Events arriving during snapshots enter a bounded journal. QueueParams sequence barriers avoid replaying aggregate completions already represented by that response. AMI snapshots are not atomic transactions; `snapshot_atomic=false` remains explicit and periodic reconciliation is required.
 - Reconnect uses exponential backoff with jitter, capped at 30 seconds. All request futures settle on timeout/disconnect. Transport cleanup is bounded. Event/frame/state/journal/payload budgets fail closed and resynchronize instead of allocating indefinitely.
@@ -61,25 +61,13 @@ QueueParams SLA/performance, Holdtime and TalkTime are PBX summaries at their sn
 
 CoreShowChannels can inventory active legs but does not reconstruct every bridge or answered call's originating queue after reconnect. `initial_call_scope_complete=false` and `history_complete=false` are intentional. Unattributed legs must remain hidden from scoped users; never guess permissions from caller number, extension prefixes or Linkedid alone. The collector's entire Redis payload is private, not a browser response.
 
-## Next migration gates
+## Integrated gateway and command boundaries
 
-1. Replace all ordinary dashboard reads and the separate journey listener with Redis projections; ensure old import-time backend connections and optional channel probes are also disabled in this mode. Keep legacy mode explicit for rollback. No silent fallback on failure.
-2. Apply queue/action scope server-side before serialization, including dictionary keys, IDs, caller numbers, free-form fields and channel associations. Test viewer/agent/supervisor/admin, access revocation and expired sessions. Authenticate WebSocket upgrades, validate Origin, limit frame/subscription rate and re-check scope on every update.
-3. Migrate controls to a separate AMI identity and a durable command ledger: pending → confirmed/rejected/unknown. AMI accepted does not prove device state or audio. Revalidate target ownership against fresh state, serialize staffing reservations across processes and reconcile external PBX changes. App policy cannot prevent manual PBX commands without PBX-side enforcement.
-4. WebSocket full snapshot plus revision/generation contract; coalesce slow clients and disconnect rather than keep unbounded per-viewer queues. Existing frontend polling remains until this gate passes. No WebSocket feature is claimed by the collector release.
-5. Reporting and durable alert outbox follow monitoring. Issabel SSO requires validated server-side session integration, not a trusted cookie or HTTP header.
+Ordinary HTTP and WebSocket projections read Redis only. Scope and caller redaction are applied before serialization. The actual Flask login/session pipeline runs on every push; a shared hashed-token registry invalidates existing sockets after logout. Origin is explicit. Client action frames are refused. Full snapshots coalesce every two seconds; bounded connections, payloads and send deadlines prevent unbounded per-viewer queues. Redis failures never cause a hidden AMI fallback.
 
-## Pilot installation and rollback
+Control targets are revalidated from fresh scoped state and a server-owned internal extension allowlist. Exact Local halves and observed bridges propagate queue provenance; Linkedid is not an authorization boundary. Transferred SIP/PJSIP endpoints remain targets even after queue membership ends. SQLite serializes staffing reservations and records pending/confirmed/rejected/unknown commands. State confirmation does not establish causation or audio. Optional Bale outbox delivery is leased, bounded and at least once.
 
-Do not replace system Python or restart Asterisk. Install the collector's dependencies into a dedicated virtual environment (or the matching application venv), copy the private example to `/etc/sanequeue/collector.ini`, and provide a private authenticated Redis endpoint. Set config ownership `root:sanequeue`, mode `0640`. Never expose Redis or plain AMI to the public network. For remote AMI configure verified TLS or a private tunnel. The example does not create an AMI account or Redis server.
-
-```bash
-python -m pip install -r requirements/collector.txt
-python -m sanequeue.realtime --config /etc/sanequeue/collector.ini
-python -m sanequeue.realtime --config /etc/sanequeue/collector.ini --status
-```
-
-Review the service template paths before installing it. Stop the collector service to roll back this pilot; the legacy web service does not depend on it yet. The live validation used an isolated Redis on loopback port 16379, temporary credentials and two shadow collectors. Both collectors and temporary Redis were stopped afterward. Installing the distribution Redis package did not enable its service.
+Run one gateway process. HA, full historical reporting, independent penetration review, broad PBX VM acceptance and high-call-volume soak testing remain future acceptance gates. Follow the [bilingual deployment/rollback guide](REALTIME_DEPLOYMENT.md); stopping Redis is not a legacy fallback.
 
 Cancellation-race context: [CPython issue 86296](https://github.com/python/cpython/issues/86296). The collector uses an explicit deadline helper and regression tests rather than depending on race-sensitive `wait_for` behavior across supported Python versions.
 

@@ -56,7 +56,8 @@ class Beta15Test(unittest.TestCase):
   self.assertIn('id="ami-queue"',HTML)
   self.assertIn('id="ami-visible-queues"',HTML)
   self.assertIn('reflectAmiPreset()',JS)
-  self.assertIn('PJSIPShowEndpoints', (R/'qpanel/ami_health.py').read_text(encoding='utf-8'))
+  from qpanel.ami_health import _ACTIONS
+  self.assertEqual(_ACTIONS['extensions'],('PJSIPShowEndpoints','EndpointList','EndpointListComplete'))
  def test_route_is_registered_before_blocking_flask_run(self):
   self.assertLess(APP.index("@module.app.route('/api/accounts/with-grants'"),APP.index('module.app.run('))
   self.assertIn('save_account_with_grants',APP)

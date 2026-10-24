@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
-      - run: pip install -r requirements/modern.txt pytest
+      - run: pip install -r requirements/modern.txt pytest httpx2
       - run: pybabel compile -d qpanel/translations
       - run: python -m pytest tests --ignore=tests/historical
       - run: node --check qpanel/themes/qpanel/static/js/operations.js

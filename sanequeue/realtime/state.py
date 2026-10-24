@@ -1,6 +1,7 @@
 """Private materialized state; consumers must apply queue scope and redaction."""
 import copy
 import time
+import math
 
 
 def integer(value, default=0):
@@ -44,6 +45,9 @@ class QueueState:
         self.channels_complete = False
         self._counter_events = {}
         self.wrap_deadlines = {}
+        self.action_events = {}
+        self.parked = {}
+        self.inventory = {}
 
     def _put(self, table, key, value):
         if key not in table:
@@ -73,9 +77,14 @@ class QueueState:
         channel = dict(old)
         channel.update({k: event[k] for k in ('channel', 'linkedid', 'channelstate',
                        'channelstatedesc', 'calleridnum', 'calleridname', 'exten',
-                       'context', 'application', 'duration') if k in event})
-        channel.setdefault('created_at', self.clock())
+                       'context', 'application', 'duration','connectedlinenum','connectedlinename','bridgeid') if k in event})
+        seconds=sum(integer(v)*(60**i) for i,v in enumerate(reversed(str(event.get('duration','0')).split(':'))))
+        channel.setdefault('created_at', self.clock()-seconds)
         channel.setdefault('queues', [])
+        if str(event.get('application','')).lower()=='queue':
+            observed_queue=str(event.get('applicationdata','')).split(',',1)[0]
+            if observed_queue in self.queues:
+                channel['queues']=sorted(set(channel['queues'])|{observed_queue})
         self._put(self.channels, uid, channel)
         if old.get('channel') and old.get('channel') != channel.get('channel'):
             self.by_channel.pop(old['channel'], None)
@@ -83,10 +92,46 @@ class QueueState:
             self.by_channel[channel['channel']] = uid
         return uid
 
+    def propagate_scopes(self, uid):
+        """Follow observed bridges and exact Local halves, never a Linkedid guess."""
+        pending, seen, scopes = [uid], set(), set()
+        while pending:
+            current=pending.pop()
+            if current in seen or current not in self.channels:continue
+            seen.add(current)
+            if len(seen)>2048:raise StateOverflow('call_component_limit')
+            channel=self.channels[current]
+            scopes.update(channel.get('queues',[]))
+            pending.extend(self.bridges.get(channel.get('bridge'),set())-seen)
+            name=channel.get('channel','')
+            if name.startswith('Local/') and name.endswith((';1',';2')):
+                peer=self.by_channel.get(name[:-1]+('2' if name[-1]=='1' else '1'))
+                if peer and peer not in seen:pending.append(peer)
+        if scopes:
+            for current in seen:self.channels[current]['queues']=sorted(scopes)
+        return seen
+
     def ingest(self, event):
         e = {str(k).lower(): str(v)[:2048] for k, v in event.items()}
         kind, queue, now = e.get('event', '').lower(), e.get('queue'), self.clock()
         handled = False
+        if kind == 'originateresponse' and e.get('actionid','').startswith('sq-'):
+            self.action_events[e['actionid']] = {k:e[k] for k in ('response','reason') if k in e}
+            while len(self.action_events)>1000:self.action_events.pop(next(iter(self.action_events)))
+            handled = True
+        if kind in ('parkedcall','unparkedcall','parkedcalltimeout','parkedcallgiveup'):
+            parked_uid=e.get('parkeeuniqueid') or self.by_channel.get(e.get('parkeechannel'))
+            if kind=='parkedcall':
+                key=e.get('parkinglot','')+':'+e.get('parkingspace','')
+                value={k:e[k] for k in ('parkinglot','parkingspace','parkeechannel','parkeeuniqueid') if k in e}
+                value['queues']=list(self.channels.get(parked_uid,{}).get('queues',[]))
+                value['observed_at']=now
+                self._put(self.parked,key,value)
+            else:
+                for key,value in list(self.parked.items()):
+                    if (parked_uid and value.get('parkeeuniqueid')==parked_uid) or (e.get('parkeechannel') and value.get('parkeechannel')==e['parkeechannel']):
+                        self._drop(self.parked,key)
+            handled=True
         if queue and kind in {'queueparams', 'queueentry', 'queuemember',
                 'queuememberadded', 'queuememberremoved', 'queuememberstatus',
                 'queuememberpause', 'queuememberpenalty', 'queuememberringinuse',
@@ -146,6 +191,12 @@ class QueueState:
                 # Status/device events remain authoritative for ready/ringing.
                 if kind != 'agentcalled':
                     m['state_observed_since'] = now
+            if kind in ('agentcalled','agentconnect'):
+                for call_uid in (e.get('uniqueid'),e.get('destuniqueid')):
+                    if call_uid in self.channels:
+                        if kind=='agentconnect':self.channels[call_uid]['answered_at']=now
+                        self.channels[call_uid]['queues']=sorted(set(self.channels[call_uid].get('queues',[]))|{queue})
+                        self.propagate_scopes(call_uid)
             if member:
                 m = q['members'].get(member, {})
                 deadline = integer(m.get('lastcall')) + integer(m.get('wrapuptime'))
@@ -155,12 +206,30 @@ class QueueState:
                     self.wrap_deadlines.pop((queue, member), None)
             q['waiting_count'] = len(q['entries'])
 
-        if kind in ('newchannel', 'newstate', 'coreshowchannel', 'newcallerid', 'rename'):
+        if kind in ('newchannel', 'newstate', 'coreshowchannel', 'newcallerid', 'newconnectedline','rename'):
             if kind == 'rename' and e.get('newname'):
                 e = dict(e, channel=e['newname'])
             self._channel(e)
             handled = True
+            if kind=='coreshowchannel' and e.get('bridgeid'):
+                kind='bridgeenter'
+                e['bridgeuniqueid']=e['bridgeid']
         uid = e.get('uniqueid') or self.by_channel.get(e.get('channel'))
+        if kind in ('rtcpreceived','rtcpsent') and uid in self.channels:
+            def metric(key, scale=1, upper=1e12):
+                try:
+                    value=float(e[key])*scale
+                    return round(value,4) if math.isfinite(value) and 0<=value<=upper else None
+                except (KeyError,ValueError,OverflowError):return None
+            sample={
+                'rtt_ms':metric('rtt',1000,3600000),
+                'loss_pct':metric('report0fractionlost',100/256,100),
+                'jitter_ticks':metric('report0iajitter'),
+                'sampled_at':now,'direction':'received' if kind=='rtcpreceived' else 'sent'}
+            self.channels[uid]['rtcp_'+sample['direction']]=sample
+            received=self.channels[uid].get('rtcp_received')
+            self.channels[uid]['rtcp']=received if received and now-received['sampled_at']<=30 else sample
+            handled=True
         if queue and uid in self.channels:
             scopes = set(self.channels[uid]['queues'])
             scopes.add(queue)
@@ -185,6 +254,7 @@ class QueueState:
                         if k in self.channels:
                             self.channels[k]['queues'] = sorted(scopes)
                             self.channels[k]['bridge'] = bridge
+                            self.channels[k].setdefault('bridge_entered_at',now)
                 else:
                     self.bridges.get(bridge, set()).discard(uid)
                     if not self.bridges.get(bridge):
@@ -205,7 +275,14 @@ class QueueState:
                 self.channels[key]['last_relationship_event'] = kind
             handled = True
         if kind in ('hold', 'unhold') and uid in self.channels:
-            self.channels[uid]['held_since'] = now if kind == 'hold' else None
+            channel = self.channels[uid]
+            if kind == 'hold':
+                channel.setdefault('held_since', now)
+                if channel['held_since'] is None:
+                    channel['held_since'] = now
+            elif channel.get('held_since') is not None:
+                channel['hold_seconds'] = channel.get('hold_seconds', 0) + max(0, now-channel['held_since'])
+                channel['held_since'] = None
             handled = True
         if kind == 'hangup':
             old = self.channels.get(uid, {})
@@ -215,11 +292,15 @@ class QueueState:
             if bridge and not self.bridges.get(bridge):
                 self._drop(self.bridges, bridge)
             self._drop(self.channels, uid)
+            for key,value in list(self.parked.items()):
+                if value.get('parkeeuniqueid')==uid:self._drop(self.parked,key)
             for q in self.queues.values():
                 self._drop(q['entries'], uid)
                 self._drop(q['entries'], e.get('channel'))
                 q['waiting_count'] = len(q['entries'])
             handled = True
+        if uid in self.channels and kind in ('bridgeenter','newchannel','queuecallerjoin','agentcalled','agentconnect','blindtransfer','attendedtransfer','dialbegin','dialend'):
+            self.propagate_scopes(uid)
         if handled:
             self.version += 1
             self.last_event_at = now
@@ -243,4 +324,5 @@ class QueueState:
                 'revision': self.version, 'last_event_at': self.last_event_at,
                 'last_sync_at': self.last_sync_at, 'channels_complete': self.channels_complete,
                 'history_complete': False, 'initial_call_scope_complete': False,
-                'snapshot_atomic': False}
+                'snapshot_atomic': False, 'action_events': copy.deepcopy(self.action_events),
+                'parked':copy.deepcopy(self.parked), 'inventory':copy.deepcopy(self.inventory)}

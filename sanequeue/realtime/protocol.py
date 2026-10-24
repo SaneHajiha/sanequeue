@@ -4,7 +4,9 @@ import re
 import uuid
 
 MAX_FRAME = 262144
-READ_ACTIONS = frozenset({'Login', 'Logoff', 'Ping', 'QueueStatus', 'CoreShowChannels'})
+READ_ACTIONS = frozenset({'Login', 'Logoff', 'Ping', 'QueueStatus', 'CoreShowChannels',
+    'ListCommands','PJSIPShowEndpoints','PJSIPShowContacts','PJSIPShowRegistrationsOutbound',
+    'SIPpeers','SIPshowregistry','ParkedCalls'})
 
 
 async def bounded(awaitable, timeout):

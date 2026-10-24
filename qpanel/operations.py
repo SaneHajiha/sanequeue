@@ -9,8 +9,9 @@ import time
 import math
 import threading
 import json
+from contextlib import nullcontext
 from datetime import datetime, timedelta
-from flask import jsonify, request, session, abort, Response, url_for
+from flask import jsonify, request, session, abort, Response, url_for, g
 from flask_login import current_user, login_required
 from qpanel.reporting import QueueReports, number
 from qpanel.privacy import public_queue_snapshot
@@ -33,6 +34,10 @@ def install(app, cfg, backend, get_data, render):
 
     def policy_store():
         return app.config.get('SANEQUEUE_POLICY_STORE')
+
+    def queue_lock(queue):
+        ledger=app.config.get('SANEQUEUE_ACTION_LEDGER')
+        return ledger.queue_lock(queue) if ledger else nullcontext()
 
     def scope_data(data):
         store = policy_store()
@@ -71,7 +76,7 @@ def install(app, cfg, backend, get_data, render):
             abort(400)
         data = scope_data(get_data())
         selected_queue = request.form.get('queue')
-        permission = {'pause_member':'pause','remove_from_queue':'membership','ops_control':{'add':'membership','remove':'membership','penalty':'membership','spy':'monitor','whisper':'monitor','barge':'monitor','priority':'priority','first':'priority','hangup':'hangup'}.get(request.form.get('action'))}.get(request.endpoint, None)
+        permission = {'pause_member':'pause','remove_from_queue':'membership','ops_control':{'add':'membership','remove':'membership','penalty':'membership','spy':'monitor','whisper':'monitor','barge':'monitor','priority':'priority','first':'priority','hangup':'hangup','transfer':'transfer','attended_transfer':'transfer','cancel_transfer':'transfer','park':'park','retrieve':'park','pickup':'pickup','dial':'dial','hangup_active':'hangup'}.get(request.form.get('action'))}.get(request.endpoint, None)
         if not selected_queue or not permission or not can_access_queue(selected_queue,permission):
             abort(403)
         if request.endpoint in ('remove_from_queue', 'pause_member', 'ops_control'):
@@ -138,6 +143,7 @@ def install(app, cfg, backend, get_data, render):
             own_interfaces=[v.strip() for v in cfg.get_value_set_default('agent_interfaces', current_user.get_id() or '', '').split(',')],
             reports_enabled=str(option('reports_enabled', 'false')).lower() == 'true',
             destinations=[v.strip() for v in cfg.get_value_set_default('supervisor_extensions', current_user.get_id() or '', '').split(',') if v.strip()],
+            realtime_push=bool(app.config.get('SANEQUEUE_REALTIME_PUSH')), websocket_url='/ws/operations',
             logged_in_user=current_user.get_id(), assigned_phone=cfg.get_value_set_default('supervisor_extensions',current_user.get_id() or '',''),
             queue_url=url_for('queue', name='__QUEUE__'), language_url=url_for('language', language='__LANG__'), ami_settings_url='/api/ami/settings', ami_test_url='/api/ami/test', ami_connect_url='/api/ami/connect'))
 
@@ -145,10 +151,29 @@ def install(app, cfg, backend, get_data, render):
     @login_required
     def ops_data():
         data = scope_data(get_data())
-        if getattr(backend, 'last_error', False):
+        if getattr(g, 'sanequeue_state_error', getattr(backend, 'last_error', False)):
             return jsonify(error='pbx_unavailable'), 503
         channel_details = False
-        if not backend.is_freeswitch() and str(option('live_channels', 'true')).lower() == 'true':
+        provider = app.config.get('SANEQUEUE_CHANNEL_PROVIDER')
+        if callable(provider):
+            from qpanel.compatibility import device_channel
+            try:
+                channels = provider(data.keys())
+                channel_details = True
+                for queue in data.values():
+                    for interface, member in queue.get('members', {}).items():
+                        try:
+                            target = device_channel(member, interface, channels)
+                        except ValueError:
+                            continue
+                        match = next((c for c in channels if c.get('Channel') == target), None)
+                        if match:
+                            member.update(LiveDuration=str(match['Duration']), LiveHoldSeconds=match['HoldSeconds'],
+                                LiveCaller=match.get('CallerIDNum',''), LiveChannelState=match.get('ChannelStateDesc',''),
+                                LiveChannel=match['Channel'])
+            except Exception:
+                return jsonify(error='collector_unavailable'),503
+        elif not backend.is_freeswitch() and str(option('live_channels', 'true')).lower() == 'true':
             manager = backend._connect()
             try:
                 channels = manager.connection.CoreShowChannels()
@@ -171,7 +196,8 @@ def install(app, cfg, backend, get_data, render):
                     except AMI_ERRORS:
                         pass
         store = policy_store()
-        policy_result = store.evaluate(data) if store and getattr(backend, 'live_source', '') == 'ami-live' else {'alerts':[], 'notify':[], 'notification_status':{}}
+        alert_provider=app.config.get('SANEQUEUE_ALERT_PROVIDER')
+        policy_result = dict(alert_provider(data.keys()),notify=[]) if callable(alert_provider) else store.evaluate(data) if store and getattr(backend, 'live_source', '') == 'ami-live' else {'alerts':[], 'notify':[], 'notification_status':{}}
         if policy_result['notify'] and os.getenv('SANEQUEUE_ENABLE_BALE_ALERTS') == '1' and os.getenv('SANEQUEUE_BALE_BOT_TOKEN') and os.getenv('SANEQUEUE_BALE_CHAT_ID'):
             from qpanel.queue_policies import send_bale_alert
             def _push_alerts(alert_list):
@@ -192,6 +218,7 @@ def install(app, cfg, backend, get_data, render):
         journeys = journey_provider(data.keys(), numbers_allowed) if callable(journey_provider) and getattr(backend, 'live_source', '') == 'ami-live' else {
             'connected': False, 'records': [], 'complete_history': False}
         return jsonify(call_journeys=journeys, queues=public_queue_snapshot(data, privileged=role() in ('admin','supervisor'), reveal_numbers=(role()=='admin' or (role()=='supervisor' and all(can_access_queue(q,'caller_details') for q in data)))), policy_alerts=policy_result['alerts'], notification_status=policy_result['notification_status'],timestamp=int(time.time()), role=role(), caller_numbers_visible=(role()=='admin' or (role()=='supervisor' and all(can_access_queue(q,'caller_details') for q in data))),
+                       control_status=(app.config.get('SANEQUEUE_CONTROL_STATE') or (lambda:None))(),
                        channel_details=channel_details, controls_enabled=bool(app.config.get('SANEQUEUE_TEST_CONTROLS_STATUS', lambda:False)()) and getattr(backend, 'live_source', '') == 'ami-live',
                        minimum_ready=number(option('minimum_ready', 0)), minimum_ready_percent=number(option('minimum_ready_percent', 0)),
                        stats_scope='since_queue_reset', observed_at=getattr(backend, 'latest_sample_unix', None), backend='freeswitch' if backend.is_freeswitch() else 'asterisk', data_source=getattr(backend, 'live_source', 'demo' if str(option('demo_mode','false')).lower()=='true' else 'pbx'))
@@ -208,7 +235,7 @@ def install(app, cfg, backend, get_data, render):
         reason = request.form.get('reason', '')[:80]
         if any(c in reason + agent + queue for c in '\r\n\x00'):
             abort(400)
-        with action_lock:
+        with action_lock, queue_lock(queue):
             visible = get_data(queue)
             store = policy_store()
             if store:
@@ -223,7 +250,7 @@ def install(app, cfg, backend, get_data, render):
                 if store:store.release_leave(queue,agent)
                 return jsonify(error='minimum_ready'), 409
             result = ami_action('QueuePause', {'Queue': cfg.realname_queue(queue), 'Interface': agent, 'Paused': paused, 'Reason': reason})
-            if store and ((paused == 'true' and result.status_code >= 400) or paused == 'false'):
+            if store and ((paused == 'true' and definitely_rejected(result)) or paused == 'false'):
                 store.release_leave(queue, agent)
             return result
 
@@ -236,10 +263,18 @@ def install(app, cfg, backend, get_data, render):
                         if str(member.get('Status', '0')) == '1'
                         and str(member.get('Paused', '0')).lower() in ('0', 'false')
                         and str(member.get('InCall', '0')).lower() in ('0', 'false')
+                        and member.get('Ready',True) is not False
                         and excluded not in (key, member.get('Location')))
         return available >= minimum
 
+    def definitely_rejected(response):
+        if app.config.get('SANEQUEUE_ACTION_LEDGER'):
+            return (response.get_json(silent=True) or {}).get('state')=='rejected'
+        return response.status_code>=400
+
     def ami_action(name, fields):
+        executor=app.config.get('SANEQUEUE_ACTION_EXECUTOR')
+        if callable(executor):return app.make_response(executor(name,fields))
         manager = backend._connect()
         try:
             action_id = 'sq-' + secrets.token_hex(8)
@@ -270,8 +305,26 @@ def install(app, cfg, backend, get_data, render):
         channel = request.form.get('channel', '')
         if any(c in queue + agent + channel for c in '\r\n\x00'):
             abort(400)
-        with action_lock:
+        with action_lock, queue_lock(queue):
             data = get_data(queue)
+            from sanequeue.actions.plans import PERMISSIONS, plan
+            if action in PERMISSIONS:
+                if action not in app.config.get('SANEQUEUE_ADVANCED_ACTIONS',()):
+                    return jsonify(error='action_not_enabled_for_this_pbx'),409
+                private=app.config.get('SANEQUEUE_PRIVATE_STATE')
+                if not callable(private):return jsonify(error='persistent_collector_required'),409
+                from sanequeue.api.state import StateUnavailable
+                try:
+                    state=private()
+                    allowed=list(scope_data(get_data()))
+                    own=cfg.get_value_set_default('supervisor_extensions',current_user.get_id(),'')
+                    name,fields=plan(state,queue,action,channel,destination=request.form.get('extension',''),
+                        own_phone=own,extensions=app.config.get('SANEQUEUE_INTERNAL_EXTENSIONS',()),
+                        context=app.config.get('SANEQUEUE_TRANSFER_CONTEXT','from-internal'),
+                        parkinglot=app.config.get('SANEQUEUE_PARKING_LOT','default'),allowed_queues=allowed)
+                except StateUnavailable:return jsonify(error='collector_unavailable'),503
+                except ValueError as exc:return jsonify(error=str(exc)),409
+                return ami_action(name,fields)
             base = {'Queue': cfg.realname_queue(queue)}
             if action in ('priority', 'first', 'hangup'):
                 entries = list(data.get('entries', {}).values())
@@ -305,7 +358,10 @@ def install(app, cfg, backend, get_data, render):
                     return jsonify(error='destination_not_allowed'), 403
                 from qpanel.compatibility import spy_target
                 channels = []
-                if str(member.get('StateInterface', '')).startswith('hint:'):
+                provider = app.config.get('SANEQUEUE_CHANNEL_PROVIDER')
+                if callable(provider):
+                    channels = provider([queue])
+                elif str(member.get('StateInterface', '')).startswith('hint:'):
                     resolver = backend._connect()
                     try:
                         channels = resolver.connection.CoreShowChannels()
@@ -317,7 +373,13 @@ def install(app, cfg, backend, get_data, render):
                             except AMI_ERRORS: pass
                 overrides = dict(cfg.get_items('device_channels') or [])
                 try:
-                    target = spy_target(member, agent, channels, overrides)
+                    if callable(provider):
+                        from qpanel.compatibility import device_channel
+                        target = device_channel(member, agent, channels, overrides)
+                    else:
+                        target = spy_target(member, agent, channels, overrides)
+                    if target == destination or target.startswith(destination+'-'):
+                        return jsonify(error='supervisor_cannot_monitor_own_phone'),409
                 except ValueError as exc:
                     return jsonify(error=str(exc)), 409
                 mode = {'spy': 'q', 'whisper': 'qw', 'barge': 'qB'}[action]
@@ -339,7 +401,7 @@ def install(app, cfg, backend, get_data, render):
                         if store:store.release_leave(queue,agent)
                         return jsonify(error='minimum_ready'), 409
                     response = ami_action('QueueRemove', base)
-                    if store and response.status_code >= 400:store.release_leave(queue, agent)
+                    if store and definitely_rejected(response):store.release_leave(queue, agent)
                     return response
                 try:
                     penalty = int(request.form.get('penalty', '0'))
@@ -384,6 +446,68 @@ def install(app, cfg, backend, get_data, render):
             pass
         return jsonify(events=list(reversed(rows)))
 
+    @app.route('/api/commands/<ident>')
+    @login_required
+    def command_state(ident):
+        ledger=app.config.get('SANEQUEUE_ACTION_LEDGER')
+        if not ledger or not re.fullmatch(r'sq-[0-9a-f]{32}',ident):abort(404)
+        result=ledger.public(ident,current_user.get_id(),scope_data(get_data()))
+        if result is None:abort(404)
+        return jsonify(result)
+
+    @app.route('/api/control/options')
+    @login_required
+    def control_options():
+        if role() not in ('admin','supervisor'):abort(403)
+        allowed=scope_data(get_data())
+        queue=request.args.get('queue','')
+        if queue not in allowed:abort(403)
+        private=app.config.get('SANEQUEUE_PRIVATE_STATE')
+        if not callable(private):return jsonify(actions=[],targets=[],parked=[],extensions=[])
+        from sanequeue.actions.plans import PERMISSIONS
+        from sanequeue.api.state import scoped_channels, StateUnavailable
+        from qpanel.compatibility import device_channel
+        try:state=private()
+        except StateUnavailable:return jsonify(error='collector_unavailable'),503
+        channels=scoped_channels(state,allowed)
+        candidates=[dict(Channel=c.get('channel','')) for c in channels.values() if queue in c['queues']]
+        targets=[]
+        for agent,member in allowed[queue].get('members',{}).items():
+            try:channel=device_channel(member,agent,candidates)
+            except ValueError:continue
+            targets.append(dict(agent=agent,channel=channel,label=member.get('Name') or agent))
+        known={target['channel'] for target in targets}
+        for channel in candidates:
+            name=channel['Channel']
+            if name not in known and name.startswith(('SIP/','PJSIP/')):
+                targets.append(dict(agent='',channel=name,label=name.rsplit('-',1)[0]))
+                known.add(name)
+        parked=[dict(key=k,space=v.get('parkingspace'),lot=v.get('parkinglot')) for k,v in state.get('parked',{}).items()
+                if queue in v.get('queues',[]) and set(v['queues']).issubset(allowed)]
+        actions=[a for a in app.config.get('SANEQUEUE_ADVANCED_ACTIONS',()) if a in PERMISSIONS and can_access_queue(queue,PERMISSIONS[a])]
+        return jsonify(actions=actions,targets=targets,parked=parked,extensions=list(app.config.get('SANEQUEUE_INTERNAL_EXTENSIONS',())))
+
+    @app.route('/api/quality')
+    @login_required
+    def media_quality():
+        if role() not in ('admin','supervisor'):abort(403)
+        allowed=scope_data(get_data())
+        private=app.config.get('SANEQUEUE_PRIVATE_STATE')
+        if not callable(private):return jsonify(error='persistent_collector_required'),409
+        from sanequeue.api.state import scoped_channels, StateUnavailable
+        try:state=private()
+        except StateUnavailable:return jsonify(error='collector_unavailable'),503
+        rows=[]
+        for channel in scoped_channels(state,allowed).values():
+            quality=channel.get('rtcp')
+            if quality:
+                rows.append(dict(queues=channel['queues'],technology=channel.get('channel','').split('/')[0],
+                    rtt_ms=quality.get('rtt_ms'),loss_pct=quality.get('loss_pct'),
+                    jitter_ticks=quality.get('jitter_ticks'),sampled_at=quality.get('sampled_at'),
+                    stale=time.time()-quality.get('sampled_at',0)>30,direction=quality.get('direction')))
+        return jsonify(streams=rows[:200],source='observed_rtcp',mos=None,
+                       jitter_unit='rtp_timestamp_ticks',complete=False)
+
 
     @app.route('/api/queue/summary')
     @login_required
@@ -416,7 +540,7 @@ def install(app, cfg, backend, get_data, render):
         if policy_store() is None:
             abort(403)
         data = scope_data(get_data())
-        if getattr(backend, 'last_error', False):
+        if getattr(g, 'sanequeue_state_error', getattr(backend, 'last_error', False)):
             return jsonify(error='pbx_unavailable'), 503
         selected = request.args.get('queue', '')
         if selected and selected not in data:

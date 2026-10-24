@@ -1,3 +1,15 @@
+# Current validation · beta.21 · 2026-10-25
+
+Windows Python 3.11: 276 passed, 2 real-Redis skips, 79 subtests passed. Linux Python 3.11 with actual Redis: 278 passed, 79 subtests passed. No failures. JavaScript syntax checks passed. The current suite excludes retained historical release snapshots through pytest.ini; they are not deleted.
+
+Real test-PBX acceptance covered pause/resume, penalty, dynamic membership, park/retrieve, blind and attended transfer, and pickup. The user confirmed telephone outcomes. WebSocket snapshots and logout revocation were tested using the real Flask session; 100 concurrent-batch HTTP requests and 20 WebSockets generated no additional web AMI collections. Collector-stop fail-closed and restart recovery passed.
+
+Product Design Audit covered 16 views, Persian/English, light/dark and 1280px/492px layouts. Final inspected plain-background text had no detected contrast failures or unintended page overflow. Gradient/pseudo-element and complete accessibility certification are outside that measurement.
+
+See [the complete beta.21 audit and limitations](AUDIT_BETA21.md), [current feature matrix](FEATURES.md) and [deployment](REALTIME_DEPLOYMENT.md). Existing sections below describe earlier releases and must not be interpreted as new platform certification.
+
+---
+
 # Latest collector pilot
 
 For beta.20 results and the distinction between the new opt-in collector and the existing web adapter, read [collector validation](COLLECTOR_VALIDATION.md) and the [strict audit](AUDIT_20261024.fa.md). The evidence below describes the beta.18/19 baseline.

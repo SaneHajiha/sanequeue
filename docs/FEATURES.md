@@ -1,4 +1,4 @@
-# Monitoring feature matrix · beta.18
+# Monitoring feature matrix · beta.21
 
 Status describes implemented behavior, not a promise of universal PBX compatibility.
 
@@ -22,11 +22,15 @@ Status describes implemented behavior, not a promise of universal PBX compatibil
 | Shift planning / شیفت | Automated + browser | Queue scope, timezone-aware dates, overlap rejection; no automatic PBX changes |
 | Directory / دفترچه | Automated + browser | Scoped shared contacts, no click-to-call or CRM sync |
 | Audit / ثبت عملیات | Implemented | Accepted/rejected requests; 202 does not establish execution |
-| Blind/attended transfer, pickup | Planned | Requires PBX-specific target and bridge validation |
-| Park/retrieve controls | Planned | Inventory only in this release |
+| Blind/attended transfer, pickup | Live beta | Exact scoped legs and local destinations; user-confirmed test-PBX acceptance |
+| Park/retrieve controls | Live beta | Park slot observed, retrieval connected supervisor 300; user confirmed |
+| Redis API / WebSocket | Live beta | No AMI fallback; 20 concurrent sockets tested; logout revokes existing socket |
+| RTCP observations | Automated + UI | Only available scoped samples; no MOS estimation; jitter is RTP ticks |
 | Historical reporting / گزارش‌گیری | Next phase | No historical KPI/export acceptance claim |
 | AI, STT, WebRTC, tenant isolation | Planned | Separate architecture, deployment and privacy work required |
 
 The monitoring scope was compared against the [VoiPing public feature list](https://voiping.ir/product/ماژول-گزارشات-و-مانیتورینگ-آنلاین-صف/), accessed 2026-10-24. This is an independent implementation. Conference-style supervision refers to barge, not a full conference-room management system.
 
 ChanSpy behavior and mode flags follow the [official Asterisk documentation](https://docs.asterisk.org/Asterisk_20_Documentation/API_Documentation/Dialplan_Applications/ChanSpy/).
+
+Current evidence, partial inventory privileges and limits: [beta.21 audit](AUDIT_BETA21.md). Persistent mode requires [explicit deployment](REALTIME_DEPLOYMENT.md).

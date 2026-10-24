@@ -7,19 +7,20 @@
  const duration=v=>{v=Math.max(0,Math.floor(n(v)));return [Math.floor(v/60),v%60].map(x=>String(x).padStart(2,'0')).join(':');};
  const queueMean=(q,key)=>q&&q[key]!==undefined&&q[key]!==null&&String(q[key]).trim()!==''&&n(q.Completed)>0?duration(q[key]):'—';
  const bool=v=>v===true||v===1||v==='1'||v==='true';
- const status=m=>bool(m.Paused)?'paused':(bool(m.InCall)||[2,3,6,7,8,10].includes(n(m.Status)))?'busy':n(m.Status)===1?'ready':'offline';
+ const status=m=>bool(m.Paused)?'paused':m.Activity==='wrap_up'?'busy':(bool(m.InCall)||[2,3,6,7,8,10].includes(n(m.Status)))?'busy':n(m.Status)===1?'ready':'offline';
  const labels={ready:t('آماده دریافت تماس','Ready for calls'),busy:t('مشغول','Busy'),paused:t('توقف موقت','Paused'),offline:t('خارج از دسترس','Unavailable')};
  const memberDetail=m=>{if(bool(m.Paused))return {key:'paused',label:(m.PausedReason? t('توقف موقت: ','Paused: ')+m.PausedReason:t('توقف موقت','Paused'))};const code=n(m.Status);
   if(code===6||code===7)return {key:'ringing',label:t('در حال زنگ‌خوردن','Ringing')};
   if(code===8)return {key:'held',label:t('تماس روی انتظار','On hold')};
   if(bool(m.InCall)||code===10)return {key:'talking',label:t('در حال مکالمه','In conversation')};
   if(code===2||code===3)return {key:'busy',label:t('مشغول','Busy')};
+  if(m.Activity==='wrap_up')return {key:'busy',label:t('کار پس از تماس','Wrap-up')+' · '+duration(m.WrapUpRemaining)};
   if(code===1)return {key:'ready',label:t('آماده پاسخ‌گویی','Ready')};
   return {key:'offline',label:t('خارج از دسترس','Unavailable')};};
  const stateChip=m=>{const d=memberDetail(m);return `<span class="sq-state sq-state--${d.key}"><i></i>${esc(d.label)}</span>`;};
 
  let samples=[], sampledSource='', currentDataSource='sample-data', livePolicyAlerts=[];
- let queues={}, lastSuccess=0, pending=false, timer, sound=false, audioContext=null, lastSound=0, minimumReady=0, minimumPercent=0;
+ let queues={}, lastSuccess=0, lastReceipt=0, pending=false, timer, sound=false, audioContext=null, lastSound=0, minimumReady=0, minimumPercent=0;
  let journeyFeed={connected:false,records:[],complete_history:false};
  const supervisor=['admin','supervisor'].includes(cfg.role);
  let armedQueue='';
@@ -50,6 +51,7 @@
  const viewJump=$('view-jump');
  if(viewJump){viewJump.innerHTML=Array.from(document.querySelectorAll('nav [data-view]')).map(button=>`<option value="${esc(button.dataset.view)}">${esc(names[button.dataset.view])}</option>`).join('');viewJump.onchange=()=>{const button=Array.from(document.querySelectorAll('nav [data-view]')).find(item=>item.dataset.view===viewJump.value);if(button)button.click();};}
  document.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>{
+  document.body.dataset.view=button.dataset.view;
   document.querySelectorAll('[data-view]').forEach(b=>{b.classList.toggle('active',b===button);b.setAttribute('aria-current',b===button?'page':'false');});
   if(viewJump)viewJump.value=button.dataset.view;
   Object.keys(names).forEach(key=>{const pane=$(key+'-view');if(pane)pane.hidden=key!==button.dataset.view;});$('view-title').textContent=names[button.dataset.view];const heading=viewHeadings[button.dataset.view];document.querySelector('.page-heading h1').textContent=heading[0];document.querySelector('.page-heading .muted').textContent=heading[1];if(button.dataset.view==='audit')loadAudit();if(button.dataset.view==='users')loadUsers();if(button.dataset.view==='wallboard')renderWallboard(selected(),[]);if(button.dataset.view==='policies'||(button.dataset.view==='agents'&&!policyState))loadPolicyEditor();
@@ -207,6 +209,10 @@
 
  function capabilitiesCount(){return capabilities.length;}
  function render(){
+  // Keep native modal return-focus targets alive during background pushes.
+  if(document.querySelector('dialog[open]'))return;
+  const focused=document.activeElement;
+  const focusKey=focused?.tagName==='BUTTON'&&focused.closest('.view')&&Object.keys(focused.dataset).length?{pane:focused.closest('.view').id,data:{...focused.dataset}}:null;
   const data=selected(), threshold=n($('threshold').value);let answered=0,abandoned=0,waiting=0,ready=0,total=0,busy=0,holdSum=0,holdWeight=0,slSum=0,slWeight=0,cards=[],agents=[],calls=[],alerts=[];
   for(const [name,q] of data){
    answered+=n(q.Completed);abandoned+=n(q.Abandoned);waiting+=n(q.Calls);
@@ -264,6 +270,10 @@
   renderCallRoom(calls,agents,threshold);
   updateDetailViews(data, agents, calls, alerts);
   renderJourneyViews();
+  if(focusKey&&!focused.isConnected&&document.activeElement===document.body){
+   const replacement=[...$(focusKey.pane).querySelectorAll('button')].find(button=>Object.entries(focusKey.data).every(([key,value])=>button.dataset[key]===value));
+   if(replacement&&!replacement.disabled)replacement.focus({preventScroll:true});
+  }
  }
  function renderQueueFocus(data,threshold){
   const cards=data.map(([name,q])=>{
@@ -273,7 +283,7 @@
    const health=(n(q.Calls)>0&&counts.ready===0)?'critical':(longest>=threshold||n(q.Calls)>=n($('waiting-threshold').value))?'warning':'healthy';
    const text=health==='critical'?t('نیازمند مداخله','Immediate attention'):health==='warning'?t('تحت فشار','Under pressure'):t('پایدار','Healthy');
    const healthNote=health==='critical'?t('تماس منتظر بدون کارشناس آماده','Waiting callers without ready agents'):health==='warning'?t('تأخیر یا ازدحام نزدیک آستانه','Wait or capacity alert'):t('ظرفیت پاسخ‌گویی در محدوده عادی','No live threshold breach');
-   return `<article class="queue-focus-card ${health}"><div class="focus-top"><div><p class="focus-overline">${t('صف تماس','CALL QUEUE')}</p><h3>${esc(policyState?.queues?.[name]?.label||name)} <small dir="ltr">${esc(name)}</small></h3><span class="focus-strategy">${esc(q.Strategy||'—')}</span></div><span class="health-pill ${health}">${esc(text)}</span></div><div class="focus-meter"><span>${t('ظرفیت نیروها','Agent capacity')}</span><b>${fmt(counts.ready)} / ${fmt(members.length)}</b></div><div class="capacity" role="img" aria-label="${esc(Object.entries(counts).map(([key,val])=>labels[key]+': '+val).join(', '))}">${Object.entries(counts).map(([key,val])=>`<span class="${key}" style="width:${members.length?100*val/members.length:0}%"></span>`).join('')}</div><div class="focus-stat-grid"><div><small>${t('منتظر','Waiting')}</small><strong>${fmt(q.Calls)}</strong></div><div><small>${t('طولانی‌ترین انتظار','Longest wait')}</small><strong class="${longest>=threshold?'overdue':''}">${duration(longest)}</strong></div><div><small>${t('آماده','Ready')}</small><strong>${fmt(counts.ready)}</strong></div><div><small>${t('مشغول','Busy')}</small><strong>${fmt(counts.busy)}</strong></div></div><div class="queue-focus-performance"><div><small>${t('پاسخ‌داده','Answered')}</small><b>${fmt(q.Completed)}</b></div><div><small>${t('رهاشده','Abandoned')}</small><b>${fmt(q.Abandoned)}</b></div><div><small>${t('میانگین انتظار','Average wait')}</small><b dir="ltr">${queueMean(q,'Holdtime')}</b></div><div><small>${t('میانگین مکالمه','Talk time')}</small><b dir="ltr">${queueMean(q,'TalkTime')}</b></div><div><small>${t('سطح خدمت','Service level')}</small><b>${n(q.Completed)>0&&String(q.ServicelevelPerf??'').trim()!==''?fmt(q.ServicelevelPerf)+'%':'—'}</b></div></div><div class="queue-focus-roster"><strong>${t('اعضای این صف','Queue members')}</strong>${members.length?members.map(([key,m])=>`<div class="queue-member-line"><span class="member-name">${esc(m.Name||key)}</span>${stateChip(m)}</div>`).join(''):`<span class="muted">${t('بدون عضو','No members')}</span>`}</div><div class="focus-bottom"><small>${esc(healthNote)}</small><button type="button" data-focus="${esc(name)}">${t('نمایش جزئیات','Inspect queue')} ←</button></div></article>`;
+   return `<article class="queue-focus-card ${health}"><div class="focus-top"><div><p class="focus-overline">${t('صف تماس','CALL QUEUE')}</p><h3>${esc(policyState?.queues?.[name]?.label||name)}${policyState?.queues?.[name]?.label&&policyState.queues[name].label!==name?` <small dir="ltr">${esc(name)}</small>`:''}</h3><span class="focus-strategy">${esc(q.Strategy||'—')}</span></div><span class="health-pill ${health}">${esc(text)}</span></div><div class="focus-meter"><span>${t('ظرفیت نیروها','Agent capacity')}</span><b>${fmt(counts.ready)} / ${fmt(members.length)}</b></div><div class="capacity" role="img" aria-label="${esc(Object.entries(counts).map(([key,val])=>labels[key]+': '+val).join(', '))}">${Object.entries(counts).map(([key,val])=>`<span class="${key}" style="width:${members.length?100*val/members.length:0}%"></span>`).join('')}</div><div class="focus-stat-grid"><div><small>${t('منتظر','Waiting')}</small><strong>${fmt(q.Calls)}</strong></div><div><small>${t('طولانی‌ترین انتظار','Longest wait')}</small><strong class="${longest>=threshold?'overdue':''}">${duration(longest)}</strong></div><div><small>${t('آماده','Ready')}</small><strong>${fmt(counts.ready)}</strong></div><div><small>${t('مشغول','Busy')}</small><strong>${fmt(counts.busy)}</strong></div></div><div class="queue-focus-performance"><div><small>${t('پاسخ‌داده','Answered')}</small><b>${fmt(q.Completed)}</b></div><div><small>${t('رهاشده','Abandoned')}</small><b>${fmt(q.Abandoned)}</b></div><div><small>${t('میانگین انتظار','Average wait')}</small><b dir="ltr">${queueMean(q,'Holdtime')}</b></div><div><small>${t('میانگین مکالمه','Talk time')}</small><b dir="ltr">${queueMean(q,'TalkTime')}</b></div><div><small>${t('سطح خدمت','Service level')}</small><b>${n(q.Completed)>0&&String(q.ServicelevelPerf??'').trim()!==''?fmt(q.ServicelevelPerf)+'%':'—'}</b></div></div><div class="queue-focus-roster"><strong>${t('اعضای این صف','Queue members')}</strong>${members.length?members.map(([key,m])=>`<div class="queue-member-line"><span class="member-name">${esc(m.Name||key)}</span>${stateChip(m)}</div>`).join(''):`<span class="muted">${t('بدون عضو','No members')}</span>`}</div><div class="focus-bottom"><small>${esc(healthNote)}</small><button type="button" data-focus="${esc(name)}">${t('نمایش جزئیات','Inspect queue')} ←</button></div></article>`;
   });
   $('queue-focus-cards').innerHTML=cards.join('')||`<div class="empty">${t('صفی یافت نشد.','No matching queues found.')}</div>`;
  }
@@ -286,9 +296,11 @@
   $('waiting-only-rows').innerHTML=$('waiting-room-rows').innerHTML;
  }
  async function fetchJSON(url,options){const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),url.includes('/api/ami/')?30000:15000);let response;try{response=await fetch(url,{credentials:'same-origin',signal:controller.signal,...options});}finally{clearTimeout(timeout);}if(response.redirected||!response.headers.get('content-type')?.includes('application/json'))throw new Error('login_required');const body=await response.json();if(!response.ok)throw new Error(body.error||'request_failed');return body;}
- async function refresh(){
-  if(pending)return;pending=true;clearTimeout(timer);$('refresh').disabled=true;
-  try{const result=await fetchJSON(cfg.data_url);queues=result.queues||{};currentDataSource=result.data_source||'sample-data';showFullNumbers=Boolean(result.caller_numbers_visible);document.body.dataset.connection='fresh';minimumReady=result.minimum_ready;minimumPercent=result.minimum_ready_percent;cfg.test_controls_enabled=Boolean(result.controls_enabled);updateControlBadge();$('staffing-info').textContent=t('حداقل آمادگی: ','Minimum staffing: ')+fmt(minimumReady)+' / '+fmt(minimumPercent)+'%';const current=$('queue-filter').value;const keys=Object.keys(queues).sort();$('queue-filter').innerHTML=`<option value="">${t('همه صف‌ها','All queues')}</option>`+keys.map(key=>`<option value="${esc(key)}">${esc(key)}</option>`).join('');if(keys.includes(current))$('queue-filter').value=current;
+ let socket=null, socketRetry=1000, socketTimer=null;
+ function markStale(error){journeyFeed={...journeyFeed,connected:false};renderJourneyViews();currentDataSource='stale';cfg.test_controls_enabled=false;document.body.dataset.connection='stale';updateControlBadge({enabled:false});$('connection').className='badge offline';$('connection').textContent=t('ارتباط قطع است','Connection lost');$('error').hidden=false;$('error').textContent=error.message==='login_required'?t('نشست منقضی شده؛ دوباره وارد شوید.','Session expired. Sign in again.'):t('داده زنده در دسترس نیست؛ آخرین داده قابل اعتماد قدیمی است. تونل، مجوزها و مرحله Parser را بررسی کنید.','Live data unavailable; last known values are stale. Check tunnel, permissions and parser.');}
+ function applySnapshot(result){
+  if(result.data_source==='ami-live' && Number(result.observed_at)>0 && Number(result.observed_at)*1000<lastSuccess)return;
+  lastReceipt=performance.now();queues=result.queues||{};currentDataSource=result.data_source||'sample-data';showFullNumbers=Boolean(result.caller_numbers_visible);document.body.dataset.connection='fresh';minimumReady=result.minimum_ready;minimumPercent=result.minimum_ready_percent;cfg.test_controls_enabled=Boolean(result.controls_enabled);updateControlBadge(result.control_status);$('staffing-info').textContent=t('حداقل آمادگی: ','Minimum staffing: ')+fmt(minimumReady)+' / '+fmt(minimumPercent)+'%';const current=$('queue-filter').value;const keys=Object.keys(queues).sort();$('queue-filter').innerHTML=`<option value="">${t('همه صف‌ها','All queues')}</option>`+keys.map(key=>`<option value="${esc(key)}">${esc(key)}</option>`).join('');if(keys.includes(current))$('queue-filter').value=current;
    const scopeSelect=$('test-scope-queue');if(scopeSelect){
      const prev=scopeSelect.value;
      scopeSelect.innerHTML=`<option value="">${t('انتخاب صف','Choose queue')}</option>`+keys.map(key=>`<option value="${esc(key)}">${esc(key)}</option>`).join('');
@@ -297,11 +309,27 @@
      if($('test-scope-label'))$('test-scope-label').textContent=chosen;
      if($('test-agent-label'))$('test-agent-label').textContent=Object.keys(queues[chosen]?.members||{})[0]||'—';
    }
-   updateAmiQueueSelect();
+   updateAmiQueueSelect();updateAdvancedQueues();
    journeyFeed=result.call_journeys||{connected:false,records:[],complete_history:false};
    livePolicyAlerts=Array.isArray(result.policy_alerts)?result.policy_alerts:[];lastSuccess=(result.data_source==='ami-live'&&Number.isFinite(Number(result.observed_at))&&Number(result.observed_at)>0)?Math.round(Number(result.observed_at)*1000):Date.now();$('connection').className='badge';$('connection').textContent=result.data_source==='ami-live'?t('AMI زنده','Live AMI'):(cfg.demo_mode?t('پیش‌نمایش آفلاین · داده ساختگی','Offline demo · sample data'):t('متصل به مرکز تلفن','PBX connected'));$('error').hidden=true;$('updated').textContent=new Date(lastSuccess).toLocaleTimeString(fa?'fa-IR':'en-GB');updateSamples(currentDataSource);render();
-  }catch(error){journeyFeed={...journeyFeed,connected:false};renderJourneyViews();currentDataSource='stale';cfg.test_controls_enabled=false;document.body.dataset.connection='stale';updateControlBadge();$('connection').className='badge offline';$('connection').textContent=t('ارتباط قطع است','Connection lost');$('error').hidden=false;$('error').textContent=error.message==='login_required'?t('نشست منقضی شده؛ دوباره وارد شوید.','Session expired. Sign in again.'):t('داده زنده در دسترس نیست؛ آخرین داده قابل اعتماد قدیمی است. تونل، مجوزها و مرحله Parser را بررسی کنید.','Live data unavailable; last known values are stale. Check tunnel, permissions and parser.');}
-  finally{pending=false;$('refresh').disabled=false;timer=setTimeout(refresh,document.hidden?Math.max(cfg.interval,15000):cfg.interval);}
+  document.body.dataset.transport=socket&&socket.readyState===WebSocket.OPEN?'websocket':'http';
+  if(document.body.dataset.transport==='websocket')$('connection').textContent+=' · WebSocket';
+ }
+ function connectSocket(){
+  if(!cfg.realtime_push||!window.WebSocket)return;
+  const url=new URL(cfg.websocket_url||'/ws/operations',location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';
+  socket=new WebSocket(url);
+  socket.onopen=()=>{socketRetry=1000;clearTimeout(timer);};
+  socket.onmessage=event=>{try{const message=JSON.parse(event.data);if(message.type==='snapshot')applySnapshot(message.data);else markStale(new Error(message.error||'collector_unavailable'));}catch(error){markStale(error);}};
+  socket.onclose=event=>{markStale(new Error(event.code===4401?'login_required':'push_disconnected'));if(event.code===4401)return;clearTimeout(timer);timer=setTimeout(refresh,1000);clearTimeout(socketTimer);socketTimer=setTimeout(connectSocket,socketRetry);socketRetry=Math.min(30000,socketRetry*2);};
+  socket.onerror=()=>{socket.close();};
+ }
+ window.addEventListener('pagehide',()=>{clearTimeout(socketTimer);if(socket){socket.onclose=null;socket.close();}});
+ async function refresh(){
+  if(pending)return;pending=true;clearTimeout(timer);$('refresh').disabled=true;
+  try{applySnapshot(await fetchJSON(cfg.data_url));
+  }catch(error){markStale(error);}
+  finally{pending=false;$('refresh').disabled=false;if(!socket||socket.readyState!==WebSocket.OPEN)timer=setTimeout(refresh,document.hidden?Math.max(cfg.interval,15000):cfg.interval);}
  }
  $('refresh').onclick=refresh;$('search').oninput=render;$('status-filter').onchange=render;
  $('queue-filter').onchange=()=>{updateSamples(currentDataSource+'|'+$('queue-filter').value);render();};
@@ -337,8 +365,66 @@
   }catch(error){alert(['minimum_ready','queue_exit_limit_reached','configure_roster_size_before_leaving'].includes(error.message)?t('سقف خروج یا حداقل نیروی فعال صف اجازه این عملیات را نمی‌دهد.','Staffing floor prevents this departure.'):t('Asterisk عملیات را تأیید نکرد؛ دسترسی AMI و وضعیت صف را بررسی کن.','AMI did not confirm operation; check permissions and queue status.'));}
   finally{button.disabled=false;}
  };
- const actionNames={first:t('انتقال به ابتدای صف','Move caller to front'),priority:t('تغییر اولویت تماس','Change caller priority'),hangup:t('قطع تماس','Hang up call'),spy:t('شنود','Listen'),whisper:t('نجوا','Whisper'),barge:t('ورود به مکالمه','Barge'),penalty:t('وزن توزیع','Agent penalty'),remove:t('حذف از صف','Remove from queue'),add:t('افزودن کارشناس','Add agent')};
+ const actionNames={transfer:t('انتقال مستقیم','Blind transfer'),attended_transfer:t('انتقال با مشورت','Attended transfer'),cancel_transfer:t('لغو مشورت','Cancel attended transfer'),park:t('پارک تماس','Park call'),retrieve:t('بازیابی تماس پارک‌شده','Retrieve parked call'),pickup:t('پاسخ به تماس زنگ‌خور','Pick up ringing call'),dial:t('تماس با داخلی','Call internal extension'),hangup_active:t('قطع مکالمه جاری','Hang up active call'),first:t('انتقال به ابتدای صف','Move caller to front'),priority:t('تغییر اولویت تماس','Change caller priority'),hangup:t('قطع تماس','Hang up call'),spy:t('شنود','Listen'),whisper:t('نجوا','Whisper'),barge:t('ورود به مکالمه','Barge'),penalty:t('وزن توزیع','Agent penalty'),remove:t('حذف از صف','Remove from queue'),add:t('افزودن کارشناس','Add agent')};
+ let advancedState={actions:[],targets:[],parked:[],extensions:[]}, trackedCommand=0;
+ function updateAdvancedQueues(){
+  const panel=$('advanced-controls');if(!panel)return;panel.hidden=!cfg.realtime_push||!supervisor;if(panel.hidden)return;
+  const select=$('advanced-queue'),before=select.value,keys=Object.keys(queues).sort();
+  if([...select.options].map(o=>o.value).join('|')!==keys.join('|')){select.innerHTML=keys.map(q=>`<option value="${esc(q)}">${esc(q)}</option>`).join('');if(keys.includes(before))select.value=before;loadAdvanced();}
+ }
+ async function loadAdvanced(){
+  const queue=$('advanced-queue')?.value;if(!queue)return;
+  try{advancedState=await fetchJSON('/api/control/options?queue='+encodeURIComponent(queue));const action=$('advanced-action'),previous=action.value;action.innerHTML=advancedState.actions.map(a=>`<option value="${esc(a)}">${esc(actionNames[a]||a)}</option>`).join('');if(advancedState.actions.includes(previous))action.value=previous;renderAdvancedFields();$('advanced-help').textContent=advancedState.actions.length?t('ابتدا گیت همین صف را فعال کنید. انتقال با مشورت با تلفن مبدأ تکمیل می‌شود.','Arm this queue first. Complete an attended transfer using the source phone.'):t('عملیاتی برای این حساب و PBX فعال نشده است.','No advanced actions enabled for this account and PBX.');}
+  catch(error){advancedState={actions:[],targets:[],parked:[],extensions:[]};renderAdvancedFields();$('advanced-help').textContent=t('هدف زنده در دسترس نیست: ','Live targets unavailable: ')+error.message;}
+ }
+ function renderAdvancedFields(){
+  const action=$('advanced-action').value,target=$('advanced-target'),ext=$('advanced-extension');
+  const options=action==='retrieve'?advancedState.parked.map(p=>[p.key,p.lot+' · '+p.space]):advancedState.targets.map(p=>[p.channel,p.label]);
+  target.innerHTML=options.length?options.map(([value,label])=>`<option value="${esc(value)}">${esc(label)}</option>`).join(''):`<option value="">${action==='retrieve'?t('تماس پارک‌شده‌ای موجود نیست','No parked calls available'):t('تماس فعالی برای این صف موجود نیست','No active calls in this queue')}</option>`;target.disabled=action==='dial'||!options.length;target.required=action!=='dial';
+  ext.innerHTML=advancedState.extensions.map(e=>`<option value="${esc(e)}">${esc(e)}</option>`).join('');ext.disabled=!['dial','transfer','attended_transfer'].includes(action);ext.required=!ext.disabled;
+  updateAdvancedSubmit();
+ }
+ function updateAdvancedSubmit(){
+  const form=$('advanced-form');if(!form)return;
+  const action=$('advanced-action').value;
+  form.querySelector('[type=submit]').disabled=!cfg.test_controls_enabled||armedQueue!==$('advanced-queue').value||!advancedState.actions.includes(action)||(action!=='dial'&&!$('advanced-target').value)||(['dial','transfer','attended_transfer'].includes(action)&&!$('advanced-extension').value);
+ }
+ async function trackCommand(result){
+  if(!cfg.realtime_push||!/^sq-[0-9a-f]{32}$/.test(result?.action_id||''))return;
+  const sequence=++trackedCommand,box=$('command-feedback');box.hidden=false;
+  const labels={pending:t('فرمان پذیرفته شد؛ تأیید تغییر وضعیت در انتظار است.','Command accepted; waiting for observed state.'),confirmed:t('تغییر وضعیت در PBX مشاهده شد؛ صحت صدا جداگانه آزموده می‌شود.','PBX state change observed; audio requires separate acceptance.'),rejected:t('فرمان رد شد.','Command rejected.'),unknown:t('نتیجه قطعی ثبت نشد؛ پیش از تکرار، وضعیت تماس را بررسی کنید.','Outcome is unknown. Check the call before retrying.')};
+  box.textContent=labels.pending;
+  for(let attempt=0;attempt<50&&sequence===trackedCommand;attempt++){
+   try{const value=await fetchJSON('/api/commands/'+result.action_id);box.textContent=(labels[value.state]||labels.unknown)+' '+result.action_id.slice(-8);if(value.state!=='pending')return;}
+   catch(error){box.textContent=labels.unknown;return;}
+   await new Promise(resolve=>setTimeout(resolve,2000));
+  }
+  if(sequence===trackedCommand)box.textContent=labels.unknown;
+ }
+ if($('advanced-form')){
+  $('advanced-queue').onchange=loadAdvanced;$('advanced-action').onchange=renderAdvancedFields;$('advanced-reload').onclick=loadAdvanced;
+  $('advanced-target').onchange=updateAdvancedSubmit;$('advanced-extension').onchange=updateAdvancedSubmit;
+  $('advanced-form').onsubmit=async event=>{event.preventDefault();const action=$('advanced-action').value,queue=$('advanced-queue').value;
+   if(!cfg.test_controls_enabled||armedQueue!==queue){$('advanced-help').textContent=t('گیت کنترل همین صف را در تنظیمات فعال کنید.','Arm this queue in settings first.');return;}
+   if(!confirm((actionNames[action]||action)+' · '+queue+'؟'))return;
+   const button=event.target.querySelector('[type=submit]');button.disabled=true;
+   try{const result=await fetchJSON(cfg.control_url,{method:'POST',headers:{'X-CSRF-Token':cfg.csrf,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action,queue,channel:$('advanced-target').disabled?'':$('advanced-target').value,extension:$('advanced-extension').disabled?'':$('advanced-extension').value})});trackCommand(result);$('advanced-help').textContent=t('درخواست ثبت شد؛ نتیجه را در بخش وضعیت فرمان دنبال کنید.','Request recorded; follow its observed outcome below.');await refresh();}
+   catch(error){$('advanced-help').textContent=t('عملیات انجام نشد یا نتیجه نامعلوم است: ','Action rejected or outcome unknown: ')+error.message;}
+   finally{updateAdvancedSubmit();}
+  };
+ }
  let actionTarget=null;
+ if($('quality-panel')){
+  $('quality-panel').hidden=!cfg.realtime_push||!supervisor;
+  $('quality-reload').onclick=async()=>{
+   const button=$('quality-reload');button.disabled=true;
+   try{const result=await fetchJSON('/api/quality');
+    $('quality-rows').innerHTML=(result.streams||[]).map(row=>`<tr><td>${esc(row.queues.join(' / '))}</td><td>${esc(row.technology)}</td><td>${esc(row.rtt_ms??'—')}</td><td>${esc(row.loss_pct??'—')}</td><td>${esc(row.jitter_ticks??'—')}</td><td>${row.stale?t('قدیمی','Stale'):t('تازه','Recent')}</td></tr>`).join('');
+    $('quality-status').textContent=result.streams?.length?t('مقادیر ثبت‌شده توسط PBX؛ MOS محاسبه یا تخمین زده نشده است.','PBX observations; MOS is not calculated or estimated.'):t('نمونهٔ RTCP مجاز موجود نیست؛ تنظیمات RTCP و تماس فعال را بررسی کنید.','No authorized RTCP samples. Check RTCP configuration and active calls.');
+   }catch(error){$('quality-rows').replaceChildren();$('quality-status').textContent=t('دریافت کیفیت ممکن نشد: ','Quality unavailable: ')+error.message;}
+   finally{button.disabled=false;}
+  };
+ }
  $('sound-toggle').onclick=()=>{sound=!sound;if(sound){audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();audioContext.resume();}$('sound-toggle').setAttribute('aria-pressed',String(sound));$('sound-toggle').textContent=sound?t('هشدار صوتی: روشن','Sound alerts: on'):t('هشدار صوتی: خاموش','Sound alerts: off');};
  ['waiting-threshold','pause-threshold'].forEach(id=>{const value=n(storage.get(id));if(value>0)$(id).value=value;$(id).onchange=()=>{$(id).value=Math.max(1,Math.min(n($(id).max),n($(id).value)));storage.set(id,$(id).value);render();};});
  document.addEventListener('click',event=>{const button=event.target.closest('[data-action]');if(!button)return;if(currentDataSource!=='ami-live'||!cfg.test_controls_enabled){alert(t('کنترل این نشست فعال نیست؛ ابتدا اتصال زنده و گیت صف را بررسی کن.','Live controls are locked in this session.'));return;}if(armedQueue&&button.dataset.queue&&armedQueue!==button.dataset.queue){alert(t('کنترل روی صف '+armedQueue+' فعال است؛ برای صف '+button.dataset.queue+' باید گیت همان صف را در تنظیمات فعال کنی.','Controls are armed for queue '+armedQueue+'; arm queue '+button.dataset.queue+' separately.'));return;}actionTarget={...button.dataset};$('action-title').textContent=actionNames[actionTarget.action];$('action-description').textContent=actionTarget.queue+' · '+(actionTarget.agent||actionTarget.channel||'');$('action-error').textContent='';let fields='';
@@ -351,7 +437,7 @@
  });
  $('action-cancel').onclick=()=>$('action-dialog').close();
  $('action-form').onsubmit=async event=>{event.preventDefault();if(!actionTarget)return;const submit=event.submitter||$('action-form').querySelector('[type=submit]');submit.disabled=true;const fields=Object.fromEntries(new FormData(event.target));
-  try{await fetchJSON(cfg.control_url,{method:'POST',headers:{'X-CSRF-Token':cfg.csrf,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({...actionTarget,...fields})});$('action-dialog').close();await refresh();}
+  try{const outcome=await fetchJSON(cfg.control_url,{method:'POST',headers:{'X-CSRF-Token':cfg.csrf,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({...actionTarget,...fields})});trackCommand(outcome);$('action-dialog').close();await refresh();}
   catch(error){const errors={
   control_queue_mismatch:t('گیت کنترل برای صف دیگری فعال است. ابتدا در تنظیمات، کنترل صف '+actionTarget.queue+' را جداگانه فعال کن.','Controls are armed for another queue; arm queue '+actionTarget.queue+' first.'),
   control_gate_not_armed_for_current_session:t('کنترل این کاربر/نشست فعال نیست یا منقضی شده. ابتدا صف موردنظر را در تنظیمات فعال کن.','Controls are not armed for this login/session.'),
@@ -411,13 +497,16 @@
  $('ami-test').onclick=async()=>{try{const result=await submitAmi(cfg.ami_test_url);renderAmiStatus(amiState.settings,result.snapshot);showView('settings');showAmiFeedback(true,t('تست AMI و QueueStatus موفق شد. حالا فعال‌سازی داده زنده را بزن.','AMI login and QueueStatus succeeded. Now enable live data.'));}catch(error){showAmiError(error,'probe');}};
  $('ami-enable').onclick=async()=>{try{const result=await submitAmi(cfg.ami_connect_url,{action:'enable',enabled:true});renderAmiStatus(amiState.settings,result.snapshot);showView('settings');await refresh();showAmiFeedback(true,t('داده واقعی صف انتخابی وارد داشبورد شد.','Selected queue live data is enabled.'));}catch(error){showAmiError(error,'adapter');}};
  $('ami-disable').onclick=async()=>{try{const result=await submitAmi(cfg.ami_connect_url,{action:'disable',enabled:false});renderAmiStatus(amiState.settings,result.snapshot||amiState.snapshot);await refresh();showView('settings');}catch(error){showAmiError(error,'adapter');}};
+ if(cfg.realtime_push){['ami-save','ami-enable','ami-disable'].forEach(id=>{$(id).disabled=true;$(id).title=t('مدیریت اتصال روی سرور انجام می‌شود.','Connection is managed on the server.');});}
 
-async function updateControlBadge(){
+
+async function updateControlBadge(payload){
  try {
-   const state=await fetchJSON(cfg.controls_status_url);
+   const state=payload&&typeof payload.enabled==='boolean'?payload:await fetchJSON(cfg.controls_status_url);
    const enabled=!!state.enabled;
    armedQueue=enabled?String(state.queue||''):'';
    cfg.test_controls_enabled=enabled;
+   updateAdvancedSubmit();
    $('test-controls-badge').className='badge '+(enabled?'':'pending');
    $('test-controls-badge').textContent=enabled?t('فعال','Enabled'):t('غیرفعال','Disabled');
    $('test-controls-info').textContent=enabled?t('صف مجاز: ','Authorized queue: ')+(state.queue||'—')+' · '+t('زمان باقی‌مانده: ','Remaining: ')+Math.ceil((state.remaining_seconds||0)/60)+' '+t('دقیقه','min')
@@ -449,8 +538,8 @@ $('test-controls-disable').onclick=async()=>{
   ['supervision',t('شنود، نجوا و ورود به مکالمه','Listen, whisper, barge'),t('اتصال و دریافت صدای کارشناس آزموده شده؛ تأیید کامل مسیر صدا لازم است','Connection and agent audio tested; full audio acceptance still required'),'beta'],
   ['dashboard',t('داشبورد، هشدار، Wallboard و نمودار زنده','Dashboard, alerts, wallboard, live charts'),t('نمودار بر اساس نمونه‌های همین مرورگر','Charts from current browser samples only'),'ready'],
   ['pbx',t('کانال‌های فعال، PJSIP و ParkedCalls','Channels, PJSIP and parked calls'),t('فقط خواندنی؛ با مجوز AMI مناسب','Read-only, optional AMI privileges'),'beta'],
-  ['transfer',t('انتقال Blind / Attended و Pickup','Blind/attended transfer and pickup'),t('نیازمند پیاده‌سازی و تست ARI/AMI','Requires new AMI/ARI implementation'),'planned'],
-  ['park',t('پارک و بازگردانی تماس','Park and retrieve calls'),t('نمایش وضعیت اولیه آماده تست، اجرای فرمان برنامه‌ریزی‌شده','Read inventory beta, controls planned'),'planned'],
+  ['transfer',t('انتقال Blind / Attended و Pickup','Blind/attended transfer and pickup'),t('هدف دقیق و مقصد داخلی مجاز؛ نیازمند فعال‌سازی روی PBX','Exact target and internal allowlist; PBX activation required'),'beta'],
+  ['park',t('پارک و بازگردانی تماس','Park and retrieve calls'),t('پارک در Bridge دوطرفه و بازیابی روی تلفن اختصاصی','Two-party bridge parking and retrieval on assigned phone'),'beta'],
   ['trunks',t('سلامت ترانک‌های SIP و کیفیت RTP','SIP trunk and RTP quality'),t('نیازمند آداپتور جدا و RTCP/QoS','Dedicated registration/RTCP adapter needed'),'planned'],
   ['softphone',t('WebRTC Softphone و موبایل','WebRTC & mobile softphone'),t('نیازمند WSS/TLS، SIP.js و تنظیمات PBX','Requires WSS/TLS, SIP.js and PBX config'),'planned'],
   ['contacts',t('دفترچه تلفن صف','Queue directory'),t('ثبت مخاطب با دسترسی صف؛ CRM و کلیک‌توکال در برنامه توسعه','Queue-scoped contacts; CRM and click-to-call planned'),'beta'],
@@ -471,7 +560,7 @@ $('test-controls-disable').onclick=async()=>{
     if((kind==='extensions'||kind==='contacts')&&(r==='action_permission_denied'||r==='action_or_module_unavailable')) info.textContent+=' '+t('روی سرور تست: manager show command PJSIPShowEndpoints / PJSIPShowContacts و module show like res_pjsip_manager را بررسی کن؛ مجوز system را بدون ارزیابی امنیتی اضافه نکن.','On test PBX check manager show command PJSIPShowEndpoints / PJSIPShowContacts and module show like res_pjsip_manager; do not grant system privilege without review.');
     resultBox.textContent=JSON.stringify({kind:response.kind,action:response.action,reason:r,supported:false},null,2);return;
    }
-   info.textContent=t('نتیجه زنده و بدون شماره تماس‌گیرنده','Live data with no caller numbers');
+   info.textContent=t('نتیجه زنده و بدون شماره تماس‌گیرنده','Live data with no caller numbers')+(response.complete===false?t(' · فهرست جزئی است؛ همهٔ درایورها قابل بررسی نیستند.',' · Partial inventory; not every driver could be inspected.'):'');
    const data=response.data||{};
    const items=kind==='channels'?[[t('کانال‌ها (نه تماس یکتا)','Channel legs'),data.channel_legs],[t('کانال‌های Up','Up channels'),data.up],[t('زنگ‌خور','Ringing'),data.ringing]]:kind==='extensions'?[[t('نقاط پایانی SIP/PJSIP','SIP/PJSIP endpoints / peers'),data.total],[t('آزاد بر اساس state','Available by state'),data.available]]:kind==='parking'?[[t('تماس پارک شده','Parked calls'),data.parked_calls]]:kind==='contacts'?[[t('کانتکت‌های PJSIP','PJSIP contacts'),data.contacts],[t('در دسترس','Available'),data.available]]:kind==='registrations'?[[t('رجیستری خروجی','Outbound registrations'),data.registrations],[t('رجیستر','Registered'),data.registered],[t('ناموفق / بدون رجیستر','Not registered'),data.unregistered]]:[];
    if(kind==='permissions'){
@@ -496,7 +585,7 @@ $('test-controls-disable').onclick=async()=>{
   holder.innerHTML=policyAvailable.map(id=>`<label class="sq-choice"><input type="checkbox" value="${esc(id)}" ${chosen.has(id)?'checked':''}><span>صف <bdi dir="ltr">${esc(id)}</bdi>${queues[id]?.Name&&queues[id].Name!==id?` · ${esc(queues[id].Name)}`:''}</span></label>`).join('')||`<span class="muted">${t('هیچ صف مجازی از AMI دریافت نشد. اتصال را بررسی کن.','No authorized queues loaded from AMI.')}</span>`;
  }
  const normalizePhone=s=>String(s||'').trim();
- const phoneFromMember=s=>{const raw=String(s||'');const found=raw.match(/(?:PJSIP|SIP)\/([A-Za-z0-9_.-]+)/i)||raw.match(/(?:Local|hint:)\/?([A-Za-z0-9_.-]+)@/i);return found?'PJSIP/'+found[1]:'';};
+ const phoneFromMember=s=>{const found=String(s||'').match(/^(PJSIP|SIP)\/([A-Za-z0-9_.-]+)$/i);return found?found[1].toUpperCase()+'/'+found[2]:'';};
  function knownPhones(){const found=new Set();for(const q of Object.values(queues||{}))for(const m of Object.values(q.members||{}))for(const candidate of [m.StateInterface,m.Location,m.Interface,m.Name]){const p=phoneFromMember(candidate);if(p)found.add(p);}return [...found].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));}
  function renderPhoneOptions(phones,selected){const select=$('account-phone');if(!select)return;const chosen=normalizePhone(selected??select.value);const list=[...new Set((phones||[]).map(normalizePhone).filter(x=>/^(PJSIP|SIP)\/[A-Za-z0-9_.-]+$/.test(x)))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
   select.innerHTML=`<option value="">${t('بدون داخلی (فقط مدیر/مشاهده‌گر)','No extension (admin/viewer only)')}</option>`+list.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
@@ -511,9 +600,9 @@ $('test-controls-disable').onclick=async()=>{
   status.textContent=t('در حال خواندن داخلی‌های PJSIP از AMI...','Reading PJSIP endpoints from AMI...');
   try{const result=await fetchJSON('/api/pbx/health?kind=extensions');
     if(!result.supported)throw Error(result.reason||'pjsip_inventory_unavailable');
-    const live=(result.data?.endpoints||[]).map(x=>'PJSIP/'+String(x.endpoint||'')).filter(x=>/^PJSIP\/\d{2,8}$/.test(x));
+    const live=(result.data?.endpoints||[]).map(x=>String(x.technology||'PJSIP')+'/'+String(x.endpoint||'')).filter(x=>/^(SIP|PJSIP)\/\d{1,12}$/.test(x));
     const all=[...new Set([...live,...fromQueue])];phoneInventory=all;renderPhoneOptions(all,previous);
-    status.textContent=t('داخلی‌های خوانده‌شده از PBX: ','PBX endpoints: ')+fmt(live.length);
+    status.textContent=t('داخلی‌های خوانده‌شده از PBX: ','PBX endpoints: ')+fmt(live.length)+(result.complete===false?t(' · فهرست جزئی؛ درایور داخلی را از روی Local حدس نمی‌زنیم.',' · Partial list; Local members do not establish the device driver.'):'');
     if(info)info.textContent=t('صف‌های قابل انتخاب: ','Selectable queues: ')+fmt(policyAvailable.length)+' · '+t('داخلی‌ها: ','Extensions: ')+fmt(all.length);
   }catch(error){status.textContent=t('لیست کامل PJSIP دردسترس نیست؛ داخلی‌های شناسایی‌شده از اعضای صف نمایش داده شدند.','Full PJSIP inventory unavailable; using queue member extensions.');if(info)info.textContent=t('دریافت لیست کامل نیازمند مجوز PJSIPShowEndpoints است.','Full list needs PJSIPShowEndpoints permission.')+' ('+esc(error.message)+')';}
  }
@@ -647,6 +736,6 @@ $('test-controls-disable').onclick=async()=>{
  }
  $('qs-close').onclick=()=>$('queue-summary-dialog').close();
  document.addEventListener('click',event=>{const b=event.target.closest('[data-queue-summary]');if(b)showQueueSummary(b.dataset.queueSummary);});
-function clock(){$('clock').textContent=new Intl.DateTimeFormat(fa?'fa-IR-u-ca-persian':'en-GB',{dateStyle:'medium',timeStyle:'short'}).format(new Date());if(lastSuccess&&Date.now()-lastSuccess>Math.max(20000,cfg.interval*3)){$('connection').className='badge pending';$('connection').textContent=t('داده‌ها قدیمی است','Data is stale');currentDataSource='stale';cfg.test_controls_enabled=false;document.body.dataset.connection='stale';updateControlBadge();}}
- clock();setInterval(clock,10000);loadAmiSettings();loadPolicyEditor();updateControlBadge();setInterval(updateControlBadge,15000);refresh();
+function clock(){$('clock').textContent=new Intl.DateTimeFormat(fa?'fa-IR-u-ca-persian':'en-GB',{dateStyle:'medium',timeStyle:'short'}).format(new Date());if(lastReceipt&&performance.now()-lastReceipt>Math.max(20000,cfg.interval*3)){$('connection').className='badge pending';$('connection').textContent=t('داده‌ها قدیمی است','Data is stale');currentDataSource='stale';cfg.test_controls_enabled=false;document.body.dataset.connection='stale';updateControlBadge({enabled:false});}}
+ clock();setInterval(clock,10000);loadAmiSettings();loadPolicyEditor();updateControlBadge();if(!cfg.realtime_push)setInterval(updateControlBadge,15000);refresh();connectSocket();
 })();
