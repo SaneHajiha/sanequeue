@@ -8,7 +8,7 @@ I build practical tools for Asterisk-based contact centers, with a focus on clea
 
 ### SaneQueue
 
-An open-source queue operations dashboard based on QPanel: live queues, agent presence, supervised controls and bilingual documentation.
+An open-source queue operations dashboard: live queues, agent presence, supervised controls and bilingual documentation.
 
 [Explore SaneQueue](https://github.com/SaneHajiha/sanequeue) · [راهنمای فارسی](https://github.com/SaneHajiha/sanequeue/blob/master/README.fa.md)
 

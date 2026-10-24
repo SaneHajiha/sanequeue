@@ -1,3 +1,7 @@
+# Latest collector pilot
+
+For beta.20 results and the distinction between the new opt-in collector and the existing web adapter, read [collector validation](COLLECTOR_VALIDATION.md) and the [strict audit](AUDIT_20261024.fa.md). The evidence below describes the beta.18/19 baseline.
+
 # Validation record · 2026-10-24
 
 ## Automated

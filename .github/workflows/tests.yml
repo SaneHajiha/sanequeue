@@ -3,6 +3,13 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      SANEQUEUE_TEST_REDIS_URL: redis://127.0.0.1:6379/15
     strategy:
       matrix:
         python: ['3.10', '3.11', '3.12']

@@ -2,11 +2,15 @@
 
 # SaneQueue
 
-Persian and English live queue monitoring for Asterisk-based contact centers, built on [QPanel](https://github.com/roramirez/qpanel). MIT licensed.
+Persian and English live queue monitoring for Asterisk-based contact centers. MIT licensed.
 
-**2.1.0-beta.19 · monitoring validation release · [راهنمای فارسی](README.fa.md)**
+**2.1.0-beta.20 · collector pilot release · [راهنمای فارسی](README.fa.md)**
 
 ![English operations dashboard with synthetic demonstration data](docs/images/dashboard-en.png)
+
+## Collector pilot and strict audit
+
+This release adds an independent persistent read-only AMI collector with Redis leader fencing. It is **opt-in**; the existing web adapter has not migrated to it. See [architecture](docs/REALTIME_ARCHITECTURE.md), [strict audit and scores](docs/AUDIT_20261024.fa.md), [database plan](docs/DATABASE_PLAN.md) and [admin password recovery](docs/ADMIN_ACCESS.md). WebSocket and full historical reporting remain undelivered.
 
 ## What you can use
 
@@ -34,10 +38,10 @@ The installer requires an isolated Python 3.10–3.12 runtime. Never replace Iss
 
 ## Verified scope
 
-224 pytest tests passed locally on Python 3.11. Live monitoring and queue controls were exercised on a test PBX running Rocky Linux 8.10 and Asterisk 20.12.0. Asterisk 16/18 event variants are fixture-tested; Issabel 4/5 and all customer installations are not universally certified. Docker configuration is supplied but has not been built in this validation environment. This release is beta, with explicit remaining acceptance work.
+The beta.19 baseline passed 224 tests. Collector pilot validation is recorded in [the current audit](docs/AUDIT_20261024.fa.md). Live monitoring and queue controls were exercised on a test PBX running Rocky Linux 8.10 and Asterisk 20.12.0. Asterisk 16/18 event variants are fixture-tested; Issabel 4/5 and all customer installations are not universally certified. Docker configuration is supplied but has not been built in this validation environment. This release is beta, with explicit remaining acceptance work.
 
 Screenshots use synthetic data. Historical notes from earlier previews remain under `docs/` and root release notes for provenance; this README and the beta.18 validation guide describe the current release.
 
 ## Attribution
 
-Copyright and licenses of QPanel and bundled libraries are preserved in [LICENSE](LICENSE) and [NOTICE](NOTICE). SaneQueue is independent of Issabel, Asterisk, FOP2 and VoiPing. No proprietary assets or source code from those products are included.
+Third-party copyright and license notices are preserved in [LICENSE](LICENSE) and [NOTICE](NOTICE). SaneQueue is independent of Issabel, Asterisk, FOP2 and VoiPing. No proprietary assets or source code from those products are included.

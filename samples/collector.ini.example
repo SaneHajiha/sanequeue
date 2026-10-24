@@ -1,0 +1,16 @@
+[ami]
+host = 127.0.0.1
+port = 5038
+user = sanequeue_readonly
+password = REPLACE_LOCALLY
+tls = false
+; For remote AMI use a verified TLS endpoint or a private tunnel.
+; ca_file = /etc/sanequeue/ami-ca.pem
+; server_name = pbx.example.org
+
+[collector]
+pbx_id = primary
+redis_url = redis://127.0.0.1:6379/0
+reconcile_seconds = 120
+heartbeat_seconds = 10
+publish_seconds = 1

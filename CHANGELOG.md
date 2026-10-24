@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0-beta.20 — 2026-10-24
+
+- Add an opt-in independent asyncio AMI collector: bounded transport/state, event journal, heartbeat, reconnect/resync and Redis lease fencing.
+- Preserve external cancellation when AMI responses race with shutdown; fix bridge switches, late leaves, channel rename, wrap-up expiry and queue re-entry counters.
+- Add real Redis CI tests and live shadow validation on Asterisk 20.12. The existing web adapter is not migrated and WebSocket is not delivered in this release.
+- Add secure offline password recovery, branded asset URLs with traversal tests, bilingual architecture/recovery documentation, strict scored audit and database migration/indexing plan.
+- Preserve legal third-party attribution. No Asterisk restart or dialplan change is required.
+
+
 ## 2.1.0-beta.19 — 2026-10-24
 
 - Product Design audit follow-up: derive capability status totals from the catalogue and localize their numbers.

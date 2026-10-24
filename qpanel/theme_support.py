@@ -16,11 +16,16 @@ def setup_themes(app, app_identifier=None):
             abort(404)
         return send_from_directory(os.path.join(roots[theme_name], 'static'), filename)
 
+    @app.route('/assets/<path:filename>')
+    def sanequeue_assets(filename):
+        return send_from_directory(os.path.join(roots['qpanel'], 'static'), filename)
+
     @app.context_processor
     def helpers():
         current = getattr(g, 'active_theme', 'qpanel')
         return dict(theme=lambda template: current + '/' + template,
-                    theme_static=lambda filename: url_for('theme_assets', theme_name=current, filename=filename))
+                    theme_static=lambda filename: url_for('sanequeue_assets', filename=filename)
+                    if current == 'qpanel' else url_for('theme_assets', theme_name=current, filename=filename))
 
 
 def render_theme_template(theme, template, **context):

@@ -10,6 +10,7 @@ ALLOWED_ACTIONS = frozenset({'pause_member','priority','first','hangup','spy','w
 
 @dataclass
 class TestControlGate:
+    __test__ = False  # Runtime authorization object, not a pytest test class.
     queue: str = '8001'
     agents: frozenset = frozenset({'Local/100@from-queue/n', 'PJSIP/100'})
     supervisor: str = ''  # chosen from the authenticated account, not a shared default
