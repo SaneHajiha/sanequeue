@@ -82,6 +82,10 @@ def get_data_queues(queue=None):
 
 def get_user_config_by_name(username):
     try:
+        canonicalizer=app.config.get('SANEQUEUE_ACCOUNT_CANONICALIZER')
+        if callable(canonicalizer):
+            username=canonicalizer(username)
+            if username is None:return None
         user = User()
         user.id = username
         user.password = cfg.get('users', username)
@@ -170,8 +174,8 @@ def request_loader(request):
     return None
 
 
-_login_attempts = OrderedDict()
-_login_lock = threading.Lock()
+from sanequeue.security.login import LoginLimiter
+_login_limiter = LoginLimiter()
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -182,27 +186,20 @@ def login():
         return render_template('login.html')
 
     address = request.remote_addr or 'unknown'
-    with _login_lock:
-        now = time.monotonic()
-        count, since = _login_attempts.get(address, (0, now))
-        if now - since >= 300:
-            count, since = 0, now
-        if count >= 20:
-            return jsonify(error='login_rate_limited'), 429
-        _login_attempts[address] = (count + 1, since)
-        _login_attempts.move_to_end(address)
-        if len(_login_attempts) > 2048:
-            _login_attempts.popitem(last=False)
-
-    username = request.form['username']
+    username = request.form.get('username','')
+    ticket=_login_limiter.reserve(address,username)
+    if ticket is None:return jsonify(error='login_rate_limited'),429
+    if len(username)>64:return render_template('login.html',login_error=True),401
     user_config = get_user_config_by_name(username)
     if user_config is None:
         return render_template('login.html', login_error=True), 401
 
     password = request.form.get('pw', '')
     stored = user_config.password
-    valid = check_password_hash(stored, password) if stored.startswith(('pbkdf2:', 'scrypt:')) else __import__('hmac').compare_digest(stored, password)
+    valid = len(password)<=200 and (check_password_hash(stored, password) if stored.startswith(('pbkdf2:', 'scrypt:')) else __import__('hmac').compare_digest(stored, password))
     if valid:
+        _login_limiter.success(ticket)
+        username=user_config.id
         session.clear()
         session['_auth_version'] = hashlib.sha256(stored.encode('utf-8')).hexdigest()
         registry=app.config.get('SANEQUEUE_AUTH_SESSIONS')

@@ -84,7 +84,12 @@ def sync_accounts():
                 cfg.config.remove_option('agent_interfaces',username)
 sync_accounts()
 from sanequeue.security.permissions import sections_for
-module.app.config['SANEQUEUE_MENU_PROVIDER']=lambda username,role:sections_for(role,read_accounts(ACCOUNTS_PATH).get(username,{}))
+from qpanel.local_accounts import canonical_username,delete_account,LOCK as ACCOUNT_LOCK
+module.app.config['SANEQUEUE_ACCOUNT_CANONICALIZER']=lambda username:canonical_username(ACCOUNTS_PATH,username)
+def account_sections(username,role):
+    account=read_accounts(ACCOUNTS_PATH).get(username)
+    return sections_for(role,account) if account is not None else frozenset()
+module.app.config['SANEQUEUE_MENU_PROVIDER']=account_sections
 from sanequeue.security.profile import install as install_profile
 install_profile(module.app,ACCOUNTS_PATH,STATE,sync_accounts)
 from sanequeue.security.organization import install as install_organization,disabled as module_disabled
@@ -635,17 +640,12 @@ def local_accounts_api():
     try:
         username=str(obj.get('username','')).strip()
         if obj.get('action')=='delete':
-            if username==current_user.get_id():return jsonify(error='cannot_delete_self'),409
-            users=read_accounts(ACCOUNTS_PATH)
-            if username not in users:return jsonify(error='unknown_user'),404
-            if users[username]['role']=='admin' and sum(1 for v in users.values() if v['role']=='admin')<=1:
-                return jsonify(error='last_admin'),409
-            del users[username]
-            from qpanel.local_accounts import write_accounts
-            write_accounts(ACCOUNTS_PATH,users)
-            if cfg.config.has_option('users',username):cfg.config.remove_option('users',username)
-            if cfg.config.has_option('roles',username):cfg.config.remove_option('roles',username)
-            if cfg.config.has_option('supervisor_extensions',username):cfg.config.remove_option('supervisor_extensions',username)
+            with ACCOUNT_LOCK:
+                try:delete_account(ACCOUNTS_PATH,username,current_user.get_id(),lambda:POLICIES.remove_subject(username))
+                except ValueError as error:return jsonify(error=str(error)),404 if str(error)=='unknown_user' else 409
+                sync_accounts()
+                registry=module.app.config.get('SANEQUEUE_AUTH_SESSIONS')
+                if registry:registry.revoke_user(username)
         else:
             role=str(obj.get('role','')).strip()
             phone=str(obj.get('phone','')).strip()

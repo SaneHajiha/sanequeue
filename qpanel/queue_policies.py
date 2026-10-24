@@ -106,6 +106,17 @@ class QueuePolicyStore:
     def export(self):
         with self.lock:return deepcopy(self.state)
 
+    def remove_subject(self,username):
+        """Remove a deleted identity without clearing live staffing reservations."""
+        with self.lock:
+            if username not in self.state['supervisors']:return
+            clean=deepcopy(self.state);clean['supervisors'].pop(username)
+            self.path.parent.mkdir(parents=True,exist_ok=True)
+            temporary=self.path.with_suffix('.tmp')
+            with temporary.open('w',encoding='utf-8') as stream:
+                json.dump(clean,stream,ensure_ascii=False,indent=2);stream.flush();os.fsync(stream.fileno())
+            os.replace(temporary,self.path);self.state=clean
+
     def replace(self,payload, *, visible_queues=None):
         clean=validate_config(payload)
         if visible_queues is not None and any(k not in visible_queues for k in clean['queues']):

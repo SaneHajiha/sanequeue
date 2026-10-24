@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 import threading
+import tempfile
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.@-]{2,64}$")
 PHONE_RE = re.compile(r"^(PJSIP|SIP)/[A-Za-z0-9_.-]{1,48}$")
@@ -48,19 +49,36 @@ def read_accounts(path):
 
 def write_accounts(path,accounts):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
-    temp=path.with_suffix('.tmp')
-    with temp.open('w',encoding='utf-8') as f:
-        json.dump(accounts,f,ensure_ascii=False,indent=2)
-        f.flush();os.fsync(f.fileno())
-    try:os.chmod(temp,0o600)
-    except OSError:pass
-    os.replace(temp,path)
+    with LOCK:
+        descriptor,temp=tempfile.mkstemp(prefix='.accounts-',dir=path.parent)
+        try:
+            with os.fdopen(descriptor,'w',encoding='utf-8') as f:
+                json.dump(accounts,f,ensure_ascii=False,indent=2);f.flush();os.fsync(f.fileno())
+            os.replace(temp,path)
+        finally:
+            if os.path.exists(temp):os.unlink(temp)
+
+
+def canonical_username(path,username):
+    if not isinstance(username,str):return None
+    return next((name for name in read_accounts(path) if name.casefold()==username.casefold()),None)
+
+
+def delete_account(path,username,actor,before_delete=None):
+    with LOCK:
+        if username==actor:raise ValueError('cannot_delete_self')
+        users=read_accounts(path)
+        if username not in users:raise ValueError('unknown_user')
+        if users[username]['role']=='admin' and sum(a['role']=='admin' for a in users.values())<=1:raise ValueError('last_admin')
+        if before_delete:before_delete()
+        del users[username];write_accounts(path,users)
 
 
 def set_account(path,username,role,phone,password=None,*,menus=None):
     with LOCK:
         validate_identity(username,role,phone)
         registry=read_accounts(path)
+        if username not in registry and len(registry)>=100:raise ValueError('account_limit_reached')
         old=registry.get(username,{})
         if old.get('role') == 'admin' and role != 'admin' and sum(v.get('role') == 'admin' for v in registry.values()) <= 1:
             raise ValueError('last_admin')
