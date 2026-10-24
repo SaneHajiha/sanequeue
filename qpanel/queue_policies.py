@@ -29,7 +29,7 @@ DEFAULT_REASONS = [
 ]
 DEFAULT_QUEUE = {
   'label':'',
-  'alerts':{'waiting_above':5, 'wait_seconds_above':300, 'min_ready':0,'cooldown_seconds':300,'bale_enabled':False},
+  'alerts':{'waiting_above':5, 'wait_seconds_above':300, 'min_ready':0,'cooldown_seconds':300,'bale_enabled':False,'telegram_enabled':False,'count_enabled':True,'time_enabled':True,'match_mode':'any'},
   'staffing':{'roster_size':0,'max_absent_percent':50,'max_absent_count':5,'min_on_duty':0},
   'pause_reasons':deepcopy(DEFAULT_REASONS),
 }
@@ -61,6 +61,13 @@ def validate_config(raw):
         for key, lo, hi in [('waiting_above',0,10000),('wait_seconds_above',0,86400),('min_ready',0,1000),('cooldown_seconds',60,86400)]:
             base['alerts'][key]=_bounded_int(alerts.get(key,base['alerts'][key]),lo,hi,key)
         base['alerts']['bale_enabled']=alerts.get('bale_enabled',False) is True
+        base['alerts']['telegram_enabled']=alerts.get('telegram_enabled',False) is True
+        for key in ('count_enabled','time_enabled'):
+            if key in alerts and not isinstance(alerts[key],bool):raise ValueError('invalid_alert_switch')
+            base['alerts'][key]=alerts.get(key,True)
+        mode=alerts.get('match_mode','any')
+        if mode not in ('any','all'):raise ValueError('invalid_alert_match_mode')
+        base['alerts']['match_mode']=mode
         for key, lo, hi in [('roster_size',0,1000),('max_absent_percent',0,100),('max_absent_count',0,1000),('min_on_duty',0,1000)]:
             base['staffing'][key]=_bounded_int(staffing.get(key,base['staffing'][key]),lo,hi,key)
         reasons=[r for r in q.get('pause_reasons',DEFAULT_REASONS) if isinstance(r,dict) and r.get('id')!='survey']
@@ -121,6 +128,8 @@ class QueuePolicyStore:
         with self.lock:return deepcopy(self.state['queues'].get(queue,DEFAULT_QUEUE))
 
     def access(self,username,role,queue,action='view'):
+        from sanequeue.security.permissions import ROLE_ACTIONS
+        if action not in ROLE_ACTIONS.get(role,()):return False
         if role=='admin': return True
         if role not in ('supervisor','agent','viewer'): return False
         with self.lock:
@@ -226,8 +235,12 @@ class QueuePolicyStore:
             for name,data in queues.items():
                 rules=self.queue(name)['alerts']
                 summary=self.summary(name,data)
-                tests=(('waiting_count',summary['waiting']>rules['waiting_above'], summary['waiting'], rules['waiting_above']),
-                       ('waiting_time',summary['longest_wait']>rules['wait_seconds_above'],summary['longest_wait'],rules['wait_seconds_above']),
+                count_fired=summary['waiting']>0 and summary['waiting']>=rules['waiting_above']
+                time_fired=summary['longest_wait']>0 and summary['longest_wait']>=rules['wait_seconds_above']
+                selected=[condition for key,condition in (('count_enabled',count_fired),('time_enabled',time_fired)) if rules[key]]
+                matched=bool(selected) and (all(selected) if rules['match_mode']=='all' else any(selected))
+                tests=(('waiting_count',matched and rules['count_enabled'] and count_fired, summary['waiting'], rules['waiting_above']),
+                       ('waiting_time',matched and rules['time_enabled'] and time_fired,summary['longest_wait'],rules['wait_seconds_above']),
                        ('ready_below',summary['members']>0 and summary['status_counts']['ready']<rules['min_ready'],summary['status_counts']['ready'],rules['min_ready']))
                 for typ,fired,value,limit in tests:
                     if not fired:continue

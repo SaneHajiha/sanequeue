@@ -3,6 +3,7 @@ import sys
 import time
 import copy
 import json
+import re
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 import secrets
@@ -40,7 +41,7 @@ if not secret_path.exists():
     with os.fdopen(fd,'w') as stream: stream.write(secrets.token_hex(32))
 module.app.secret_key = secret_path.read_text(encoding='utf-8').strip()
 module.app.config['SESSION_COOKIE_HTTPONLY'] = True
-module.app.config['MAX_CONTENT_LENGTH'] = 128 * 1024
+module.app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024
 module.app.config['SANEQUEUE_REQUIRE_SESSION_VERSION'] = SERVER_MODE
 module.app.config['SESSION_COOKIE_SAMESITE'] = 'Strict'
 module.app.config['SESSION_COOKIE_SECURE'] = os.getenv('SANEQUEUE_HTTPS') == '1'
@@ -82,6 +83,17 @@ def sync_accounts():
             if cfg.config.has_section('agent_interfaces'):
                 cfg.config.remove_option('agent_interfaces',username)
 sync_accounts()
+from sanequeue.security.permissions import sections_for
+module.app.config['SANEQUEUE_MENU_PROVIDER']=lambda username,role:sections_for(role,read_accounts(ACCOUNTS_PATH).get(username,{}))
+from sanequeue.security.profile import install as install_profile
+install_profile(module.app,ACCOUNTS_PATH,STATE,sync_accounts)
+from sanequeue.security.organization import install as install_organization,disabled as module_disabled
+install_organization(module.app,STATE,lambda:cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'))
+
+@module.app.before_request
+def maintenance_controls():
+    if module_disabled() and (request.path in ('/api/control','/api/members/pause') or request.path.startswith('/api/ami/')):
+        return jsonify(error='module_disabled'),503
 cfg.config.set('sanequeue', 'minimum_ready_percent', cfg.get_value_set_default('sanequeue','minimum_ready_percent','0'))  # Isolated test queue may have only one agent.
 cfg.config.set('sanequeue', 'demo_mode', 'false' if SERVER_MODE else 'true')
 cfg.config.set('sanequeue', 'live_channels', 'false')
@@ -173,6 +185,12 @@ if os.environ.get('SANEQUEUE_COLLECTOR_CONFIG'):
     module.app.config['SANEQUEUE_ACTION_EXECUTOR']=execute_persistent_action
     module.app.config['SANEQUEUE_PRIVATE_STATE']=lambda: PERSISTENT_READER.read(fresh=True)[0]
     module.app.config['SANEQUEUE_INTERNAL_EXTENSIONS']=tuple(v.strip() for v in os.environ.get('SANEQUEUE_INTERNAL_EXTENSIONS','').split(',') if v.strip())
+    if os.getenv('SANEQUEUE_AUTO_EXTENSIONS')=='1':
+        def _discovered_internal_extensions():
+            from sanequeue.realtime.local_inventory import read_snapshot
+            inventory=read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json'))
+            return tuple(sorted({row['endpoint'] for row in (inventory or {}).get('endpoints',[]) if row['category']=='extension' and re.fullmatch(r'\d{1,12}',row['endpoint'])}))
+        module.app.config['SANEQUEUE_EXTENSION_PROVIDER']=_discovered_internal_extensions
     module.app.config['SANEQUEUE_TRANSFER_CONTEXT']=os.environ.get('SANEQUEUE_TRANSFER_CONTEXT','from-internal')
     module.app.config['SANEQUEUE_PARKING_LOT']=os.environ.get('SANEQUEUE_PARKING_LOT','default')
     module.app.config['SANEQUEUE_ADVANCED_ACTIONS']=tuple(v.strip() for v in os.environ.get('SANEQUEUE_ADVANCED_ACTIONS','').split(',') if v.strip())
@@ -187,6 +205,9 @@ if os.environ.get('SANEQUEUE_COLLECTOR_CONFIG'):
         return jsonify(error='collector_unavailable'),503
     from sanequeue.alerts.outbox import AlertOutbox
     ACTION_OUTBOX=AlertOutbox(STATE/'alerts.sqlite3')
+    from sanequeue.alerts.messaging import NotificationSettings
+    NOTIFICATIONS=NotificationSettings(STATE/'notifications.json')
+    module.app.config['SANEQUEUE_NOTIFICATIONS']=NOTIFICATIONS
     WORKER_HEALTH={'reconcile_last_ok':None,'reconcile_failures':0,'delivery_failures':0}
     module.app.config['SANEQUEUE_WORKER_HEALTH']=WORKER_HEALTH
     module.app.config['SANEQUEUE_ALERT_PROVIDER']=ACTION_OUTBOX.report
@@ -199,7 +220,7 @@ if os.environ.get('SANEQUEUE_COLLECTOR_CONFIG'):
                 state,health=PERSISTENT_READER.read()
                 ACTION_LEDGER.reconcile(state)
                 report=POLICIES.evaluate(legacy_queues(state))
-                ACTION_OUTBOX.observe(report['alerts'],POLICIES,delivery_enabled=bale_enabled())
+                ACTION_OUTBOX.observe(report['alerts'],POLICIES,delivery_enabled=NOTIFICATIONS.enabled() | ({'bale'} if bale_enabled() else set()))
                 WORKER_HEALTH['reconcile_last_ok']=time.time()
             except Exception:
                 WORKER_HEALTH['reconcile_failures']+=1
@@ -209,11 +230,17 @@ if os.environ.get('SANEQUEUE_COLLECTOR_CONFIG'):
         from qpanel.queue_policies import send_bale_alert
         while True:
             time.sleep(2)
-            if not bale_enabled():continue
+            if module_disabled():continue
+            enabled=NOTIFICATIONS.enabled() | ({'bale'} if bale_enabled() else set())
+            if not enabled:continue
             try:
-                job=ACTION_OUTBOX.claim()
+                job=ACTION_OUTBOX.claim(enabled)
                 if job is None:continue
-                try:success=send_bale_alert(job['payload'],os.environ['SANEQUEUE_BALE_BOT_TOKEN'],os.environ['SANEQUEUE_BALE_CHAT_ID'])
+                try:
+                    if job['provider'] in NOTIFICATIONS.enabled():
+                        success=NOTIFICATIONS.send(job['provider'],job['payload'])
+                    else:
+                        success=send_bale_alert(job['payload'],os.environ['SANEQUEUE_BALE_BOT_TOKEN'],os.environ['SANEQUEUE_BALE_CHAT_ID'])
                 except Exception:success=False
                 if not success:WORKER_HEALTH['delivery_failures']+=1
                 ACTION_OUTBOX.finish(job,success)
@@ -502,17 +529,25 @@ def _gate_session_nonce():
     return session['sq_control_nonce']
 
 
+RBAC_CONTROLS=os.getenv('SANEQUEUE_CONTROL_MODE')=='rbac' and PERSISTENT_READER is not None
+module.app.config['SANEQUEUE_CONTROL_MODE']='rbac' if RBAC_CONTROLS else 'test-gate'
+
 def _gate_is_active():
+    if module_disabled():return False
+    if RBAC_CONTROLS:
+        return current_user.is_authenticated and cfg.get_value_set_default('roles',current_user.get_id() or '','viewer') in ('admin','supervisor','agent') and AMI_RUNTIME['enabled'] and module.backend.live_source=='ami-live'
     return CONTROL_GATE.active(owner_user=current_user.get_id() or '',
                                owner_session=_gate_session_nonce())
 
 
 def _gate_remaining():
+    if RBAC_CONTROLS:return 0
     return CONTROL_GATE.remaining_seconds(owner_user=current_user.get_id() or '',
                                           owner_session=_gate_session_nonce())
 
 
 def _test_control_guard(req):
+    if RBAC_CONTROLS:return _gate_is_active()
     return CONTROL_GATE.authorize(req.endpoint, req.form.to_dict(),
                                   AMI_RUNTIME['enabled'] and module.backend.live_source == 'ami-live',
                                   bool(AMI_RUNTIME['password']),
@@ -525,7 +560,7 @@ def descriptive_action_denial(error):
     if request.path in ('/api/control', '/api/members/pause') and current_user.is_authenticated:
         if not _gate_is_active():
             return jsonify(error='control_gate_not_armed_for_current_session'),403
-        if str(request.form.get('queue','')) != CONTROL_GATE.queue:
+        if not RBAC_CONTROLS and str(request.form.get('queue','')) != CONTROL_GATE.queue:
             return jsonify(error='control_queue_mismatch', armed_queue=CONTROL_GATE.queue),403
         return jsonify(error='action_not_permitted_by_role_or_target'),403
     return error
@@ -571,9 +606,20 @@ def _security_headers(response):
 
 @module.app.before_request
 def enforce_authenticated_admin_settings():
+    if request.path=='/api/ami/control-status':
+        if not current_user.is_authenticated:abort(403)
+        return
     if request.path.startswith('/api/ami/') or request.path in ('/api/accounts','/api/pbx/health','/__sanequeue__/ami-snapshot'):
         if not current_user.is_authenticated or cfg.get_value_set_default('roles',current_user.get_id() or '','viewer')!='admin':
             abort(403)
+
+def _validate_account_phone(phone):
+    if not phone or PERSISTENT_READER is None:return
+    from sanequeue.realtime.local_inventory import read_snapshot
+    inventory=read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json'))
+    if inventory is None:raise ValueError('extension_inventory_unavailable')
+    valid={row['technology']+'/'+row['endpoint'] for row in inventory.get('endpoints',[]) if row['category']=='extension'}
+    if phone not in valid:raise ValueError('select_a_discovered_internal_phone')
 
 @module.app.route('/api/accounts',methods=['GET','POST'])
 @login_required
@@ -603,6 +649,7 @@ def local_accounts_api():
         else:
             role=str(obj.get('role','')).strip()
             phone=str(obj.get('phone','')).strip()
+            _validate_account_phone(phone)
             set_account(ACCOUNTS_PATH,username,role,phone,obj.get('password') or None)
             sync_accounts()
     except (ValueError,TypeError) as exc:
@@ -802,14 +849,15 @@ def ami_connect_api():
 @module.app.route('/api/ami/control-status')
 def ami_control_status():
     return jsonify(enabled=_gate_is_active(), remaining_seconds=_gate_remaining(),
-                   queue=CONTROL_GATE.queue, allowed_agents=sorted(CONTROL_GATE.agents), supervisor=cfg.get_value_set_default('supervisor_extensions',current_user.get_id() or '',''),
+                   mode='rbac' if RBAC_CONTROLS else 'test-gate',queue='*' if RBAC_CONTROLS else CONTROL_GATE.queue, allowed_agents=sorted(CONTROL_GATE.agents), supervisor=cfg.get_value_set_default('supervisor_extensions',current_user.get_id() or '',''),
                    live=AMI_RUNTIME['enabled'] and module.backend.live_source == 'ami-live')
 
 
-module.app.config['SANEQUEUE_CONTROL_STATE']=lambda: dict(enabled=_gate_is_active(),remaining_seconds=_gate_remaining(),queue=CONTROL_GATE.queue,allowed_agents=sorted(CONTROL_GATE.agents))
+module.app.config['SANEQUEUE_CONTROL_STATE']=lambda: dict(enabled=_gate_is_active(),remaining_seconds=_gate_remaining(),mode='rbac' if RBAC_CONTROLS else 'test-gate',queue='*' if RBAC_CONTROLS else CONTROL_GATE.queue,allowed_agents=sorted(CONTROL_GATE.agents))
 
 @module.app.route('/api/ami/control-toggle', methods=['POST'])
 def ami_control_toggle():
+    if RBAC_CONTROLS:return jsonify(error='controls_managed_by_rbac'),409
     payload=request.get_json(silent=True) or {}
     if payload.get('action')=='disable':
         if _gate_is_active():
@@ -877,8 +925,14 @@ HEALTH_CACHE_LOCK = threading.Lock()
 def pbx_health():
     """On-demand and read-only; no fake PBX data and no exposed caller IDs."""
     kind = request.args.get('kind','channels')
-    if kind not in ('channels','extensions','parking','contacts','registrations','permissions'):
+    if kind not in ('channels','extensions','trunks','parking','contacts','registrations','permissions'):
         return jsonify(error='unsupported_action'), 400
+    if kind in ('extensions','trunks'):
+        from sanequeue.realtime.local_inventory import read_snapshot,projection
+        inventory=read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json'))
+        if inventory is not None:
+            return jsonify(projection(inventory,'extension' if kind=='extensions' else 'trunk'))
+        if kind=='trunks':return jsonify(kind=kind,supported=False,reason='local_inventory_unavailable'),503
     if PERSISTENT_READER is not None:
         from sanequeue.api.state import StateUnavailable
         from sanequeue.realtime.inventory import inventory_projection
@@ -1014,6 +1068,9 @@ def accounts_and_grants_api():
     try:
         if not isinstance(obj, dict):
             return jsonify(error='invalid_payload'),400
+        if obj.get('username')==current_user.get_id() and obj.get('role')=='admin' and obj.get('menus') is not None and not {'users','settings'}.issubset(set(obj['menus'])):
+            return jsonify(error='keep_own_users_and_settings_access'),400
+        _validate_account_phone(str(obj.get('phone','')).strip())
         visible=_load_settings()['visible_queues']
         scope=set(filter_queue_data(_runtime_get_data(),visible)) if AMI_RUNTIME['enabled'] else set(parse_visible_queues(visible) or ())
         result=save_account_with_grants(ACCOUNTS_PATH,POLICIES,scope,obj)

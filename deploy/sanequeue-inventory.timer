@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh SaneQueue inventory every 30 seconds
+
+[Timer]
+OnBootSec=15
+OnUnitInactiveSec=30
+AccuracySec=2
+Unit=sanequeue-inventory.service
+
+[Install]
+WantedBy=timers.target

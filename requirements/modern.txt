@@ -22,3 +22,4 @@ starlette>=1.0,<2
 a2wsgi>=1.10,<2
 uvicorn>=0.35,<1
 websockets>=15,<17
+Pillow>=12,<14

@@ -57,7 +57,7 @@ def write_accounts(path,accounts):
     os.replace(temp,path)
 
 
-def set_account(path,username,role,phone,password=None):
+def set_account(path,username,role,phone,password=None,*,menus=None):
     with LOCK:
         validate_identity(username,role,phone)
         registry=read_accounts(path)
@@ -70,7 +70,13 @@ def set_account(path,username,role,phone,password=None):
             raise ValueError('phone_already_assigned')
         if not password and not old:raise ValueError('new_account_requires_password')
         hashed=hash_secret(password) if password else old['password_hash']
-        registry[username]={'role':role,'phone':phone,'password_hash':hashed}
+        from sanequeue.security.permissions import validate_sections
+        selected=validate_sections(role,menus)
+        registry[username]=dict(old,role=role,phone=phone,password_hash=hashed)
+        if menus is not None:registry[username]['menus']=selected
+        elif old.get('menus') is not None:
+            from sanequeue.security.permissions import sections_for
+            registry[username]['menus']=sorted(sections_for(role,old))
         write_accounts(path,registry)
         return {k:v for k,v in registry[username].items() if k!='password_hash'}
 
@@ -84,4 +90,4 @@ def bootstrap(path):
 
 
 def public_accounts(path):
-    return {username:{'role':x['role'],'phone':x.get('phone','')} for username,x in read_accounts(path).items()}
+    return {username:{'role':x['role'],'phone':x.get('phone',''),'menus':x.get('menus')} for username,x in read_accounts(path).items()}

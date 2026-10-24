@@ -1,25 +1,25 @@
-# Compatibility and resource use / سازگاری و بار سرور
+# Compatibility and resource limits · beta.22
 
-| Platform | Evidence | Acceptance still required |
+| Platform | Evidence | Remaining acceptance |
 |---|---|---|
-| Asterisk 20.12.0 / Rocky 8.10 | Actual PBX integration, queue control and browser tests | Supervision audio and production-size traffic |
-| Asterisk 18 | SIP/PJSIP/Local event parser fixtures | Actual installation, privileges, modules and audio |
-| Asterisk 16 | SIP/PJSIP/Local event parser fixtures | Actual installation, privileges, modules and audio |
-| Issabel 5 | Asterisk-compatible AMI adapter | OS/package-specific installation and end-to-end acceptance |
-| Issabel 4 | Separate dashboard runtime supported architecturally | Actual host; use a sidecar host if modern Python is unsafe |
-| SIP | Parser, hint resolution and real health inventory | Real SIP agent call/control scenarios |
-| PJSIP / Local | Actual test PBX queues and endpoints | Each site's contexts and unusual endpoint naming |
-| Python 3.11 | Local 224-test pytest suite + Linux deployment | Python 3.10/3.12 CI passed; installation acceptance still required |
-| Docker | Configuration only | Image build, network and volume ownership validation |
+| Rocky Linux 8.10 / Asterisk 20.12.0 / Python 3.11 | Automatic install, queue/control calls, messages, RTCP, bounded Local load | Real SIP/RTP concurrency and long-duration soak |
+| Asterisk 16 / 18 | AMI event/parser fixtures | Actual versions, modules, privileges and telephone controls |
+| Issabel 4 / 5 | Standard generated SIP/PJSIP definitions supported by the local adapter | Actual OS/package repositories, Python bootstrap, ACL/menu integration and full host acceptance |
+| PJSIP / Local queue members | Actual three registered phones/two queues and supervision/transfer/parking/pickup | Site-specific contexts and endpoint naming |
+| chan_sip | Actual trunk inventory plus parser fixtures | Actual SIP-agent audio and control acceptance |
+| Python 3.10–3.12 | CI matrix and isolated-runtime design | OS/runtime availability on each target |
+| Docker / remote PBX | Supplied advanced configuration | Image/network/volume and privileged inventory adapter validation |
 
-No OS distribution or all-version compatibility guarantee is implied. Capability checks return unsupported/permission errors instead of inventing values. No SIP/PJSIP migration or dialplan change is performed.
+Standard local discovery expects internal endpoint context `from-internal`. Custom contexts need an adapted explicit classification policy. Unsupported/unavailable values remain unknown. No driver migration or endpoint/dialplan change is performed. Issabel's native ACL/Smarty integration is not claimed; this is an independently authenticated web application.
 
-## Resource design
+## Monitoring cost
 
-A shared snapshot cache collects QueueStatus at most once per five seconds for ordinary viewing, regardless of browser count in one worker. Mutating controls request a fresh authorization snapshot. Concurrent cache misses coalesce; failures back off between 2 and 30 seconds. Snapshot AMI sessions disable unsolicited events. One bounded call/agent event listener tracks journeys. Health checks cache results for 30 seconds. Timeouts cap socket/action work; no shell command or CLI polling is used for normal monitoring.
+The standard installer uses one long-lived read/reporting AMI collector, bounded in-memory state, Redis snapshots and authenticated scoped WebSockets. Normal HTTP/browser refreshes do not connect to AMI. QueueStatus reconciliation is periodic (120 seconds), independent of browser count. Controls use a separate restricted identity and fresh cached state with action confirmation. The optional local phone/trunk inventory runs a bounded root task every 30 seconds; the web process never executes CLI commands. Legacy five-second AMI snapshots are a separate rollback path, not the standard managed deployment.
 
-A measured run of 100 HTTP operations requests with 20 concurrent clients completed in 8.078 seconds, p95 2.797 seconds, and caused two snapshot collections. This is a small test on an idle PBX, not a capacity guarantee. Slow AMI responses can still delay HTTP threads. Large queues, many controls, media supervision and alerts require site-specific load tests.
+A staged laboratory test reached 100 simultaneous Local queue callers. At that stage, total six-vCPU utilization was 19.19%, Asterisk RSS 149.16 MB, web RSS 78.75 MB and collector RSS 37.89 MB; 100 HTTP requests at concurrency 20 had p95 1.4563 seconds and zero HTTP errors. Additional web AMI collections: zero. All generated call legs were removed. [Full evidence and limits](AUDIT_BETA22.md).
 
-Use one worker/four threads, restrict optional probes, retain default polling and monitor CPU/RAM, AMI failures and HTTP latency. Runtime collection counters are available to administrators at `/api/runtime/metrics`. SaneQueue does not process the audio media path for ordinary monitoring. ChanSpy runs on Asterisk and has its own resource cost.
+Local calls do not emulate SIP registration, transcoding, RTP transport, recording or concurrent ChanSpy. These measurements cannot establish production capacity or absence of audio impact at 100 real calls. Test representative codecs, trunks, recording and supervision on the target PBX before production. One worker is required for the current local account/policy/cache design; multiple tenants and high availability are not implemented.
 
-فارسی: کش مشترک، اتصال رویداد محدود، مهلت پاسخ و فاصله‌گذاری خطا برای کاهش بار اضافه شده‌اند. عددهای بالا نتیجهٔ محیط آزمایشی‌اند و تضمین عدم اختلال در همه سرورها نیستند. پیش از نصب عملیاتی، آزمون همان نسخه و بار واقعی لازم است.
+RTCP is observed metadata, not an audio processing path. RTT is converted from Asterisk seconds to milliseconds; loss from fraction/256 to percent. Jitter remains RTP timestamp ticks without a verified codec clock rate; MOS is not fabricated. SIP qualify RTT is signaling reachability, not RTP latency.
+
+فارسی: این جدول مرز آزمون واقعی و پشتیبانی طراحی‌شده را روشن می‌کند. تست ۱۰۰ تماس Local جای تست ۱۰۰ تماس صوتی واقعی را نمی‌گیرد. ایزابل ۴/۵ و Asterisk ۱۶/۱۸ هنوز به نصب و پذیرش روی همان نسخه نیاز دارند.

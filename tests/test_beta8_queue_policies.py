@@ -62,17 +62,32 @@ class Beta8PolicyTests(unittest.TestCase):
         self.store.replace(cfg)
         self.assertEqual(self.store.can_leave('8001',{'members':active_members(10)},'PJSIP/100')[1],'configure_roster_size_before_leaving')
 
-    def test_thresholds_strictly_above_and_transition_deduplicated(self):
-        queue={'members':active_members(5),'Calls':'5','entries':{'a':{'Wait':'300'}},'Completed':'14','Abandoned':'3','Holdtime':'94','TalkTime':'12','ServicelevelPerf':'84.21'}
+    def test_thresholds_include_boundary_and_transition_deduplicated(self):
+        queue={'members':active_members(5),'Calls':'4','entries':{'a':{'Wait':'299'}},'Completed':'14','Abandoned':'3','Holdtime':'94','TalkTime':'12','ServicelevelPerf':'84.21'}
         res=self.store.evaluate({'8001':queue},now=0)
         self.assertEqual(res['alerts'],[])
-        queue['Calls']='6';queue['entries']['a']['Wait']='301'
+        queue['Calls']='5';queue['entries']['a']['Wait']='300'
         fired=self.store.evaluate({'8001':queue},now=10)
         self.assertEqual({a['type'] for a in fired['alerts']},{'waiting_count','waiting_time'})
         self.assertEqual(len(fired['notify']),2)
         self.assertEqual(self.store.evaluate({'8001':queue},now=999)['notify'],[])
         queue['Calls']='0';queue['entries']['a']['Wait']='0';self.store.evaluate({'8001':queue},now=1000)
         queue['Calls']='6';self.assertEqual(len(self.store.evaluate({'8001':queue},now=1001)['notify']),1)
+
+    def test_count_and_time_can_be_disabled_or_combined(self):
+        config=sample_policy();rules=config['queues']['8001']['alerts']
+        rules.update(count_enabled=False,time_enabled=True,match_mode='any');self.store.replace(config)
+        queue={'Calls':'100','members':active_members(5),'entries':{'a':{'Wait':'299'}}}
+        self.assertFalse(self.store.evaluate({'8001':queue})['alerts'])
+        queue['entries']['a']['Wait']='300'
+        self.assertEqual({a['type'] for a in self.store.evaluate({'8001':queue})['alerts']},{'waiting_time'})
+        rules.update(count_enabled=True,match_mode='all');self.store.replace(config)
+        queue['Calls']='4'
+        self.assertFalse(self.store.evaluate({'8001':queue})['alerts'])
+        queue['Calls']='5'
+        self.assertEqual(len(self.store.evaluate({'8001':queue})['alerts']),2)
+        rules.update(count_enabled=False,time_enabled=False);self.store.replace(config)
+        self.assertFalse(self.store.evaluate({'8001':queue})['alerts'])
 
     def test_numeric_limit_is_stricter_than_percentage(self):
         cfg=sample_policy(pct=90,count=2)

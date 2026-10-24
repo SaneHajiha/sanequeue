@@ -180,6 +180,8 @@ class Collector:
     async def worker(self):
         tasks = []
         try:
+            from sanequeue.security.organization import disabled
+            if disabled():raise ConnectionError('module_disabled')
             self.client = await AsyncAMI.connect(self.settings.host, self.settings.port, self.event,
                                                 tls=self.settings.tls, server_name=self.settings.server_name)
             await self.client.request('Login', Username=self.settings.user,
@@ -191,7 +193,7 @@ class Collector:
             await self.synchronize()
             self.reason = 'ready'
             tasks = [asyncio.create_task(self.heartbeat()), asyncio.create_task(self.reconciler()),asyncio.create_task(self.inventory_loop()),
-                     asyncio.create_task(self.client.closed.wait())]
+                     asyncio.create_task(self.client.closed.wait()),asyncio.create_task(self.watch_enabled())]
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 task.result()
@@ -202,6 +204,12 @@ class Collector:
             await asyncio.gather(*tasks, return_exceptions=True)
             if self.client:
                 await self.client.close()
+
+    async def watch_enabled(self):
+        from sanequeue.security.organization import disabled
+        while True:
+            if disabled():raise ConnectionError('module_disabled')
+            await asyncio.sleep(.5)
 
     async def session(self):
         self.generation = uuid.uuid4().hex
@@ -232,6 +240,10 @@ class Collector:
     async def run(self):
         delay = 1
         while True:
+            from sanequeue.security.organization import disabled
+            if disabled():
+                await asyncio.sleep(1)
+                continue
             acquired = False
             started = time.monotonic()
             try:

@@ -1,3 +1,9 @@
+# Current validation · beta.22
+
+[Current acceptance, defects, resource measurements and remaining gates](AUDIT_BETA22.md). Windows: 296 passed / 4 skips / 79 subtests. Linux with actual Redis: 300 passed / 84 subtests. Earlier results below are historical.
+
+---
+
 # Current validation · beta.21 · 2026-10-25
 
 Windows Python 3.11: 276 passed, 2 real-Redis skips, 79 subtests passed. Linux Python 3.11 with actual Redis: 278 passed, 79 subtests passed. No failures. JavaScript syntax checks passed. The current suite excludes retained historical release snapshots through pytest.ini; they are not deleted.

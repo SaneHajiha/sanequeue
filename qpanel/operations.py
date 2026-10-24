@@ -39,6 +39,10 @@ def install(app, cfg, backend, get_data, render):
         ledger=app.config.get('SANEQUEUE_ACTION_LEDGER')
         return ledger.queue_lock(queue) if ledger else nullcontext()
 
+    def internal_extensions():
+        provider=app.config.get('SANEQUEUE_EXTENSION_PROVIDER')
+        return provider() if callable(provider) else app.config.get('SANEQUEUE_INTERNAL_EXTENSIONS',())
+
     def scope_data(data):
         store = policy_store()
         return store.visible(current_user.get_id() or '', role(), data) if store else {}
@@ -52,9 +56,31 @@ def install(app, cfg, backend, get_data, render):
             session['csrf_token'] = secrets.token_hex(32)
         return session['csrf_token']
 
+    def sections():
+        from sanequeue.security.permissions import sections_for
+        provider=app.config.get('SANEQUEUE_MENU_PROVIDER')
+        return provider(current_user.get_id(),role()) if callable(provider) else sections_for(role())
+
     @app.context_processor
     def security_context():
-        return dict(csrf_token=csrf, user_role=role())
+        return dict(csrf_token=csrf, user_role=role(), can_view_section=lambda key:key in sections())
+
+    @app.before_request
+    def protect_sections():
+        if not request.path.startswith('/api/') or not current_user.is_authenticated:return
+        required=None
+        path=request.path
+        if path in ('/api/accounts','/api/accounts/with-grants'):required={'users'}
+        elif path=='/api/policies':required={'policies','users','agents'} if request.method=='GET' else {'policies','users'}
+        elif path.startswith('/api/notifications'):required={'settings'}
+        elif path=='/api/pbx/health':required={'pbx','users'}
+        elif path=='/api/quality':required={'pbx','control'}
+        elif path in ('/api/control','/api/control/options') or path.startswith('/api/commands/'):required={'control','calls','waiting','agents','queues'}
+        elif path=='/api/members/pause':required={'agents','queues','control'}
+        elif path=='/api/operations':required={'live','queues','calls','waiting','agents','presence','wallboard','alerts','control'}
+        elif path.startswith('/api/audit'):required={'audit'}
+        elif path.startswith('/api/planning/'):required={path.rsplit('/',1)[-1]}
+        if required is not None and not (sections() & required):abort(403)
 
     @app.before_request
     def protect_controls():
@@ -135,6 +161,8 @@ def install(app, cfg, backend, get_data, render):
     @app.route('/operations')
     @login_required
     def ops_home():
+        from sanequeue.security.permissions import ROLE_SECTIONS,ROLE_ACTIONS
+        from qpanel.user_help import GUIDES
         return render('operations.html', ops_config=dict(
             build_version=__import__('qpanel').__version__, test_controls_enabled=bool(app.config.get('SANEQUEUE_TEST_CONTROLS_STATUS', lambda:False)()), controls_status_url='/api/ami/control-status', controls_toggle_url='/api/ami/control-toggle', data_url=url_for('ops_data'), report_url=url_for('ops_reports'), pause_url=url_for('pause_member'), control_url=url_for('ops_control'), audit_url=url_for('ops_audit'),
             interval=max(2000, cfg.interval * 1000), csrf=csrf(), role=role(), demo_mode=str(option('demo_mode','false')).lower()=='true',
@@ -145,11 +173,47 @@ def install(app, cfg, backend, get_data, render):
             destinations=[v.strip() for v in cfg.get_value_set_default('supervisor_extensions', current_user.get_id() or '', '').split(',') if v.strip()],
             realtime_push=bool(app.config.get('SANEQUEUE_REALTIME_PUSH')), websocket_url='/ws/operations',
             logged_in_user=current_user.get_id(), assigned_phone=cfg.get_value_set_default('supervisor_extensions',current_user.get_id() or '',''),
+            allowed_sections=sorted(sections()),
+            role_sections={key:sorted(value) for key,value in ROLE_SECTIONS.items()},
+            role_actions={key:sorted(value) for key,value in ROLE_ACTIONS.items()},
+            help={key:GUIDES[key]['fa' if session.get('language',cfg.language)=='fa' else 'en'] for key in sections() if key in GUIDES},
+            control_mode=app.config.get('SANEQUEUE_CONTROL_MODE','test-gate'),
             queue_url=url_for('queue', name='__QUEUE__'), language_url=url_for('language', language='__LANG__'), ami_settings_url='/api/ami/settings', ami_test_url='/api/ami/test', ami_connect_url='/api/ami/connect'))
+
+    @app.route('/api/notifications', methods=['GET','POST'])
+    @login_required
+    def ops_notifications():
+        if role()!='admin':abort(403)
+        settings=app.config.get('SANEQUEUE_NOTIFICATIONS')
+        if settings is None:return jsonify(error='notification_service_unavailable'),503
+        if request.method=='GET':return jsonify(providers=settings.public())
+        if not hmac.compare_digest(request.headers.get('X-CSRF-Token',''),session.get('csrf_token','')) or not session.get('csrf_token'):
+            abort(403)
+        if (request.content_length or 0)>4096:return jsonify(error='payload_too_large'),413
+        try:return jsonify(providers=settings.replace(request.get_json(silent=True)))
+        except ValueError:return jsonify(error='invalid_notification_settings'),400
+
+    @app.route('/api/notifications/test', methods=['POST'])
+    @login_required
+    def ops_notifications_test():
+        if role()!='admin':abort(403)
+        if not session.get('csrf_token') or not hmac.compare_digest(request.headers.get('X-CSRF-Token',''),session['csrf_token']):abort(403)
+        settings=app.config.get('SANEQUEUE_NOTIFICATIONS')
+        if settings is None:return jsonify(error='notification_service_unavailable'),503
+        if time.time()-session.get('notification_test_at',0)<10:return jsonify(error='test_rate_limited'),429
+        payload=request.get_json(silent=True)
+        if not isinstance(payload,dict) or payload.get('provider') not in ('telegram','bale'):return jsonify(error='invalid_provider'),400
+        session['notification_test_at']=time.time()
+        from sanequeue.alerts.messaging import MessagingError
+        try:
+            success=settings.send(payload['provider'],test=True)
+            return jsonify(accepted=success),200 if success else 502
+        except MessagingError as error:return jsonify(error=str(error)),502
 
     @app.route('/api/operations')
     @login_required
     def ops_data():
+        from qpanel.queue_policies import ALLOWED_GRANTS
         data = scope_data(get_data())
         if getattr(g, 'sanequeue_state_error', getattr(backend, 'last_error', False)):
             return jsonify(error='pbx_unavailable'), 503
@@ -217,7 +281,7 @@ def install(app, cfg, backend, get_data, render):
             can_access_queue(q, 'caller_details') for q in data)))
         journeys = journey_provider(data.keys(), numbers_allowed) if callable(journey_provider) and getattr(backend, 'live_source', '') == 'ami-live' else {
             'connected': False, 'records': [], 'complete_history': False}
-        return jsonify(call_journeys=journeys, queues=public_queue_snapshot(data, privileged=role() in ('admin','supervisor'), reveal_numbers=(role()=='admin' or (role()=='supervisor' and all(can_access_queue(q,'caller_details') for q in data)))), policy_alerts=policy_result['alerts'], notification_status=policy_result['notification_status'],timestamp=int(time.time()), role=role(), caller_numbers_visible=(role()=='admin' or (role()=='supervisor' and all(can_access_queue(q,'caller_details') for q in data))),
+        return jsonify(permissions={q:sorted(action for action in ALLOWED_GRANTS if can_access_queue(q,action)) for q in data},call_journeys=journeys, queues=public_queue_snapshot(data, privileged=role() in ('admin','supervisor'), reveal_numbers=(role()=='admin' or (role()=='supervisor' and all(can_access_queue(q,'caller_details') for q in data)))), policy_alerts=policy_result['alerts'], notification_status=policy_result['notification_status'],timestamp=int(time.time()), role=role(), caller_numbers_visible=(role()=='admin' or (role()=='supervisor' and all(can_access_queue(q,'caller_details') for q in data))),
                        control_status=(app.config.get('SANEQUEUE_CONTROL_STATE') or (lambda:None))(),
                        channel_details=channel_details, controls_enabled=bool(app.config.get('SANEQUEUE_TEST_CONTROLS_STATUS', lambda:False)()) and getattr(backend, 'live_source', '') == 'ami-live',
                        minimum_ready=number(option('minimum_ready', 0)), minimum_ready_percent=number(option('minimum_ready_percent', 0)),
@@ -319,7 +383,7 @@ def install(app, cfg, backend, get_data, render):
                     allowed=list(scope_data(get_data()))
                     own=cfg.get_value_set_default('supervisor_extensions',current_user.get_id(),'')
                     name,fields=plan(state,queue,action,channel,destination=request.form.get('extension',''),
-                        own_phone=own,extensions=app.config.get('SANEQUEUE_INTERNAL_EXTENSIONS',()),
+                        own_phone=own,extensions=internal_extensions(),
                         context=app.config.get('SANEQUEUE_TRANSFER_CONTEXT','from-internal'),
                         parkinglot=app.config.get('SANEQUEUE_PARKING_LOT','default'),allowed_queues=allowed)
                 except StateUnavailable:return jsonify(error='collector_unavailable'),503
@@ -485,7 +549,7 @@ def install(app, cfg, backend, get_data, render):
         parked=[dict(key=k,space=v.get('parkingspace'),lot=v.get('parkinglot')) for k,v in state.get('parked',{}).items()
                 if queue in v.get('queues',[]) and set(v['queues']).issubset(allowed)]
         actions=[a for a in app.config.get('SANEQUEUE_ADVANCED_ACTIONS',()) if a in PERMISSIONS and can_access_queue(queue,PERMISSIONS[a])]
-        return jsonify(actions=actions,targets=targets,parked=parked,extensions=list(app.config.get('SANEQUEUE_INTERNAL_EXTENSIONS',())))
+        return jsonify(actions=actions,targets=targets,parked=parked,extensions=list(internal_extensions()))
 
     @app.route('/api/quality')
     @login_required

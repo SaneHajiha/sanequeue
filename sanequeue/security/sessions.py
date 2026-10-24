@@ -37,3 +37,6 @@ class SessionRegistry(ActionLedger):
         key=self.key(token)
         if key:
             with self.db() as db:db.execute('DELETE FROM sessions WHERE hash=?',(key,))
+
+    def revoke_user(self,user):
+        with self.db() as db:db.execute('DELETE FROM sessions WHERE user=?',(user,))

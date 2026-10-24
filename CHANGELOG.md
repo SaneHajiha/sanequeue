@@ -1,3 +1,14 @@
+# 2.1.0-beta.22 · 2026-10-25
+
+- Automatic isolated installation: private Redis, separate restricted AMI identities, independent collector/gateway, sanitized local phone/trunk inventory and rollback backup.
+- Correct internal-phone selection excludes numeric SIP trunks; server rejects assigning a trunk as a user phone.
+- Role ceilings, per-user menu selection, API section checks and queue-action permissions; managed RBAC removes the manual temporary queue gate.
+- Self-service name/phone/password/avatar; current-password checks and session revocation for sensitive changes.
+- Per-queue count/time thresholds with independent enable switches and any/all matching. Telegram and Bale private configuration, test delivery and durable independent retries/cooldowns.
+- Real fullscreen supervisor wallboard with optional permission-checked caller numbers, rotating waiting lists and clearer capacity/trend charts.
+- Contextual Persian/English help for all 17 sections, generated illustrated manuals and updated installation/validation records.
+- Actual RTCP reception and bounded 100-concurrent-Local-call acceptance; these do not certify 100 SIP/RTP calls or all Issabel/Asterisk versions.
+
 # Changelog
 
 ## 2.1.0-beta.21 — 2026-10-25
