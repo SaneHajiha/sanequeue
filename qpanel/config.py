@@ -6,7 +6,14 @@
 from __future__ import absolute_import
 import six.moves.configparser
 import os
-from distutils.util import strtobool
+def strtobool(value):
+    """Boolean option parser compatible with the former distutils helper."""
+    normalized = str(value).strip().lower()
+    if normalized in ('y', 'yes', 't', 'true', 'on', '1'):
+        return 1
+    if normalized in ('n', 'no', 'f', 'false', 'off', '0'):
+        return 0
+    raise ValueError('Invalid boolean option')
 from .convert import convert_time_when_param
 import six
 
@@ -63,7 +70,7 @@ class QPanelConfig:
     def __open_config_file(self, file_path):
         cfg = six.moves.configparser.ConfigParser()
         try:
-            with open(file_path) as f:
+            with open(file_path, encoding='utf-8-sig') as f:
                 if six.PY3:
                     cfg.read_file(f)
                 else:

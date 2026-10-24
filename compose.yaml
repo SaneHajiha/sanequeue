@@ -1,0 +1,15 @@
+services:
+  sanequeue:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5000:5000"
+    environment:
+      QPANEL_CONFIG_FILE: /app/config.ini
+      TZ: Asia/Tehran
+    volumes:
+      - ./config.ini:/app/config.ini:ro
+      - /var/log/asterisk:/var/log/asterisk:ro
+      - sanequeue-data:/var/lib/sanequeue
+volumes:
+  sanequeue-data:

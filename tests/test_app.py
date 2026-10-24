@@ -24,6 +24,6 @@ class ConfigTestClass(unittest.TestCase):
             self.configs_dir, 'config_default.ini')
 
         rs = self.app.get('/')
-        self.assertEqual(rs.status_code, 200)
-        self.assertIn('REQUEST_INTERVAL = 5000', str(rs.data))
+        self.assertEqual(rs.status_code, 302)
+        self.assertIn('/login', rs.location)
 

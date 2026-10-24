@@ -1,0 +1,29 @@
+name: Bug report / گزارش مشکل
+description: Report a reproducible problem without private PBX data.
+title: "[Bug]: "
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior / رفتار مورد انتظار و مشاهده‌شده
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps / مراحل بازتولید
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: SaneQueue, OS, Python, Asterisk and driver versions
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy / حریم خصوصی
+      options:
+        - label: I removed passwords, AMI secrets, caller numbers, IPs and recordings.
+          required: true

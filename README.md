@@ -1,222 +1,43 @@
-&nbsp;
-<p align="center">
-  <a href="https://ghost.org">
-    <img src="https://raw.githubusercontent.com/roramirez/qpanel/master/qpanel/themes/qpanel/static/img/logo_header.png" alt="QPanel" />
-  </a>
-</p>
-<h3 align="center">The Dashboard for Queues/CallCenter in Asterisk and FreeSWITCH</h3>
-<hr />
-<p align="center">
-    <a href="https://travis-ci.org/roramirez/qpanel">
-        <img src="https://travis-ci.org/roramirez/qpanel.svg?branch=master" alt="Build status" />
-    </a>
-    <a href="https://github.com/roramirez/qpanel/contributors/">
-        <img src="https://img.shields.io/github/contributors/roramirez/qpanel.svg" alt="Contributors" />
-    </a>
-    <a href="https://gitter.im/qpanel/Lobby">
-        <img src="https://badges.gitter.im/qpanel/Lobby.svg" alt="Chat on Gitter" />
-    </a>
-</p>
+<p align="center"><img src="docs/images/banner.jpg" alt="SaneHajiha — Open-source VoIP & Contact Center Tools" /></p>
 
+# SaneQueue
 
-![Demo](samples/animation.gif)
+Persian and English live queue monitoring for Asterisk-based contact centers, built on [QPanel](https://github.com/roramirez/qpanel). MIT licensed.
 
-## Overview
+**2.1.0-beta.18 · monitoring validation release · [راهنمای فارسی](README.fa.md)**
 
-QPanel is a panel for queues on Asterisk and FreeSWITCH, powerful and simple monitor in realtime:
+![English operations dashboard with synthetic demonstration data](docs/images/dashboard-en.png)
 
-* General resume for calls. Abandoned, Incoming, Answer time and Waiting time.
-* Show information on detail by queue.
-* Show agents status if these are free, busy or unavailable.
-* Pause reason and time to agents.
-* Percent of abandoned calls.
-* Allows rename the queue name or hide in case if required not show a determined queue.
-* Show callers by queue with the priority and wait time.
-* Spy, Whisper and Barge for agents on queues.
-* Show service level of queues
-* Hangup incomming calls
-* Authentication Access.
-* Simple configuration. Just use Asterisk manager.
-* Multi languages availables: English, Spanish, German, Russian and Portuguese.
-* Written on Python.
-* Responsive design.
-* Opensource by MIT licence.
+## What you can use
 
+- Live queues, waiting callers, agent availability, queue counters and service level.
+- Persian RTL / English LTR, local fonts, dark/light appearance, search, queue filters, wallboard and browser-observed live charts.
+- Scoped accounts, supervisor phones, per-queue permissions, pause reasons and minimum staffing rules.
+- Staged pause/resume, penalty, dynamic membership, caller priority and hangup controls with CSRF checks and audit records.
+- SIP/PJSIP endpoint and registration inventory, active channel and parking inventory, capability detection.
+- Live call journey events, threshold alerts, optional Bale notifications, queue directory and shift planning with overlap validation.
+- Shared five-second AMI snapshots, bounded timeouts and failure backoff. Viewing the panel does not create an AMI connection per browser request.
 
-Also you can use a [API of QPanel](doc/api.md) for data query related to queues
+Listen/whisper/barge requests use ChanSpy and a configured supervisor extension. AMI acceptance is **not audio confirmation**. These controls remain beta and require a manual audio acceptance test on each installation. Transfer, pickup, parking controls, CRM, WebRTC, AI and historical reports are **not delivered features**. See the [feature matrix](docs/FEATURES.md).
 
+## Install and operate
 
+[Installation](docs/INSTALL.md) · [Compatibility and performance](docs/COMPATIBILITY.md) · [User guide](docs/USER_GUIDE.md) · [Validation evidence](docs/VALIDATION.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
-## Requirement
- * Python 3.6+
- * [Asterisk](http://www.asterisk.org) 1.4+ and enabled manager or [FreeSWITCH](http://www.freeswitch.org) and connection permission to Event Socket Library.
-
-  The feature to scheduler reset stats for the queues is required Redis >= 3.0.0. 
-  If you run the QPanel as service (WSGI) you need reset stats using the script `run-worker.py` in `supervisord` or other process control system.
-
-
-### Asterisk
-On /etc/asterisk/manager.conf do you set command permission for read and write, example:
-
-```
-    [qpanel]
-    secret = mi_super_secret_password
-    read = command
-    write = command,originate,call,agent
+```bash
+git clone https://github.com/SaneHajiha/sanequeue.git
+cd sanequeue
+sudo env PYTHON=python3.11 bash scripts/install.sh
 ```
 
-#### AMI options
-  * _originate_ for spy, whisper and barge.
-  * _call_ feature hangup calls.
-  * _agent_ remove agents from the queues.
+The installer requires an isolated Python 3.10–3.12 runtime. Never replace Issabel's system Python. It creates a dedicated OS user, asks for AMI credentials and a dashboard password, stores only the password hash, and binds the service to localhost. Review the install guide before starting it. No dialplan or SIP endpoint configuration is changed.
 
+## Verified scope
 
-Some features maybe not included in your Asterisk version. In the [patch
-directory](patches) you can find the patchs for add more powerfull to the QPanel.
+224 pytest tests passed locally on Python 3.11. Live monitoring and queue controls were exercised on a test PBX running Rocky Linux 8.10 and Asterisk 20.12.0. Asterisk 16/18 event variants are fixture-tested; Issabel 4/5 and all customer installations are not universally certified. Docker configuration is supplied but has not been built in this validation environment. This release is beta, with explicit remaining acceptance work.
 
+Screenshots use synthetic data. Historical notes from earlier previews remain under `docs/` and root release notes for provenance; this README and the beta.18 validation guide describe the current release.
 
-### Freeswitch
+## Attribution
 
-The feature realtime counter for answered and abandoned calls in a  queues if not included in your FreeSWITCH version. In the [patch
-directory](patches/freeswitch) you can find the patch
-
-
-You can configure a freeswitch section for your config.ini file like
-
-```
-    [freeswitch]
-    host = 127.0.0.1
-    port = 8021
-    password = ClueCon
-```
-
-In general section set config
-
-```
-    ; Use FreeSWITCH as backend. Use mod_callcenter
-    freeswitch = True
-```
-
-To use a FreeSWITCH need install `SWIG`. In system Debian base run
-
-
-```
- apt-get install swig
- pip install -r requirements/fs.txt
-```
-
-
-## 1. Clone this repository
-```
- git clone https://github.com/roramirez/qpanel.git
-```
-
-## 2. Install dependencies
-
-```
- $ pip install -r requirements.txt
-```
-If dont have pip in your system. For install
-
-### Debian and Ubuntu
- ```
- sudo apt-get install python-pip
- ```
-
-### Fedora
- ```
- sudo yum install python-pip
- ```
-
-### Get Javascript, CSS and external web libraries
-Is necessary have installed Node.
-
- ```
-    npm install
- ```
-
-
-##  3. Go and prepair environment
- ```
-  cd qpanel
-  cp samples/config.ini-dist config.ini
- ```
-  Edit config.ini file with Manager Asterisk parameters
-
-  **Note**: Can set the absolute path for configuration file in an enviroment variable called `QPANEL_CONFIG_FILE`.
-
-## 4.- Translations
- ```
-  pybabel compile -d qpanel/translations
- ```
-
-
-## 5.- Run and relax
- ```
-    python app.py
- ```
-
-Go url of machine http://IP:5000
-
-If you want run QPanel like a service, see the [samples configurations
-files](samples/configs).  There are a example for use with uWSGI + NGINX
-
-## QueueLog Stats for Asterisk
-You could use the stats for queue of `Asterisk` from QueueLog. If need more informacion about this go [Stats, Realtime and other things](doc/StatsConfig.md)
-or see the section `[queue_log]` of the [sample configuration file](samples/samples/config.ini-dist)
-
-
-## New features?
-If you like new features or something is wrong [please open a issue](https://github.com/roramirez/qpanel/issues/new)
-
-If you want check the development version get checkout of `develop` branch
-
- ```
- git clone -b develop https://github.com/roramirez/qpanel.git
- ```
-
-
-## Updating source new in a release
-
-Go the QPanel directory
-```
-    cd qpanel
-```
-
-
-Get the new code
-
-```
-    git pull
-```
-
-Update dependencies
-
-```
-    pip install -r requirements.txt
-    npm install
-```
-
-
-## Notes
-
-### Errors
-
-#### pip update
-
-For error in instalation process of requirements. `UserWarning: python_requires requires setuptools version > 24.3`
- `pip install --upgrade setuptool`
-
-
-
-
-## How to contribute
-
- * Fork the project
- * Create a feature branch (git checkout -b my-feature)
- * Add your files changed (git add file_change1 file_change2, etc..)
- * Commit your changes (git commit -m "add my feature")
- * Push to the branch (git push origin my-feature)
- * Create a pull request
-
-Happy coding :)
+Copyright and licenses of QPanel and bundled libraries are preserved in [LICENSE](LICENSE) and [NOTICE](NOTICE). SaneQueue is independent of Issabel, Asterisk, FOP2 and VoiPing. No proprietary assets or source code from those products are included.

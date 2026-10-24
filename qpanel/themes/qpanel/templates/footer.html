@@ -1,26 +1,9 @@
       <footer class="footer">
         <div class="container-fluid">
-          <nav class="float-left">
-            <ul>
-              <li>
-                <a href="https://github.com/roramirez/qpanel" target="_blank">
-                  QPanel
-                </a>
-              </li>
-              <li>
-                <a href="https://boxtub.com/qpanel" target="_blank">
-                  {{ _('About Us') }}
-                </a>
-              </li>
-            </ul>
-          </nav>
-          <div class="copyright float-right">
-            &copy;
-            <script>
-              document.write(new Date().getFullYear())
-            </script>, made with <i class="material-icons">favorite</i> by
-            <a href="https://boxtub.com/qpanel" target="_blank">QPanel Team</a>.
-          </div>
+          <span><strong>صانع · SaneQueue</strong> — {{ 'مانیتورینگ صف تماس' if ui_language == 'fa' else 'Call queue monitoring' }}</span>
+          <span class="sane-credits">{{ 'مبتنی بر' if ui_language == 'fa' else 'Based on' }}
+          <a href="https://github.com/roramirez/qpanel" target="_blank" rel="noopener">QPanel</a> ·
+          <a href="https://github.com/mrsane" target="_blank" rel="noopener">mrsane</a></span>
         </div>
       </footer>
 
@@ -40,7 +23,9 @@
                     if (response.require_upgrade) {
                         showPopupUpdate(response.last_stable_version);
                     }
-                    Cookies.set('check_version', '1', { expires: 30 });
+                    if (response.update_check_available !== false) {
+                        Cookies.set('check_version', '1', { expires: 30 });
+                    }
                 }
             });
             rversion.fail(function (response) {
@@ -51,8 +36,8 @@
         }, false);
 
         function showPopupUpdate(actual_version) {
-           var title = '{{ _('New version available') }}';
-           var message = '{{ _('Exist a new version stable: ') }}' + actual_version + '{{ _('. Visit and update your QPanel <a href="https://github.com/roramirez/qpanel" target="_blank" style="color:#ffd777">from GitHub</a>.') }}';
+           var title = {{ _('New version available')|tojson }};
+           var message = {{ _('Exist a new version stable: ')|tojson }} + actual_version + {{ _('. Visit and update your QPanel <a href="https://github.com/roramirez/qpanel" target="_blank" style="color:#ffd777">from GitHub</a>.')|tojson }};
 
           $.notify({
             icon: "cloud_download",

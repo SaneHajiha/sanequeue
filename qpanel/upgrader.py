@@ -4,14 +4,15 @@
 # Copyright (C) 2015-2022 Rodrigo Ramírez Norambuena <a@rodrigoramirez.com>
 #
 
+import re
 import requests
-from distutils.version import LooseVersion
+from packaging.version import Version as LooseVersion
 import qpanel
 
 
 BRANCH = 'master'
-REPO = 'git@github.com:roramirez/qpanel.git'
-URL_STABLE_VERSION = 'https://rodrigoramirez.com/qpanel/version/' + BRANCH
+REPO = 'https://github.com/SaneHajiha/sanequeue.git'
+URL_STABLE_VERSION = 'https://raw.githubusercontent.com/SaneHajiha/sanequeue/' + BRANCH + '/VERSION'
 
 
 def require_upgrade():
@@ -19,6 +20,8 @@ def require_upgrade():
 
 
 def check_require_upgrade(current, stable):
+    if not stable or not re.match(r'^\d+(?:\.\d+){1,3}$', stable):
+        return False
     a = LooseVersion(current)
     b = LooseVersion(stable)
     if a < b:
@@ -36,15 +39,20 @@ def get_current_version():
 
 
 def get_stable_version(url=URL_STABLE_VERSION):
-    stable_version = __get_data_url(url)
-    return __first_line(stable_version)
+    stable_version = __first_line(__get_data_url(url))
+    if isinstance(stable_version, str):
+        stable_version = stable_version.strip()
+        if re.match(r'^\d+(?:\.\d+){1,3}$', stable_version):
+            return stable_version
+    return None
 
 
 def __get_data_url(url):
-    req = requests.get(url)
     try:
+        req = requests.get(url, timeout=(3, 5))
+        req.raise_for_status()
         return req.text
-    except:
+    except requests.RequestException:
         return None
 
 

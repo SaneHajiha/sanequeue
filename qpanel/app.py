@@ -5,11 +5,16 @@
 #
 
 from flask import Flask, jsonify, redirect, request, session, url_for
-from flask_themes import setup_themes, render_theme_template
+from qpanel.theme_support import setup_themes, render_theme_template
 from werkzeug.serving import run_simple
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.exceptions import abort
+from werkzeug.security import check_password_hash
 import logging
+import hashlib
+from collections import OrderedDict
+import threading
+import time
 
 from flask_babel import Babel, gettext
 import flask_login
@@ -72,8 +77,6 @@ def get_data_queues(queue=None):
             data = data[queue]
         except:
             abort(404)
-    if cfg.is_debug:
-        app.logger.debug(data)
     return data
 
 
@@ -90,10 +93,20 @@ def get_user_config_by_name(username):
 # Flask env
 APPLICATION_ROOT = cfg.base_url
 app = Flask(__name__)
+
+@app.before_request
+def retire_legacy_http_surface():
+    """Legacy handlers may stay importable, but are not public SaneQueue APIs."""
+    legacy = ('/spy','/whisper','/barge','/hangup','/remove_from_queue',
+              '/queue/','/all_queues','/queues','/check_new_version','/stats','/home','/index')
+    if request.path in legacy or request.path.startswith(('/queue/', '/stats/')):
+        abort(410)
+
 app.config.from_object(__name__)
-babel = Babel(app)
+babel = Babel()
 app.config['BABEL_DEFAULT_LOCALE'] = cfg.language
 app.secret_key = cfg.secret_key
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 setup_themes(app, app_identifier='qpanel')
 
 
@@ -136,6 +149,9 @@ def user_loader(username):
 
     if user_config is None:
         return
+    version = hashlib.sha256(user_config.password.encode('utf-8')).hexdigest()
+    if (app.config.get('SANEQUEUE_REQUIRE_SESSION_VERSION') or session.get('_auth_version')) and session.get('_auth_version') != version:
+        return None
     return set_data_user(user_config)
 
 
@@ -144,38 +160,52 @@ def request_loader(request):
     username = request.form.get('username')
     user_config = get_user_config_by_name(username)
 
-    if not cfg.has_users():
-        # fake login
-        user = User()
-        user.id = 'withoutlogin'
-        return user
+    # No anonymous/fake login in SaneQueue, even when no accounts are configured.
+    # The first-run launcher must provision a real local admin account.
+    # Credentials are accepted only by the login endpoint, never as an
+    # implicit authentication bypass on arbitrary POST requests.
+    return None
 
-    if user_config is None:
-        return
 
-    user = set_data_user(user_config)
-    user.is_authenticated = user_config == request.form['pw']
-    return user
-
+_login_attempts = OrderedDict()
+_login_lock = threading.Lock()
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if not cfg.has_users():
-        return redirect(url_for('home'))
+        return jsonify(error='account_registry_not_configured'), 503
 
     if request.method == 'GET':
         return render_template('login.html')
 
+    address = request.remote_addr or 'unknown'
+    with _login_lock:
+        now = time.monotonic()
+        count, since = _login_attempts.get(address, (0, now))
+        if now - since >= 300:
+            count, since = 0, now
+        if count >= 20:
+            return jsonify(error='login_rate_limited'), 429
+        _login_attempts[address] = (count + 1, since)
+        _login_attempts.move_to_end(address)
+        if len(_login_attempts) > 2048:
+            _login_attempts.popitem(last=False)
+
     username = request.form['username']
     user_config = get_user_config_by_name(username)
     if user_config is None:
-        return redirect(url_for('login'))
+        return render_template('login.html', login_error=True), 401
 
-    if user_config.password == request.form['pw']:
+    password = request.form.get('pw', '')
+    stored = user_config.password
+    valid = check_password_hash(stored, password) if stored.startswith(('pbkdf2:', 'scrypt:')) else __import__('hmac').compare_digest(stored, password)
+    if valid:
+        session.clear()
+        session['_auth_version'] = hashlib.sha256(stored.encode('utf-8')).hexdigest()
         user = set_data_user(user_config)
         flask_login.login_user(user)
         return redirect(url_for('home'))
-    return redirect(url_for('login'))
+    return render_template('login.html', login_error=True), 401
 
 
 @app.route('/login_external', methods=['GET', 'POST'])
@@ -209,7 +239,6 @@ def login_external():
     return redirect(url_for('logout'))
 
 
-@app.before_first_request
 def setup_logging():
     # issue https://github.com/benoitc/gunicorn/issues/379
     if not app.debug:
@@ -217,16 +246,31 @@ def setup_logging():
         app.logger.setLevel(logging.INFO)
 
 
-# babel
-@babel.localeselector
+# Babel: explicit user selection, then configured site language.
+SUPPORTED_LANGUAGES = ('fa', 'en', 'es', 'de', 'pt_BR', 'ru', 'fr_FR')
+
+
 def get_locale():
-    langs = ['en', 'es', 'de', 'pt_BR', 'ru']
-    browser = request.accept_languages.best_match(langs)
-    try:
-        return session['language']
-    except KeyError:
-        session['language'] = browser
-        return browser
+    selected = session.get('language')
+    if selected in SUPPORTED_LANGUAGES:
+        return selected
+    if cfg.language in SUPPORTED_LANGUAGES:
+        return cfg.language
+    return request.accept_languages.best_match(SUPPORTED_LANGUAGES) or 'en'
+
+
+if hasattr(babel, 'localeselector'):
+    babel.init_app(app)
+    babel.localeselector(get_locale)
+else:
+    babel.init_app(app, locale_selector=get_locale)
+setup_logging()
+
+
+@app.context_processor
+def locale_context():
+    language = get_locale()
+    return dict(ui_language=language, ui_direction='rtl' if language == 'fa' else 'ltr')
 
 
 # Utilities helpers
@@ -320,6 +364,8 @@ def utility_processor():
 @app.route('/')
 @flask_login.login_required
 def home():
+    if not backend.is_freeswitch():
+        return ops_home()
     data = get_data_queues()
     template = 'index.html'
     if backend.is_freeswitch():
@@ -368,6 +414,9 @@ def queues():
 @app.route('/lang/<language>')
 @flask_login.login_required
 def language(language=None):
+    language = language or cfg.language
+    if language not in SUPPORTED_LANGUAGES:
+        abort(400)
     session['language'] = language
     return redirect(url_for('home'))
 
@@ -375,17 +424,13 @@ def language(language=None):
 @app.route('/check_new_version')
 @flask_login.login_required
 def check_new_version():
-    need_upgrade = False
-    try:
-        if upgrader.require_upgrade():
-            need_upgrade = True
-    except:
-        pass
-
+    current = upgrader.get_current_version()
+    stable = upgrader.get_stable_version()
     return jsonify(
-        require_upgrade=need_upgrade,
-        current_version=upgrader.get_current_version(),
-        last_stable_version=upgrader.get_stable_version()
+        require_upgrade=upgrader.check_require_upgrade(current, stable),
+        current_version=current,
+        last_stable_version=stable,
+        update_check_available=stable is not None
     )
 
 
@@ -431,7 +476,11 @@ def hangup_call():
 
 
 @app.route('/stats/<from_date>/<to_date>/<name>.json')
+@flask_login.login_required
 def stats_json(name, from_date, to_date):
+    if not cfg.has_queuelog_config():
+        abort(404)
+    data = get_data_queues(name)
     real_name = cfg.realname_queue(name)
     queue_values = queuelog_data_queue(from_date, to_date, None, real_name)
     data = get_data_queues(name)
@@ -441,7 +490,10 @@ def stats_json(name, from_date, to_date):
 @app.route('/stats', defaults={'name': None, 'from_date': uqpanel.init_day(),
                                'to_date': uqpanel.end_day()})
 @app.route('/stats/<name>/<from_date>/<to_date>')
+@flask_login.login_required
 def stats(name, from_date, to_date):
+    if not cfg.has_queuelog_config():
+        abort(404)
     queues = get_data_queues()
     if name is None:
         name = uqpanel.first_data_dict(queues)
@@ -461,6 +513,9 @@ def remove_from_queue():
     r = backend.remove_from_queue(agent, queue)
     return jsonify(result=r)
 
+
+from qpanel.operations import install as install_operations
+ops_home = install_operations(app, cfg, backend, get_data_queues, render_template)
 
 # ---------------------
 # ---- Main  ----------
@@ -484,7 +539,7 @@ def main():
             print("       Reset stats will not work\n")
 
     if cfg.base_url == '/':
-        app.run(host=cfg.host_bind, port=cfg.port_bind, use_reloader=reloader,
+        app.run(host=cfg.host_bind, port=cfg.port_bind, use_reloader=reloader, threaded=False,
                 extra_files=[cfg.path_config_file])
     else:
         application = DispatcherMiddleware(Flask('dummy_app'), {

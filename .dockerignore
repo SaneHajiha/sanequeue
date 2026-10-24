@@ -1,0 +1,15 @@
+.git
+config.ini
+var
+.venv
+__pycache__
+*.pyc
+*.sqlite*
+*.log
+node_modules
+
+local_accounts.json
+session.key
+local_ami_settings.json
+local_queue_policies.json
+logs

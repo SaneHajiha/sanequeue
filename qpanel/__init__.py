@@ -1,3 +1,4 @@
 __all__ = ['app']
 
-__version__ = '0.16.1'
+# SaneQueue monitoring edition; upstream QPanel attribution retained in LICENSE.
+__version__ = '2.1.0-beta.18'

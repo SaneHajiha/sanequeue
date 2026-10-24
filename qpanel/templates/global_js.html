@@ -15,5 +15,12 @@
 
     var SHOW_SERVICE_LEVEL =  {{ show_service_level()|lower }};
     var URL_QUEUE_DATA = "{{ url_for('.queues') }}";
+    if (window.jQuery) {
+        jQuery.ajaxSetup({beforeSend: function(xhr, settings) {
+            if (!settings.crossDomain && !/^(GET|HEAD|OPTIONS)$/i.test(settings.type)) {
+                xhr.setRequestHeader('X-CSRF-Token', {{ csrf_token()|tojson }});
+            }
+        }});
+    }
 </script>
  
