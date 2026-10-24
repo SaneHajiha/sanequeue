@@ -1,0 +1,2 @@
+# Collector is independently runnable without Flask or the legacy web modules.
+redis>=4.6,<5

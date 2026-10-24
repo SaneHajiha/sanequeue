@@ -1,0 +1,19 @@
+[Unit]
+Description=SaneQueue persistent AMI collector
+After=network.target
+
+[Service]
+User=sanequeue
+Group=sanequeue
+WorkingDirectory=/opt/sanequeue
+ExecStart=/opt/sanequeue/.venv/bin/python -m sanequeue.realtime --config /etc/sanequeue/collector.ini
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
