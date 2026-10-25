@@ -91,7 +91,8 @@ def main():
     changed=[]
     try:
         for unit in ('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer'):
-            subprocess.run(['systemctl','stop',unit],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            if active[unit] or (Path('/etc/systemd/system')/unit).exists():
+                run(['systemctl','stop',unit])
         if etc.exists():shutil.copytree(etc,backup/'etc')
         if state.exists():shutil.copytree(state,backup/'state',symlinks=True)
         shutil.copy2(manager,backup/'manager.conf')
