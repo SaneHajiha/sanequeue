@@ -120,6 +120,7 @@ class Archive:
             db.execute('PRAGMA query_only=ON')
             db.execute('PRAGMA trusted_schema=OFF')
             db.execute('PRAGMA cache_size=-2048')
+            db.execute('BEGIN')
             yield db
         except sqlite3.OperationalError as error:
             if 'interrupt' in str(error).lower():

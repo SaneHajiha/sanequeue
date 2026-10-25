@@ -145,6 +145,32 @@ class ReportTests(unittest.TestCase):
         bad=self.client().get('/api/history/activity/intervals'+self.dates+'&before_time=NaN&before_id=x')
         self.assertEqual(bad.status_code,400)
 
+    def test_outbound_pause_api_masks_destination_and_enforces_scope(self):
+        inventory=dict(observed_at=self.stamp,endpoints=[dict(technology='PJSIP',endpoint='100',category='extension'),
+                                                         dict(technology='PJSIP',endpoint='provider',category='trunk')])
+        self.archive.append([Event('activity','pause',self.stamp,'ACTIVITY_INTERVAL',dict(queue='8001',agent='Local/100@from-queue/n',
+            state='paused',reason='survey',starts=self.stamp,ends=self.stamp+60,on_duty=False)),
+            Event('cdr','outbound',self.stamp+10,'CDR',dict(channel='PJSIP/100-000000ab',dstchannel='PJSIP/provider-000000ac',
+            uniqueid='outbound',dst='09123456789',duration=20,billsec=10,recordingfile='survey.wav'))],checkpoint_source='activity_cache',checkpoint=dict(observed=self.stamp+70))
+        project_batch(self.archive,inventory=inventory)
+        url='/api/history/outbound-pauses'+self.dates
+        result=self.client(role='agent').get(url)
+        self.assertEqual(result.status_code,200)
+        self.assertEqual(result.json['rows'][0]['destination'],'0912***6789')
+        self.assertNotIn('09123456789',result.text)
+        self.assertEqual(self.client(details=True).get(url).json['rows'][0]['destination'],'09123456789')
+        self.assertEqual(self.client(menus=()).get(url).status_code,403)
+        self.assertEqual(self.client().get(url+'&queue=8002').status_code,403)
+        self.assertFalse(result.json['rows'][0]['can_play'])
+        audio=self.root/'audio';audio.mkdir();(audio/'survey.wav').write_bytes(b'RIFF0123456789')
+        sound='/api/history/outbound-pauses/outbound/recording'+self.dates
+        self.assertEqual(self.client(role='agent').get(sound).status_code,403)
+        self.assertEqual(self.client(denied=('recording_play',)).get(sound).status_code,403)
+        self.assertEqual(self.client(denied=('recording_download',)).get(sound+'&download=1').status_code,403)
+        response=self.client().get(sound,headers={'Range':'bytes=4-7'})
+        self.assertEqual(response.status_code,206);self.assertEqual(response.data,b'0123');response.close()
+        self.assertEqual(self.client().get(sound.replace('outbound/recording','other/recording')).status_code,404)
+
     def test_audio_authorizes_before_open_supports_ranges_and_no_paths(self):
         self.seed()
         audio = self.root / 'audio'

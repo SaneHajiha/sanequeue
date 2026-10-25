@@ -15,6 +15,7 @@ from werkzeug.exceptions import HTTPException
 from sanequeue.reporting import queries
 from sanequeue.reporting import exports
 from sanequeue.reporting import activity_queries
+from sanequeue.reporting import outbound
 from sanequeue.reporting.audio import byte_range, open_recording
 from sanequeue.reporting.privacy import display_number
 from sanequeue.reporting.store import Archive, QueryDeadline
@@ -130,6 +131,37 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         for row in result['rows']:row['reason_label']=reason_label(row['queue'],row['reason'])
         return jsonify(result)
 
+    @app.get('/api/history/outbound-pauses')
+    @login_required
+    @safe
+    def history_outbound_pauses():
+        scope,start,end=context()
+        before=(request.args['before_time'],request.args['before_id']) if 'before_time' in request.args and 'before_id' in request.args else None
+        result=outbound.page(archive,scope,start,end,before=before,direction=request.args.get('pause_direction','outbound'))
+        for row in result['rows']:
+            memberships=row['memberships']
+            queue=next((item['queue'] for item in memberships if can_queue(item['queue'],'caller_details')),memberships[0]['queue'])
+            row['destination']=protect_number(dict(queue=queue,caller=row['destination']))['caller']
+            for item in memberships:item['reason_label']=reason_label(item['queue'],item['reason'])
+            for key,action in (('can_play','recording_play'),('can_download','recording_download')):
+                row[key]=bool(row['has_recording'] and role() in ('admin','supervisor') and any(can_queue(item['queue'],action) for item in memberships))
+        return jsonify(result)
+
+    @app.get('/api/history/outbound-pauses/<recording_id>/recording')
+    @login_required
+    @safe
+    def history_outbound_recording(recording_id):
+        scope,start,end=context()
+        result=outbound.page(archive,scope,start,end,ident=recording_id,direction=request.args.get('pause_direction','outbound'))
+        if not result['rows']:abort(404)
+        download=request.args.get('download')=='1'
+        capability='recording_download' if download else 'recording_play'
+        if role() not in ('admin','supervisor') or not any(can_queue(item['queue'],capability) for item in result['rows'][0]['memberships']):abort(403)
+        with archive.reader() as db:
+            row=db.execute('SELECT recording,ts FROM report_cdr WHERE pbx=? AND source_key=?',(pbx,recording_id)).fetchone()
+        if not row or not row['recording']:abort(404)
+        return serve_recording(row,recording_id,download)
+
     def authorized_detail(visit_id):
         scope, start, end = context()
         result = queries.detail(archive, scope, start, end, visit_id)
@@ -166,6 +198,9 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             row = db.execute('SELECT recording,ts FROM report_cdr WHERE pbx=? AND source_key=?', (pbx, recording_id)).fetchone()
         if row is None:
             abort(404)
+        return serve_recording(row,recording_id,download)
+
+    def serve_recording(row,recording_id,download):
         reference = row['recording']
         suffix = Path(reference).suffix.lower()
         if not download and suffix not in ('.wav', '.mp3', '.ogg'):

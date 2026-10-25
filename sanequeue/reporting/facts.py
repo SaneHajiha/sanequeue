@@ -8,6 +8,9 @@ import json
 import math
 import re
 import time
+import os
+from .identity import parties, canonical
+from sanequeue.realtime.local_inventory import read_snapshot
 
 
 SCHEMA = '''
@@ -41,8 +44,11 @@ CREATE TABLE IF NOT EXISTS report_activity(
  starts REAL,ends REAL,on_duty INTEGER,coverage TEXT,canonical_agent TEXT,PRIMARY KEY(pbx,source_key));
 CREATE INDEX IF NOT EXISTS ra_queue ON report_activity(pbx,queue,starts);
 CREATE INDEX IF NOT EXISTS ra_agent ON report_activity(pbx,agent,starts);
+CREATE TABLE IF NOT EXISTS report_cdr_parties(
+ pbx TEXT,source_key TEXT,agent TEXT,direction TEXT,inventory_observed REAL,
+ PRIMARY KEY(pbx,source_key));
 '''
-PROJECTION_VERSION = 3
+PROJECTION_VERSION = 4
 
 
 def number(value):
@@ -146,9 +152,11 @@ def _rebuild_visits(db, pbx, queue, callid):
                        'wait_seconds', 'talk_seconds', 'segment_ended_by', 'coverage'))))
 
 
-def project_batch(archive, *, limit=500):
+def project_batch(archive, *, limit=500, inventory=None):
     """Atomically advance a projection cursor; replay/restart is idempotent."""
     limit = max(1, min(1000, int(limit)))
+    if inventory is None:
+        inventory=read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json'))
     with archive.writer() as db:
         db.executescript(SCHEMA)
         db.execute('BEGIN IMMEDIATE')
@@ -156,6 +164,7 @@ def project_batch(archive, *, limit=500):
         if 'canonical_agent' not in columns:
             db.execute('ALTER TABLE report_activity ADD COLUMN canonical_agent TEXT')
             db.execute('UPDATE report_activity SET canonical_agent=agent')
+        db.execute('CREATE INDEX IF NOT EXISTS ra_canonical ON report_activity(pbx,canonical_agent,starts)')
         previous = db.execute('SELECT after_id FROM report_projection WHERE pbx=?', (archive.pbx,)).fetchone()
         after = previous[0] if previous else 0
         version = db.execute('SELECT version FROM report_projection_version WHERE pbx=?', (archive.pbx,)).fetchone()
@@ -177,7 +186,7 @@ def project_batch(archive, *, limit=500):
                   starts=excluded.starts,ends=excluded.ends,on_duty=excluded.on_duty,coverage=excluded.coverage,
                   canonical_agent=excluded.canonical_agent''',
                            (archive.pbx,key,event_id,row['queue'],row['agent'],row['state'],row['reason'],
-                            row['starts'],row['ends'],int(row['on_duty']),row.get('coverage','observed'),row.get('canonical_agent',row['agent'])))
+                            row['starts'],row['ends'],int(row['on_duty']),row.get('coverage','observed'),canonical(row.get('canonical_agent',row['agent']),inventory)))
             elif source == 'cdr':
                 values = (archive.pbx, key, event_id, ts, *(str(row.get(k) or '') for k in (
                     'uniqueid', 'linkedid', 'src', 'dst', 'channel', 'dstchannel')),
@@ -189,6 +198,9 @@ def project_batch(archive, *, limit=500):
                   dst=excluded.dst,channel=excluded.channel,dstchannel=excluded.dstchannel,
                   duration=excluded.duration,billsec=excluded.billsec,
                   disposition=excluded.disposition,recording=excluded.recording''', values)
+                identity=parties(str(row.get('channel') or ''),str(row.get('dstchannel') or ''),inventory)
+                db.execute('INSERT OR REPLACE INTO report_cdr_parties VALUES(?,?,?,?,?)',
+                           (archive.pbx,key,identity['agent'],identity['direction'],identity['inventory_observed']))
             elif source == 'cel' and kind.upper() in ('ATTENDEDTRANSFER', 'BLINDTRANSFER'):
                 uid, linkedid = str(row.get('uniqueid') or ''), str(row.get('linkedid') or '')
                 previous_transfer = db.execute('SELECT uid,linkedid FROM report_cel_transfers WHERE pbx=? AND source_key=?',
