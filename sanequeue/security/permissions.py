@@ -9,7 +9,7 @@ ROLE_SECTIONS = {
 ROLE_ACTIONS = {
     'admin':frozenset(('view','pause','membership','monitor','hangup','priority','caller_details','transfer','park','pickup','dial')),
     'supervisor':frozenset(('view','pause','membership','monitor','hangup','priority','caller_details','transfer','park','pickup','dial')),
-    'agent':frozenset(('view','pause')),
+    'agent':frozenset(('view','pause','dial')),
     'viewer':frozenset(('view',)),
 }
 

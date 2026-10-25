@@ -1,13 +1,13 @@
-# Automatic installation · beta.22
+# Automatic installation · beta.23
 
-[فارسی](INSTALL.fa.md) · [User guide](USER_GUIDE.en.md) · [Validation](AUDIT_BETA22.md)
+[فارسی](INSTALL.fa.md) · [User guide](USER_GUIDE.en.md) · [Validation](AUDIT_BETA23.md)
 
 ## Install on the PBX
 
 Use a systemd Linux PBX with Asterisk available locally, AMI listening on 127.0.0.1:5038, outbound HTTPS and a working distribution package repository. Review the script before running it as root:
 
 ```bash
-curl -fL https://raw.githubusercontent.com/SaneHajiha/sanequeue/v2.1.0-beta.22/scripts/install.sh -o /tmp/sanequeue-install.sh
+curl -fL https://raw.githubusercontent.com/SaneHajiha/sanequeue/v2.1.0-beta.23/scripts/install.sh -o /tmp/sanequeue-install.sh
 sudo bash /tmp/sanequeue-install.sh
 ```
 

@@ -686,7 +686,7 @@ def queue_policies_api():
         return jsonify(ok=True,policies=normalized)
     store=POLICIES.export()
     role = cfg.get_value_set_default('roles', current_user.get_id() or '', 'viewer')
-    if role not in ('admin', 'supervisor'):
+    if role not in ('admin', 'supervisor','agent'):
         abort(403)
     if role != 'admin':
         store['supervisors'] = {current_user.get_id():store['supervisors'].get(current_user.get_id(),{'queues':[],'actions':['view']})}
@@ -696,6 +696,7 @@ def queue_policies_api():
         allowed=[q for q in allowed if POLICIES.access(current_user.get_id(),role,q)]
     for q in allowed:
         store['queues'].setdefault(q, POLICIES.queue(q))
+    store['queues']={q:store['queues'][q] for q in allowed}
     return jsonify(policies=store,available_queues=allowed,
                    bale_configured=bool(os.getenv('SANEQUEUE_BALE_BOT_TOKEN') and os.getenv('SANEQUEUE_BALE_CHAT_ID') and os.getenv('SANEQUEUE_ENABLE_BALE_ALERTS')=='1'))
 
@@ -1086,6 +1087,22 @@ def runtime_metrics():
 
 from qpanel.planning import PlanningStore
 PLANNING = PlanningStore(STATE / 'planning.sqlite3')
+module.app.config['SANEQUEUE_CONTACT_PROVIDER']=PLANNING.contact
+module.app.config['SANEQUEUE_CONTACT_ENRICHER']=PLANNING.enrich
+def profile_dial_options():
+    role=cfg.get_value_set_default('roles',current_user.get_id() or '','viewer')
+    allowed=POLICIES.visible(current_user.get_id() or '',role,_runtime_get_data())
+    queues=[q for q in allowed if POLICIES.access(current_user.get_id() or '',role,q,'dial') and _gate_is_active()]
+    provider=module.app.config.get('SANEQUEUE_EXTENSION_PROVIDER')
+    return dict(queues=queues,extensions=list(provider() if callable(provider) else module.app.config.get('SANEQUEUE_INTERNAL_EXTENSIONS',())))
+module.app.config['SANEQUEUE_PROFILE_DIAL_OPTIONS']=profile_dial_options
+from sanequeue.api.activity import install as install_activity
+install_activity(module.app,STATE/'activity.sqlite3',
+    lambda:POLICIES.visible(current_user.get_id() or '',cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'),_runtime_get_data()),
+    lambda:cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'),
+    lambda:[value.strip() for value in cfg.get_value_set_default('agent_interfaces',current_user.get_id() or '','').split(',') if value.strip()],
+    POLICIES.queue,
+    lambda:read_accounts(ACCOUNTS_PATH).get(current_user.get_id(),{}).get('phone_assigned_at',0))
 
 @module.app.route('/api/planning/<kind>', methods=['GET','POST'])
 @login_required
@@ -1110,7 +1127,9 @@ def planning_api(kind):
             from qpanel.privacy import mask_phone
             for row in rows:row['phone']=mask_phone(row['phone'])
         else:rows=[row for row in rows if row['agent']==current_user.get_id()]
-    return jsonify(rows=rows,queues=list(allowed),editable=role in ('admin','supervisor'))
+    dial_queues=[q for q in allowed if POLICIES.access(current_user.get_id() or '',role,q,'dial') and _gate_is_active()]
+    return jsonify(rows=rows,queues=list(allowed),editable=role in ('admin','supervisor'),dial_queues=dial_queues,
+                   assigned_phone=cfg.get_value_set_default('supervisor_extensions',current_user.get_id() or '',''))
 
 if PERSISTENT_READER is not None and SERVER_MODE:
     threading.Thread(target=reconcile_commands,name='command-alert-reconcile',daemon=True).start()

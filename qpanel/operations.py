@@ -75,17 +75,23 @@ def install(app, cfg, backend, get_data, render):
         elif path.startswith('/api/notifications'):required={'settings'}
         elif path=='/api/pbx/health':required={'pbx','users'}
         elif path=='/api/quality':required={'pbx','control'}
-        elif path in ('/api/control','/api/control/options') or path.startswith('/api/commands/'):required={'control','calls','waiting','agents','queues'}
+        elif path in ('/api/control','/api/control/options') or path.startswith('/api/commands/'):
+            required={'control','calls','waiting','agents','queues'}
+            if path=='/api/control' and request.form.get('action')=='dial':required.add('directory')
         elif path=='/api/members/pause':required={'agents','queues','control'}
+        elif path=='/api/activity/daily':required={'agents'}
         elif path=='/api/operations':required={'live','queues','calls','waiting','agents','presence','wallboard','alerts','control'}
         elif path.startswith('/api/audit'):required={'audit'}
         elif path.startswith('/api/planning/'):required={path.rsplit('/',1)[-1]}
+        if path=='/api/members/pause' and request.form.get('agent') in cfg.get_value_set_default('agent_interfaces',current_user.get_id(),'').split(','):
+            required=None  # Own status is part of the always-available profile.
         if required is not None and not (sections() & required):abort(403)
 
     @app.before_request
     def protect_controls():
         if request.endpoint not in control_endpoints:
             return
+        if request.path=='/api/profile/dial' and request.form.get('action')!='dial':abort(403)
         # Retired endpoints are forbidden in ANY deployment mode, not only demo.
         if request.endpoint in ('spy','whisper','barge','hangup_call','remove_from_queue'):
             abort(410)
@@ -95,7 +101,7 @@ def install(app, cfg, backend, get_data, render):
         gate = app.config.get('SANEQUEUE_TEST_CONTROL_GUARD')
         if not callable(gate) or not gate(request):
             abort(403)
-        if role() not in ('supervisor', 'admin') and not (role() == 'agent' and request.endpoint == 'pause_member'):
+        if role() not in ('supervisor', 'admin') and not (role() == 'agent' and (request.endpoint == 'pause_member' or request.endpoint=='ops_control' and request.form.get('action')=='dial')):
             abort(403)
         token = request.headers.get('X-CSRF-Token', request.form.get('csrf_token', ''))
         if not token or not hmac.compare_digest(token, session.get('csrf_token', '')):
@@ -115,7 +121,7 @@ def install(app, cfg, backend, get_data, render):
             adding = request.endpoint == 'ops_control' and request.form.get('action') == 'add'
             if agent and not adding and agent not in members and not any(agent == m.get('Location') for m in members.values()):
                 abort(403)
-            if role() == 'agent':
+            if role() == 'agent' and not (request.endpoint=='ops_control' and request.form.get('action')=='dial'):
                 own = cfg.get_value_set_default('agent_interfaces', current_user.get_id(), '').split(',')
                 if not agent or agent not in [v.strip() for v in own]:
                     abort(403)
@@ -281,6 +287,10 @@ def install(app, cfg, backend, get_data, render):
             can_access_queue(q, 'caller_details') for q in data)))
         journeys = journey_provider(data.keys(), numbers_allowed) if callable(journey_provider) and getattr(backend, 'live_source', '') == 'ami-live' else {
             'connected': False, 'records': [], 'complete_history': False}
+        enrich=app.config.get('SANEQUEUE_CONTACT_ENRICHER')
+        if callable(enrich) and numbers_allowed:
+            try:data=enrich(data)
+            except (OSError,__import__('sqlite3').Error):pass
         return jsonify(permissions={q:sorted(action for action in ALLOWED_GRANTS if can_access_queue(q,action)) for q in data},call_journeys=journeys, queues=public_queue_snapshot(data, privileged=role() in ('admin','supervisor'), reveal_numbers=(role()=='admin' or (role()=='supervisor' and all(can_access_queue(q,'caller_details') for q in data)))), policy_alerts=policy_result['alerts'], notification_status=policy_result['notification_status'],timestamp=int(time.time()), role=role(), caller_numbers_visible=(role()=='admin' or (role()=='supervisor' and all(can_access_queue(q,'caller_details') for q in data))),
                        control_status=(app.config.get('SANEQUEUE_CONTROL_STATE') or (lambda:None))(),
                        channel_details=channel_details, controls_enabled=bool(app.config.get('SANEQUEUE_TEST_CONTROLS_STATUS', lambda:False)()) and getattr(backend, 'live_source', '') == 'ami-live',
@@ -358,6 +368,7 @@ def install(app, cfg, backend, get_data, render):
                 except AMI_ERRORS:
                     pass
 
+    @app.route('/api/profile/dial', methods=['POST'])
     @app.route('/api/control', methods=['POST'])
     @login_required
     def ops_control():
@@ -382,7 +393,15 @@ def install(app, cfg, backend, get_data, render):
                     state=private()
                     allowed=list(scope_data(get_data()))
                     own=cfg.get_value_set_default('supervisor_extensions',current_user.get_id(),'')
-                    name,fields=plan(state,queue,action,channel,destination=request.form.get('extension',''),
+                    destination=request.form.get('extension','')
+                    external=()
+                    if action=='dial' and request.form.get('contact_id'):
+                        provider=app.config.get('SANEQUEUE_CONTACT_PROVIDER')
+                        if not callable(provider):raise ValueError('directory_unavailable')
+                        contact=provider(request.form['contact_id'],queue)
+                        destination=re.sub(r'[ ()-]','',contact['phone'])
+                        if policy_store().queue(queue).get('directory_external_dialing'):external=(destination,)
+                    name,fields=plan(state,queue,action,channel,destination=destination,external_destinations=external,
                         own_phone=own,extensions=internal_extensions(),
                         context=app.config.get('SANEQUEUE_TRANSFER_CONTEXT','from-internal'),
                         parkinglot=app.config.get('SANEQUEUE_PARKING_LOT','default'),allowed_queues=allowed)
@@ -458,7 +477,7 @@ def install(app, cfg, backend, get_data, render):
                     if member is not None and str(member.get('Membership','')).lower() == 'static':
                         return jsonify(error='static_member_must_be_managed_in_issabel'), 409
                     store = policy_store()
-                    if store and queue in store.export()['queues']:
+                    if store and queue in store.export()['queues'] and store.queue(queue)['staffing']['enabled']:
                         permitted, issue = store.reserve_leave(queue, data, agent)
                         if not permitted:return jsonify(error=issue), 409
                     if not staffing_allows(data, agent):
@@ -476,14 +495,19 @@ def install(app, cfg, backend, get_data, render):
                 base['Penalty'] = str(penalty)
                 if action == 'add':
                     store = policy_store()
-                    if store and queue in store.export()['queues']:
+                    if store and queue in store.export()['queues'] and store.queue(queue)['staffing']['enabled']:
                         roster = store.queue(queue)['staffing']['roster_size']
                         if not roster:
                             return jsonify(error='configure_roster_size_before_joining'),409
                         if len(data.get('members',{})) >= roster:
                             return jsonify(error='queue_roster_full'),409
-                    if role() != 'admin':
-                        abort(403)
+                    from sanequeue.realtime.local_inventory import read_snapshot
+                    inventory=read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json'))
+                    known={row['technology']+'/'+row['endpoint'] for row in (inventory or {}).get('endpoints',[]) if row['category']=='extension'}
+                    if agent not in known:return jsonify(error='member_must_be_discovered_extension'),409
+                    extension=agent.split('/',1)[1]
+                    if any(re.match(r'^(?:SIP|PJSIP|Local)/'+re.escape(extension)+r'(?:@|$)',str(m.get('StateInterface') or key)) for key,m in data.get('members',{}).items()):
+                        return jsonify(error='extension_already_in_queue'),409
                     base.update(Paused='false', MemberName=agent)
                 return ami_action('QueueAdd' if action == 'add' else 'QueuePenalty', base)
             abort(400)
@@ -549,7 +573,11 @@ def install(app, cfg, backend, get_data, render):
         parked=[dict(key=k,space=v.get('parkingspace'),lot=v.get('parkinglot')) for k,v in state.get('parked',{}).items()
                 if queue in v.get('queues',[]) and set(v['queues']).issubset(allowed)]
         actions=[a for a in app.config.get('SANEQUEUE_ADVANCED_ACTIONS',()) if a in PERMISSIONS and can_access_queue(queue,PERMISSIONS[a])]
-        return jsonify(actions=actions,targets=targets,parked=parked,extensions=list(internal_extensions()))
+        from sanequeue.realtime.local_inventory import read_snapshot
+        inventory=read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json'))
+        existing={re.search(r'/(\d+)(?:@|$)',value).group(1) for key,m in allowed[queue].get('members',{}).items() for value in [str(m.get('StateInterface') or key)] if re.search(r'/(\d+)(?:@|$)',value)}
+        member_candidates=sorted(row['technology']+'/'+row['endpoint'] for row in (inventory or {}).get('endpoints',[]) if row['category']=='extension' and row['endpoint'] not in existing) if can_access_queue(queue,'membership') else []
+        return jsonify(actions=actions,targets=targets,parked=parked,extensions=list(internal_extensions()),member_candidates=member_candidates)
 
     @app.route('/api/quality')
     @login_required

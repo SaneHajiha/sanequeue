@@ -56,7 +56,7 @@ Follow conversations by agent, queue and talk duration.
 2. Select the current agent or active call before acting.
 3. Blind transfer rings the destination; attended transfer permits consultation first.
 
-> One call can contain multiple SIP/PJSIP/Local channel legs; channel counts are not conversation counts.
+> One call can contain multiple channel legs. IVR entry/selection is observed only in ivr-* menus after collector connection; in-call DTMF is not stored. Queue-leg hangup party requires explicit evidence; after transfer or without evidence it remains unknown.
 
 <a id="waiting"></a>
 
@@ -72,13 +72,13 @@ Waiting callers are listed with queue position and elapsed wait.
 
 ## Agents
 
-Ready, ringing, talking, paused and wrap-up states are distinct.
+State and observed daily activity are tracked separately for each queue membership.
 
-1. Choose a pause reason before pausing.
-2. Resume when ready to receive calls again.
-3. Agents can change only their own status; supervisors need queue and action grants.
+1. Open My profile & status to change your own membership; select a reason card when pausing.
+2. A supervisor with membership permission can add a discovered extension or remove a dynamic member.
+3. Open Daily activity & pause reasons to select a date and inspect on-duty, paused-by-reason and removed intervals.
 
-> A Local interface is a queue membership path, not necessarily the actual SIP/PJSIP device.
+> Concurrent memberships are not summed as work hours. History starts when observation recording is enabled; collector gaps are not credited. Pause static members for temporary departures.
 
 <a id="presence"></a>
 
@@ -121,11 +121,14 @@ Call control requires an assigned supervisor phone, queue grants and a current c
 
 ## Wallboard
 
-A large-screen view for supervisors and managers.
+A supervisor display whose status summary remains inside the fullscreen stage.
 
-1. Choose queues and enter fullscreen.
-2. Press Escape to exit fullscreen.
-3. Public display masks caller numbers; private supervisor detail requires permission and explicit selection.
+1. Choose queues and enter fullscreen; use Exit or Escape to leave.
+2. Compare totals, ready/talking/ringing/paused agents, queue identity, waiting callers and timers.
+3. Enable private mode only when caller-details permission is available; public displays hide numbers.
+4. More than 12 waiting callers rotate in pages every 15 seconds.
+
+> Stable colors identify queues; red plus a warning symbol identifies a queue-rule breach. Connection loss is shown separately.
 
 ![Wallboard](images/wallboard-load-beta22.png)
 
@@ -185,12 +188,16 @@ Access has three layers: role, panel sections, and queue/action grants.
 
 ## Queue policies
 
-Each queue has its own independent rules.
+Configure alerts, staffing limits, pause reasons and outbound directory dialing independently per queue.
 
-1. Example: set a waiting-count threshold of 5 for a crowded queue.
-2. Enter 300 seconds for a five-minute wait threshold.
-3. Select Telegram and Bale independently; cooldown limits repeated active alerts.
-4. Agent departure limits depend on configured roster and minimum on-duty staff.
+1. Choose a queue from live inventory; the form applies only to that queue.
+2. Enable count and wait-time conditions independently; combine them with OR or AND when needed.
+3. The low-ready threshold operates independently of count/time matching.
+4. Staffing limits are optional. Enable them and define a fixed roster before enforcing departure limits.
+5. Add a pause-reason label; its technical identifier is generated automatically.
+6. Select Telegram and Bale delivery for each queue; configure bot connections under Settings.
+
+> Saving alert rules does not enable staffing restrictions. External directory dialing is off by default and requires a user Dial grant and a PBX outbound route.
 
 <a id="shifts"></a>
 
@@ -206,11 +213,14 @@ Plan team presence; saving a shift does not automatically change phone state.
 
 ## Contact directory
 
-A shared directory scoped to authorized queues, storing contact names, numbers and work notes.
+A shared per-queue directory identifies waiting callers and supports permissioned callback dialing.
 
-1. Assign the contact to a queue so its access scope applies.
-2. Record a name and number for lookup and recognition.
-3. The directory does not automatically place calls and is not a full CRM or CDR system.
+1. Save the contact with a queue, name and phone; match the incoming Caller ID number format.
+2. A matching caller in that queue displays the saved name; name updates may take up to 15 seconds.
+3. Call requires a Dial grant and your assigned phone. Your phone rings first; answer it to dial the contact.
+4. Internal destinations are allowed by default; an administrator can authorize outbound saved contacts per queue.
+
+> Saving a contact never starts a call. Names remain within the authorized queue. This directory is not a full CRM.
 
 <a id="features"></a>
 
@@ -224,7 +234,7 @@ Actual feature availability and implementation limits.
 
 ## Profile and password
 
-Use the top-bar avatar button to manage your display name, assigned phone and picture. Password or phone changes require the current password and revoke existing account sessions. PNG/JPEG/WebP images up to 512 KB and 4 megapixels are decoded, resized and stripped of metadata.
+Use My profile & status to manage first/last name, assigned phone and picture, change your queue status, and view daily activity. Personal history is clipped to the current phone assignment. Click-to-call rings your own phone first and requires a queue Dial grant. Password or phone changes require the current password and revoke existing account sessions. PNG/JPEG/WebP images up to 512 KB and 4 megapixels are decoded, resized and stripped of metadata.
 
 ![Profile](images/profile-en-beta22.png)
 

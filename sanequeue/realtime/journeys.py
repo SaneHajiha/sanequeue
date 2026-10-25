@@ -37,7 +37,7 @@ class JourneyEngine:
         'Newchannel', 'Newstate', 'DialBegin', 'DialEnd', 'BridgeEnter',
         'BridgeLeave', 'QueueCallerJoin', 'QueueCallerLeave',
         'QueueCallerAbandon', 'AgentCalled', 'AgentConnect', 'AgentComplete',
-        'BlindTransfer', 'AttendedTransfer', 'Hangup', 'Rename',
+        'BlindTransfer', 'AttendedTransfer', 'Hangup', 'Rename', 'NewExten',
     })
     def __init__(self, trunk_map=None, *, max_calls=700, completed_ttl=900, clock=None):
         self.trunk_map = {str(k): clean(v, 70) for k, v in (trunk_map or {}).items() if k and v}
@@ -84,6 +84,7 @@ class JourneyEngine:
                 'channels_seen': set(), 'connected_channels': set(), 'destination_channels': set(), 'caller_channels': set(), 'bridges': {},
                 'destination': '', 'last_agent': '', 'transfer_type': '',
                 'transfers': 0, 'ended': None, 'timeline': [],
+                'ivr_steps': [], 'hangup_party': 'unknown', 'hangup_evidence': '',
             }
         trace = self.traces[root]
         trace['updated'] = now
@@ -123,6 +124,9 @@ class JourneyEngine:
         if event_name not in self.INTERESTING:
             return
         now = float(self.clock() if now is None else now)
+        # Menu traversal only: never collect arbitrary DTMF or dialplan AppData.
+        if event_name == 'NewExten' and not re.fullmatch(r'ivr-[A-Za-z0-9_-]{1,48}',field(event,'Context'),re.I):
+            return
         with self.lock:
             self.last_event = now
             root = self._root(event)
@@ -139,7 +143,16 @@ class JourneyEngine:
                 if channel:
                     trace['channel_active'].add(channel)
                     trace['channels_seen'].add(channel)
-            if event_name == 'Newchannel':
+            if event_name == 'NewExten':
+                context=clean(field(event,'Context'),52)
+                extension=field(event,'Exten') or field(event,'Extension')
+                if field(event,'Priority')=='1' and (extension in ('s','t','i') or re.fullmatch(r'[0-9*#]{1,8}',extension)):
+                    step={'context':context,'selection':extension,'time':int(now)}
+                    if not trace['ivr_steps'] or (context,extension)!=(trace['ivr_steps'][-1]['context'],trace['ivr_steps'][-1]['selection']):
+                        trace['ivr_steps'].append(step)
+                        trace['ivr_steps']=trace['ivr_steps'][-12:]
+                        self._emit(trace,'ivr_enter' if extension=='s' else 'ivr_selection',now,context+': '+extension)
+            elif event_name == 'Newchannel':
                 self._apply_trunk(trace,event,channel)
                 if trace['trunk'] or trace['ingress_hint']:
                     label = trace['trunk'] or (trace['ingress_hint'] + ' (unverified)')
@@ -169,7 +182,20 @@ class JourneyEngine:
                         if field(event,'DestUniqueid'):self.uid_root[field(event,'DestUniqueid')]=root
                     self._emit(trace,'answered',now,trace['last_agent'])
             elif event_name == 'QueueCallerAbandon':
+                trace['hangup_party']='caller'
+                trace['hangup_evidence']='QueueCallerAbandon'
                 self._emit(trace,'abandoned',now)
+            elif event_name == 'AgentComplete':
+                reason=field(event,'Reason').lower()
+                # Queue's explicit completion reason is authoritative for this
+                # queue leg. Hangup ordering of Local/SIP legs proves nothing.
+                if reason in ('caller','agent'):
+                    trace['hangup_party']=reason
+                    trace['hangup_evidence']='AgentComplete'
+                    self._emit(trace,'caller_hangup' if reason=='caller' else 'agent_hangup',now)
+                elif reason=='transfer':
+                    trace['hangup_party']='unknown'
+                    trace['hangup_evidence']=''
             elif event_name == 'QueueCallerLeave':
                 # Normal QueueCallerLeave occurs on answer AND on exit; it is
                 # not evidence the actual phone conversation has finished.
@@ -287,6 +313,8 @@ class JourneyEngine:
                     'status':state,'destination':tr['destination'],
                     'last_agent':tr['last_agent'],'transfer_type':tr['transfer_type'],
                     'transfers':tr['transfers'],'started_at':int(tr['first']),
+                    'ivr_steps':list(tr['ivr_steps']),
+                    'hangup_party':tr['hangup_party'],'hangup_evidence':tr['hangup_evidence'],
                     'updated_at':int(tr['updated']), 'ended_at':int(tr['ended']) if end else None,
                     'timeline':list(tr['timeline'])[-24:],
                 })

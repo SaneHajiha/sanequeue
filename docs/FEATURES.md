@@ -1,4 +1,4 @@
-# Monitoring feature matrix · beta.22
+# Monitoring feature matrix · beta.23
 
 Status describes implemented behavior, not a promise of universal PBX compatibility.
 
@@ -22,16 +22,17 @@ Status describes implemented behavior, not a promise of universal PBX compatibil
 | Call journey / مسیر تماس | Beta | Bounded live AMI event history; no pre-connection historical recovery |
 | Wallboard/charts/theme / نمایش | Browser tested | Persian/English, RTL/LTR, dark/light, latest browser samples |
 | Shift planning / شیفت | Automated + browser | Queue scope, timezone-aware dates, overlap rejection; no automatic PBX changes |
-| Directory / دفترچه | Automated + browser | Scoped shared contacts, no click-to-call or CRM sync |
+| Directory / دفترچه | Automated + browser | Queue-scoped caller-name matching and permissioned click-to-call; external saved contacts require opt-in |
 | Audit / ثبت عملیات | Implemented | Accepted/rejected requests; 202 does not establish execution |
 | Blind/attended transfer, pickup | Live beta | Exact scoped legs and local destinations; user-confirmed test-PBX acceptance |
 | Park/retrieve controls | Live beta | Park slot observed, retrieval connected supervisor 300; user confirmed |
 | Redis API / WebSocket | Live beta | No AMI fallback; 20 concurrent sockets tested; logout revokes existing socket |
 | RTCP observations | Actual PJSIP RTCP + automated/UI | Only available scoped samples; no MOS estimation; jitter is RTP ticks |
+| Daily agent activity / کارکرد روزانه | Automated + live | Observed state durations and pause reasons, Tehran day boundaries, own-assignment privacy; collector gaps excluded |
 | Historical reporting / گزارش‌گیری | Next phase | No historical KPI/export acceptance claim |
 | AI, STT, WebRTC, tenant isolation | Planned | Separate architecture, deployment and privacy work required |
 
 
 ChanSpy behavior and mode flags follow the [official Asterisk documentation](https://docs.asterisk.org/Asterisk_20_Documentation/API_Documentation/Dialplan_Applications/ChanSpy/).
 
-Current evidence, partial inventory privileges and limits: [beta.22 audit](AUDIT_BETA22.md). [Automatic installation](INSTALL.md) is the standard path.
+Current evidence, partial inventory privileges and limits: [beta.23 audit](AUDIT_BETA23.md). [Automatic installation](INSTALL.md) is the standard path.

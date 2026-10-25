@@ -1,5 +1,9 @@
 """Small, scoped scheduling/directory store. Never modifies PBX state."""
 import sqlite3
+import re
+import time
+import threading
+from copy import deepcopy
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
@@ -7,6 +11,35 @@ from datetime import datetime, timezone
 class PlanningStore:
     def __init__(self, path):
         self.path = str(path)
+        self._labels={}
+        self._label_lock=threading.RLock()
+
+    def contact(self, ident, queue):
+        if not re.fullmatch(r'[1-9][0-9]{0,9}',str(ident)):raise ValueError('invalid_contact_id')
+        with self.connect() as db:
+            row=db.execute('SELECT * FROM directory WHERE id=? AND queue=?',(int(ident),queue)).fetchone()
+            if row is None:raise ValueError('contact_not_in_queue')
+            return dict(row)
+
+    def enrich(self, queues):
+        """Names stay within the contact's queue and normal caller-detail redaction."""
+        key=tuple(sorted(queues))
+        with self._label_lock:
+            cached=self._labels.get(key)
+            if cached is None or time.monotonic()-cached[0]>15:
+                labels={}
+                for row in self.list('directory',queues):
+                    phone=re.sub(r'[^+0-9]','',row['phone'])
+                    if phone:labels.setdefault((row['queue'],phone),row['name'])
+                if len(self._labels)>=32:self._labels.clear()
+                self._labels[key]=(time.monotonic(),labels)
+            else:labels=cached[1]
+        result=deepcopy(queues)
+        for queue,data in result.items():
+            for entry in data.get('entries',{}).values():
+                name=labels.get((queue,re.sub(r'[^+0-9]','',str(entry.get('CallerIDNum','')))))
+                if name:entry['CallerIDName']=name
+        return result
 
     @contextmanager
     def connect(self):
@@ -32,6 +65,7 @@ class PlanningStore:
     def save(self, kind, data, queues):
         if kind not in ('shifts','directory'):raise ValueError('unknown_kind')
         if not isinstance(data,dict):raise ValueError('invalid_payload')
+        with self._label_lock:self._labels.clear()
         queue=str(data.get('queue',''))
         if queue not in queues:raise PermissionError('queue_not_allowed')
         ident=data.get('id')

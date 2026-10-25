@@ -14,7 +14,7 @@ log = logging.getLogger('sanequeue.collector')
 
 
 class Collector:
-    def __init__(self, settings, store):
+    def __init__(self, settings, store, activity=None):
         self.settings, self.store = settings, store
         self.state = QueueState()
         self.journeys = JourneyEngine()
@@ -28,6 +28,7 @@ class Collector:
         self.last_heartbeat = None
         self.metrics = {'connections': 0, 'reconnects': 0, 'resyncs': 0, 'events': 0}
         self.reason = 'starting'
+        self.activity=activity
 
     def event(self, packet):
         self.metrics['events'] += 1
@@ -40,7 +41,12 @@ class Collector:
                 raise BufferError('resync_journal_limit')
             self.journal.append((dict(packet), time.time()))
         else:
-            self.state.ingest(packet)
+            handled=self.state.ingest(packet)
+            if not handled and str(packet.get('event','')).lower()=='newexten' and str(packet.get('context','')).lower().startswith('ivr-'):
+                self.state.version+=1
+            kind=str(packet.get('event','')).lower()
+            if self.activity and self.complete and packet.get('queue') and (kind.startswith('queuemember') or kind in ('agentconnect','agentcomplete','agentcalled')):
+                self.activity.observe(self.state.queues,time.time(),only_queue=packet['queue'])
 
     async def synchronize(self):
         self.syncing, self.complete, self.journal = True, False, []
@@ -102,6 +108,7 @@ class Collector:
                         self.journeys.ingest(dict(entry, Event='QueueCallerJoin', Queue=queue))
                 self.journey_seeded = True
             self.complete = True
+            if self.activity:self.activity.observe(self.state.queues,time.time())
             self.resync_requested = False
             self.metrics['resyncs'] += 1
         finally:
@@ -114,12 +121,13 @@ class Collector:
                 'reason': self.reason, 'last_heartbeat_at': self.last_heartbeat,
                 'last_event_at': self.state.last_event_at,
                 'last_sync_at': self.state.last_sync_at, 'published_at': time.time(),
-                'metrics': dict(self.metrics)}
+                'metrics': dict(self.metrics,activity_dropped=self.activity.dropped if self.activity else 0)}
 
     async def publisher(self):
         previous = None
         while True:
             self.state.expire_timers()
+            if self.activity and self.connected and self.complete:self.activity.observe(self.state.queues,time.time())
             marker = (self.generation, self.state.version, self.connected, self.complete, self.reason)
             changed = marker != previous
             body = self.snapshot() if changed else None
@@ -127,6 +135,12 @@ class Collector:
                 raise ConnectionError('collector_lease_lost')
             previous = marker
             await asyncio.sleep(self.settings.publish_seconds)
+
+    async def activity_writer(self):
+        while True:
+            await asyncio.sleep(5)
+            if not await self.store.renew():raise ConnectionError('collector_lease_lost')
+            await self.activity.flush()
 
     def snapshot(self):
         return dict(self.state.snapshot(), generation=self.generation,
@@ -185,7 +199,7 @@ class Collector:
             self.client = await AsyncAMI.connect(self.settings.host, self.settings.port, self.event,
                                                 tls=self.settings.tls, server_name=self.settings.server_name)
             await self.client.request('Login', Username=self.settings.user,
-                                      Secret=self.settings.password, Events='call,agent,system,reporting')
+                                      Secret=self.settings.password, Events='call,agent,system,reporting,dialplan')
             self.connected = True
             self.journeys.mark_connection(True)
             self.metrics['connections'] += 1
@@ -213,12 +227,14 @@ class Collector:
 
     async def session(self):
         self.generation = uuid.uuid4().hex
+        if self.activity:self.activity.reset(self.generation)
         self.state = QueueState()
         self.journeys = JourneyEngine()
         self.journey_seeded = False
         self.connected, self.complete, self.reason = False, False, 'synchronizing'
         tasks = [asyncio.create_task(self.renewer()), asyncio.create_task(self.publisher()),
                  asyncio.create_task(self.worker())]
+        if self.activity:tasks.append(asyncio.create_task(self.activity_writer()))
         try:
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
@@ -231,6 +247,11 @@ class Collector:
             for task in tasks:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
+            if self.activity:
+                try:
+                    if await self.store.renew():await self.activity.flush()
+                except Exception:
+                    log.warning('activity_flush_skipped_after_lease_loss')
             try:
                 await self.store.publish(self.snapshot(), self.health())
             except Exception:
