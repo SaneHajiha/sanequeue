@@ -56,11 +56,13 @@ class Beta8PolicyTests(unittest.TestCase):
         members['PJSIP/101']['Status']='2'
         self.assertTrue(self.store.can_leave('8001',{'members':members},'PJSIP/100')[0])
 
-    def test_absent_agent_and_missing_roster_safely_denied(self):
+    def test_absent_agent_denied_and_optional_staffing_is_independent(self):
         self.assertFalse(self.store.can_leave('8001',{'members':active_members(10)},'PJSIP/999')[0])
         cfg=sample_policy();cfg['queues']['8001']['staffing']['roster_size']=0
         self.store.replace(cfg)
-        self.assertEqual(self.store.can_leave('8001',{'members':active_members(10)},'PJSIP/100')[1],'configure_roster_size_before_leaving')
+        self.assertTrue(self.store.can_leave('8001',{'members':active_members(10)},'PJSIP/100')[0])
+        cfg['queues']['8001']['staffing']['enabled']=True
+        with self.assertRaises(ValueError):self.store.replace(cfg)
 
     def test_thresholds_include_boundary_and_transition_deduplicated(self):
         queue={'members':active_members(5),'Calls':'4','entries':{'a':{'Wait':'299'}},'Completed':'14','Abandoned':'3','Holdtime':'94','TalkTime':'12','ServicelevelPerf':'84.21'}

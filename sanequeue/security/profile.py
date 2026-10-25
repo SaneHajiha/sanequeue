@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import secrets
 import warnings
+import time
 
 from flask import abort,jsonify,request,session,send_file
 from flask_login import current_user,login_required,logout_user
@@ -48,12 +49,20 @@ def install(app,accounts_path,state_dir,sync_accounts):
         if request.method=='GET':
             available=phones(username)
             response=jsonify(username=username,role=account['role'],phone=account.get('phone',''),
+                             first_name=account.get('first_name',''),last_name=account.get('last_name',''),
                              display_name=account.get('display_name',''),available_phones=available or [],
-                             inventory_available=available is not None,avatar_url='/api/profile/avatar' if avatar_path(username).exists() else None)
+                             inventory_available=available is not None,avatar_url='/api/profile/avatar' if avatar_path(username).exists() else None,
+                             dial_options=(app.config.get('SANEQUEUE_PROFILE_DIAL_OPTIONS') or (lambda:dict(queues=[],extensions=[])))())
             response.headers['Cache-Control']='no-store';return response
         if not session.get('csrf_token') or not hmac.compare_digest(request.headers.get('X-CSRF-Token',''),session['csrf_token']):abort(403)
         if (request.content_length or 0)>1024*1024:return jsonify(error='profile_too_large'),413
         name=request.form.get('display_name',account.get('display_name','')).strip()
+        first=request.form.get('first_name',account.get('first_name','')).strip()
+        last=request.form.get('last_name',account.get('last_name','')).strip()
+        if any(len(value)>32 or any(not c.isprintable() for c in value) for value in (first,last)):
+            return jsonify(error='invalid_person_name'),400
+        if 'first_name' in request.form or 'last_name' in request.form:
+            name=' '.join(value for value in (first,last) if value)
         phone=request.form.get('phone',account.get('phone','')).strip()
         password=request.form.get('new_password','')
         old=request.form.get('current_password','')
@@ -79,7 +88,8 @@ def install(app,accounts_path,state_dir,sync_accounts):
             if accounts.get(username)!=account:return jsonify(error='profile_changed_retry'),409
             if phone and any(user!=username and value.get('phone')==phone for user,value in accounts.items()):
                 return jsonify(error='phone_already_assigned'),409
-            value=dict(account,display_name=name,phone=phone)
+            value=dict(account,display_name=name,first_name=first,last_name=last,phone=phone)
+            if phone!=account.get('phone',''):value['phone_assigned_at']=time.time()
             if password:value['password_hash']=hash_secret(password)
             if avatar is not None:
                 target=avatar_path(username);target.parent.mkdir(parents=True,exist_ok=True)

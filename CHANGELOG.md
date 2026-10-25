@@ -1,3 +1,14 @@
+# 2.1.0-beta.23 · 2026-10-25
+
+- Correct wildcard RBAC controls in the browser, optional per-queue staffing enforcement and discovered-extension membership management.
+- Supervisor wallboard keeps its summary inside fullscreen; stable queue identity colors, compact waiting sparklines and a labelled readiness/waiting comparison replace empty charts.
+- Independent count/time rules, reason cards and custom reason labels; staffing restrictions remain an explicit separate option.
+- Personal first/last name, queue status, internal callback dialing and bounded daily activity by pause reason, with assignment-scoped personal history.
+- Queue-scoped directory caller names and optional saved-contact outbound dialing with server-resolved destinations.
+- Bounded IVR entry/selection observations and explicit queue-leg hangup evidence; unknown final parties remain unknown.
+- Off-loop bounded SQLite activity writes, reconnect coverage boundaries and stale-writer rejection; no per-request AMI queries added.
+- Tests cover scope, race protection, Local channel evidence, daily activity boundaries and directory destination validation.
+
 # 2.1.0-beta.22 · 2026-10-25
 
 - Automatic isolated installation: private Redis, separate restricted AMI identities, independent collector/gateway, sanitized local phone/trunk inventory and rollback backup.

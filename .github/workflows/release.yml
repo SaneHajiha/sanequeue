@@ -2,7 +2,7 @@ name: Prerelease
 on:
   push:
     branches: [master]
-    paths: ['.github/releases/beta22.json']
+    paths: ['.github/releases/current.json']
   workflow_dispatch:
 permissions:
   contents: read
@@ -37,7 +37,7 @@ jobs:
           python - <<'PY'
           import json, os, pathlib, re
           import qpanel
-          manifest=json.loads(pathlib.Path('.github/releases/beta22.json').read_text())
+          manifest=json.loads(pathlib.Path('.github/releases/current.json').read_text())
           version=manifest['version']; notes=manifest['notes']
           assert isinstance(version,str) and re.fullmatch(r'\d+\.\d+\.\d+-(alpha|beta|rc)\.\d+',version)
           assert version==pathlib.Path('VERSION').read_text().strip()==qpanel.__version__
@@ -51,6 +51,7 @@ jobs:
       - run: python -m pytest tests --ignore=tests/historical
       - run: node --check qpanel/themes/qpanel/static/js/operations.js
       - run: node --check qpanel/themes/qpanel/static/js/planning.js
+      - run: node --check qpanel/themes/qpanel/static/js/activity.js
       - run: node --check qpanel/themes/qpanel/static/js/organization.js
   publish:
     needs: validate

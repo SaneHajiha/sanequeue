@@ -4,6 +4,8 @@ import asyncio
 import json
 import logging
 import signal
+import os
+from pathlib import Path
 
 from redis.asyncio import Redis
 from .collector import Collector
@@ -24,7 +26,9 @@ async def main(args):
                               'queue_count': len(state.get('queues', {})),
                               'channel_legs': len(state.get('channels', {}))}))
             return
-        task = asyncio.create_task(Collector(settings, store).run())
+        from .activity import ActivityRecorder,ActivityStore
+        activity=ActivityRecorder(ActivityStore(Path(os.getenv('SANEQUEUE_STATE_DIR','/var/lib/sanequeue'))/'activity.sqlite3'))
+        task = asyncio.create_task(Collector(settings, store,activity).run())
         loop = asyncio.get_running_loop()
         for signum in (signal.SIGINT, signal.SIGTERM):
             try:

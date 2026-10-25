@@ -7,6 +7,7 @@ import re
 import secrets
 import threading
 import tempfile
+import time
 from copy import deepcopy
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.@-]{2,64}$")
@@ -108,6 +109,8 @@ def set_account(path,username,role,phone,password=None,*,menus=_UNSET):
         from sanequeue.security.permissions import validate_sections
         selected=validate_sections(role,None if menus is _UNSET else menus)
         registry[username]=dict(old,role=role,phone=phone,password_hash=hashed)
+        if phone!=old.get('phone',''):
+            registry[username]['phone_assigned_at']=time.time()
         if menus is not _UNSET:
             if selected is None:registry[username].pop('menus',None)
             else:registry[username]['menus']=selected

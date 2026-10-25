@@ -1,4 +1,4 @@
-# Compatibility and resource limits · beta.22
+# Compatibility and resource limits · beta.23
 
 | Platform | Evidence | Remaining acceptance |
 |---|---|---|
@@ -16,7 +16,7 @@ Standard local discovery defaults to internal endpoint context `from-internal`. 
 
 The standard installer uses one long-lived read/reporting AMI collector, bounded in-memory state, Redis snapshots and authenticated scoped WebSockets. Normal HTTP/browser refreshes do not connect to AMI. QueueStatus reconciliation is periodic (120 seconds), independent of browser count. Controls use a separate restricted identity and fresh cached state with action confirmation. The optional local phone/trunk inventory runs a bounded root task every 30 seconds; the web process never executes CLI commands. Legacy five-second AMI snapshots are a separate rollback path, not the standard managed deployment.
 
-A staged laboratory test reached 100 simultaneous Local queue callers. At that stage, total six-vCPU utilization was 19.19%, Asterisk RSS 149.16 MB, web RSS 78.75 MB and collector RSS 37.89 MB; 100 HTTP requests at concurrency 20 had p95 1.4563 seconds and zero HTTP errors. Additional web AMI collections: zero. All generated call legs were removed. [Full evidence and limits](AUDIT_BETA22.md).
+A staged laboratory test reached 100 simultaneous Local queue callers. Total six-vCPU utilization was 22.09%, Asterisk RSS 146.91 MB, web RSS 81.58 MB and collector RSS 40.60 MB; 100 HTTP requests at concurrency 20 had p95 1.5660 seconds and zero HTTP errors. Additional web AMI collections: zero. All generated call legs were removed. [Full evidence and limits](AUDIT_BETA23.md).
 
 Local calls do not emulate SIP registration, transcoding, RTP transport, recording or concurrent ChanSpy. These measurements cannot establish production capacity or absence of audio impact at 100 real calls. Test representative codecs, trunks, recording and supervision on the target PBX before production. One worker is required for the current local account/policy/cache design; multiple tenants and high availability are not implemented.
 

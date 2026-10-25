@@ -14,6 +14,17 @@ PASSWORD='Synthetic-original-password-123'
 
 
 class ProfileTests(unittest.TestCase):
+    def test_first_and_last_names_survive_account_updates_without_changing_grants(self):
+        response=self.client.post('/api/profile',data={'first_name':'علی','last_name':'آزمایشی','role':'admin'},headers=self.headers)
+        self.assertEqual(response.status_code,200)
+        value=self.client.get('/api/profile').json
+        self.assertEqual(value['display_name'],'علی آزمایشی')
+        self.assertEqual(value['first_name'],'علی');self.assertEqual(value['last_name'],'آزمایشی')
+        set_account(self.accounts,'alice','supervisor','PJSIP/100')
+        self.assertEqual(read_accounts(self.accounts)['alice']['last_name'],'آزمایشی')
+        self.assertEqual(read_accounts(self.accounts)['alice']['role'],'supervisor')
+        self.assertEqual(self.client.post('/api/profile',data={'first_name':'x'*33},headers=self.headers).status_code,400)
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name);self.accounts=self.root/'accounts.json'

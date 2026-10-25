@@ -15,7 +15,9 @@ END='; END SANEQUEUE MANAGED ACCESS'
 def manager_block(original,collector_secret,control_secret):
     block=BEGIN+'\n'
     for name,secret,write in (('sanequeue_collector_auto',collector_secret,'reporting'),('sanequeue_control_auto',control_secret,'agent,call,originate,reporting')):
-        block+=f'[{name}]\nsecret = {secret}\ndeny = 0.0.0.0/0.0.0.0\npermit = 127.0.0.1/255.255.255.255\nread = system,call,agent,reporting\nwrite = {write}\nwritetimeout = 1000\n\n'
+        read='system,call,agent,reporting'+(',dialplan' if name=='sanequeue_collector_auto' else '')
+        event_filter='eventfilter = !Event: VarSet\n' if name=='sanequeue_collector_auto' else ''
+        block+=f'[{name}]\nsecret = {secret}\ndeny = 0.0.0.0/0.0.0.0\npermit = 127.0.0.1/255.255.255.255\nread = {read}\nwrite = {write}\n{event_filter}writetimeout = 1000\n\n'
     block+=END+'\n'
     pattern=re.escape(BEGIN)+r'.*?'+re.escape(END)+r'\n?'
     remainder=re.sub(pattern,'',original,flags=re.S)

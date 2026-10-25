@@ -7,7 +7,7 @@ PERMISSIONS={'transfer':'transfer','attended_transfer':'transfer','cancel_transf
 
 
 def plan(state, queue, action, channel='', *, destination='', own_phone='',
-         extensions=(), context='from-internal', parkinglot='default', allowed_queues=None):
+         extensions=(), context='from-internal', parkinglot='default', allowed_queues=None, external_destinations=()):
     if action not in PERMISSIONS:raise ValueError('unknown_action')
     if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}',context) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}',parkinglot):
         raise ValueError('invalid_server_control_settings')
@@ -20,7 +20,9 @@ def plan(state, queue, action, channel='', *, destination='', own_phone='',
         if application:fields.update(Application=application,Data=data)
         return fields
     if action=='dial':
-        if destination not in extensions or not re.fullmatch(r'[0-9]{1,12}',destination):
+        internal=destination in extensions and re.fullmatch(r'[0-9]{1,12}',destination)
+        external=destination in external_destinations and re.fullmatch(r'\+?[0-9]{3,15}',destination)
+        if not internal and not external:
             raise ValueError('destination_not_in_internal_allowlist')
         if own_phone.split('/')[-1]==destination:raise ValueError('cannot_call_own_phone')
         fields=originate();fields.update(Context=context,Exten=destination,Priority='1')

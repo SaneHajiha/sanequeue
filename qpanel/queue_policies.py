@@ -29,8 +29,9 @@ DEFAULT_REASONS = [
 ]
 DEFAULT_QUEUE = {
   'label':'',
+  'directory_external_dialing':False,
   'alerts':{'waiting_above':5, 'wait_seconds_above':300, 'min_ready':0,'cooldown_seconds':300,'bale_enabled':False,'telegram_enabled':False,'count_enabled':True,'time_enabled':True,'match_mode':'any'},
-  'staffing':{'roster_size':0,'max_absent_percent':50,'max_absent_count':5,'min_on_duty':0},
+  'staffing':{'enabled':False,'roster_size':0,'max_absent_percent':50,'max_absent_count':5,'min_on_duty':0},
   'pause_reasons':deepcopy(DEFAULT_REASONS),
 }
 DEFAULT_CONFIG = {'version':1,'queues':{},'supervisors':{}}
@@ -55,6 +56,7 @@ def validate_config(raw):
         label=q.get('label','')
         if not isinstance(label,str) or len(label)>65 or any(x in label for x in '\r\n\x00'): raise ValueError('invalid_label')
         base['label']=label
+        base['directory_external_dialing']=q.get('directory_external_dialing',False) is True
         alerts=q.get('alerts',{})
         staffing=q.get('staffing',{})
         if not isinstance(alerts,dict) or not isinstance(staffing,dict): raise ValueError('invalid_queue_settings')
@@ -70,6 +72,8 @@ def validate_config(raw):
         base['alerts']['match_mode']=mode
         for key, lo, hi in [('roster_size',0,1000),('max_absent_percent',0,100),('max_absent_count',0,1000),('min_on_duty',0,1000)]:
             base['staffing'][key]=_bounded_int(staffing.get(key,base['staffing'][key]),lo,hi,key)
+        base['staffing']['enabled']=staffing.get('enabled',base['staffing']['roster_size']>0) is True
+        if base['staffing']['enabled'] and not base['staffing']['roster_size']:raise ValueError('staffing_roster_required')
         reasons=[r for r in q.get('pause_reasons',DEFAULT_REASONS) if isinstance(r,dict) and r.get('id')!='survey']
         if not isinstance(reasons,list) or len(reasons)>30: raise ValueError('invalid_pause_reasons')
         used=set();base['pause_reasons']=[]
@@ -169,6 +173,8 @@ class QueuePolicyStore:
         without an explicit roster, membership shrink could circumvent quotas.
         """
         members=queue_data.get('members',{})
+        if not any(agent in (key,m.get('Location')) for key,m in members.items()):return False,'agent_not_in_queue'
+        if not self.queue(queue)['staffing']['enabled']:return True,''
         if self.reservation_backend is not None:
             return self.reservation_backend.reserve(queue,agent,members,self.queue(queue)['staffing'],dry=True)
         matched=[m for key,m in members.items() if agent in (key,m.get('Location'))]
@@ -202,6 +208,8 @@ class QueuePolicyStore:
             return (after>=minimum, 'ok' if after>=minimum else 'queue_exit_limit_reached')
 
     def reserve_leave(self,queue,queue_data,agent):
+        if not self.queue(queue)['staffing']['enabled']:
+            return self.can_leave(queue,queue_data,agent)
         if self.reservation_backend is not None:
             return self.reservation_backend.reserve(queue,agent,queue_data.get('members',{}),self.queue(queue)['staffing'])
         with self.lock:
