@@ -1,3 +1,9 @@
+# 2.1.0-beta.24 · 2026-10-25
+
+- Browser visual follow-up: keep all three dashboard panels in their desktop columns, remove legacy queue-card grid tracks and prevent mobile profile-header overflow.
+- Fullscreen toggle now exits the embedded fallback correctly, shows its current action, and supports Escape when native fullscreen is unavailable.
+- New desktop/mobile screenshots and documented visual acceptance; beta.23 monitoring and scope behavior retained.
+
 # 2.1.0-beta.23 · 2026-10-25
 
 - Correct wildcard RBAC controls in the browser, optional per-queue staffing enforcement and discovered-extension membership management.

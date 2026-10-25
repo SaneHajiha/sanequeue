@@ -513,12 +513,13 @@
  const showView=key=>{const button=document.querySelector(`[data-view="${key}"]`);if(button)button.click();};
  document.addEventListener('click',event=>{const b=event.target.closest('button[data-open]');if(!b)return;showView(b.dataset.open);if(b.dataset.scroll){setTimeout(()=>$(b.dataset.scroll)?.scrollIntoView({block:'center',behavior:'smooth'}),50);}});
  function exitWallboard(){wallboardPrivate=false;if($('wb-private'))$('wb-private').checked=false;if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});document.body.classList.remove('wallboard');$('wallboard-fullscreen').textContent=t('⛶ تمام‌صفحه','⛶ Fullscreen');}
- $('wallboard-fullscreen').onclick=async()=>{showView('wallboard');const stage=$('wallboard-stage');try{if(!document.fullscreenElement){await stage.requestFullscreen();document.body.classList.add('wallboard');}else exitWallboard();}catch{document.body.classList.add('wallboard');}};
+ $('wallboard-fullscreen').onclick=async()=>{showView('wallboard');if(document.fullscreenElement||document.body.classList.contains('wallboard')){exitWallboard();return;}const stage=$('wallboard-stage');try{await stage.requestFullscreen();}catch{/* Embedded browsers can reject native fullscreen; use the same full-panel stage. */}document.body.classList.add('wallboard');$('wallboard-fullscreen').textContent=t('⛶ خروج از تمام‌صفحه','⛶ Leave fullscreen');};
  $('wallboard-exit').onclick=()=>{exitWallboard();showView('live');};
  $('wallboard-queue-picker').onchange=event=>{const target=event.target.closest('[data-wb-queue]');if(!target)return;wallboardVisible=[...$('wallboard-queue-picker').querySelectorAll('input:checked')].map(x=>x.dataset.wbQueue);storage.set('wallboard-queues',JSON.stringify(wallboardVisible));renderWallboard(selected(),[]);renderJourneyViews();};
  $('wb-select-all').onclick=()=>{wallboardVisible=null;storage.set('wallboard-queues','null');renderWallboard(selected(),[]);};
  if($('wb-private'))$('wb-private').onchange=()=>{wallboardPrivate=$('wb-private').checked&&supervisor&&showFullNumbers;renderWallboard(selected(),[]);};
- document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)document.body.classList.remove('wallboard');});
+ document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement){document.body.classList.remove('wallboard');$('wallboard-fullscreen').textContent=t('⛶ تمام‌صفحه','⛶ Fullscreen');}});
+ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('wallboard')&&!document.fullscreenElement)exitWallboard();});
 
  $('queue-focus-cards').addEventListener('click',event=>{const button=event.target.closest('[data-focus]');if(!button)return;$('queue-filter').value=button.dataset.focus;render();showView('calls');});
  $('queue-cards').addEventListener('click',event=>{const button=event.target.closest('.queue-focus-link');if(!button)return;$('queue-filter').value=button.dataset.focus;render();showView('queues');});

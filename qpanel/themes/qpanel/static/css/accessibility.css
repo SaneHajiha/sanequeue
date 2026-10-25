@@ -269,3 +269,19 @@ body .wallboard-stage .wb-journey-area .journey-card{color:#edf5ff;background:#1
 .profile-dial-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-block:12px}.profile-dial-row select{min-width:100px;flex:1}.profile-dial-row button{white-space:nowrap}
 .caller-identity{display:grid;gap:2px}.caller-identity strong{font-size:13px}.caller-identity bdi{font-size:12px;color:var(--muted)}
 .queue-focus-card{border-block-start:4px solid var(--queue-accent,#2878e8)}
+/* Keep the current queue-card structure independent of legacy grid columns. */
+.ref-queue-row{grid-template-columns:minmax(0,1fr) 54px minmax(76px,auto)!important}
+.ref-queue-row>.ref-queue-identity{grid-column:1;grid-row:1}
+.ref-queue-row>.queue-summary-open{grid-column:3;grid-row:1;width:auto;max-width:100%;margin-inline:0}
+.ref-queue-row>.queue-readiness-ring{grid-column:2;grid-row:1}
+.ref-queue-row>.queue-operational-metrics{grid-column:1/-1;display:flex;flex-direction:row;justify-content:space-between;gap:10px}
+.ref-queue-row>:is(.capacity-mini,.capacity-key,.queue-spark,.queue-mini-summary){min-width:0;max-width:100%;box-sizing:border-box}
+.ref-queue-row>.queue-spark{max-width:160px}
+.ref-queue-row>.queue-mini-summary{flex-wrap:wrap;gap:10px 14px}
+.ref-queue-row>.queue-mini-summary span{min-width:54px}
+@media(min-width:1300px){.reference-three-panel>.dashboard-team{grid-column:auto}}
+@media(max-width:760px){
+ body .topbar{height:auto;min-height:52px;flex-wrap:wrap;gap:8px;padding:10px 12px}
+ body .topbar .breadcrumb{width:100%;overflow-wrap:anywhere}
+ body .top-actions{width:100%;min-width:0;flex-wrap:wrap;justify-content:flex-start;gap:8px}
+}
