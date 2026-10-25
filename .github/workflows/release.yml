@@ -1,0 +1,87 @@
+name: Prerelease
+on:
+  push:
+    branches: [master]
+    paths: ['.github/releases/beta22.json']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sanequeue-prerelease
+  cancel-in-progress: false
+jobs:
+  validate:
+    if: github.repository == 'SaneHajiha/sanequeue'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      SANEQUEUE_TEST_REDIS_URL: redis://127.0.0.1:6379/15
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      tag: ${{ steps.metadata.outputs.tag }}
+      notes: ${{ steps.metadata.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - id: metadata
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, re
+          import qpanel
+          manifest=json.loads(pathlib.Path('.github/releases/beta22.json').read_text())
+          version=manifest['version']; notes=manifest['notes']
+          assert isinstance(version,str) and re.fullmatch(r'\d+\.\d+\.\d+-(alpha|beta|rc)\.\d+',version)
+          assert version==pathlib.Path('VERSION').read_text().strip()==qpanel.__version__
+          assert isinstance(notes,str) and re.fullmatch(r'docs/[A-Za-z0-9_./-]+\.md',notes)
+          assert '..' not in pathlib.PurePosixPath(notes).parts and pathlib.Path(notes).is_file()
+          with open(os.environ['GITHUB_OUTPUT'],'a') as stream:
+              stream.write(f'version={version}\ntag=v{version}\nnotes={notes}\n')
+          PY
+      - run: pip install -r requirements/modern.txt pytest httpx2
+      - run: pybabel compile -d qpanel/translations
+      - run: python -m pytest tests --ignore=tests/historical
+      - run: node --check qpanel/themes/qpanel/static/js/operations.js
+      - run: node --check qpanel/themes/qpanel/static/js/planning.js
+      - run: node --check qpanel/themes/qpanel/static/js/organization.js
+  publish:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.validate.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+      NOTES: ${{ needs.validate.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build public source artifacts
+        run: |
+          mkdir dist
+          git archive --format=tar.gz --prefix="SaneQueue-${RELEASE_VERSION}/" --output="dist/SaneQueue-${RELEASE_VERSION}.tar.gz" HEAD
+          git archive --format=zip --prefix="SaneQueue-${RELEASE_VERSION}/" --output="dist/SaneQueue-${RELEASE_VERSION}.zip" HEAD
+          cd dist
+          sha256sum *.tar.gz *.zip > SHA256SUMS
+      - name: Publish verified prerelease
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            actual=$(gh api "repos/${GH_REPO}/commits/${TAG}" --jq .sha)
+            test "$actual" = "$GITHUB_SHA" || { echo 'Existing release target differs; refusing to overwrite.'; exit 1; }
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "SaneQueue ${RELEASE_VERSION}" --notes-file "$NOTES" --draft --prerelease
+          fi
+          gh release upload "$TAG" dist/*.tar.gz dist/*.zip dist/SHA256SUMS --clobber
+          gh release edit "$TAG" --draft=false --prerelease=true --latest=false
