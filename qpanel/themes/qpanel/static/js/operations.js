@@ -83,7 +83,7 @@
   Object.keys(names).forEach(key=>{const pane=$(key+'-view');if(pane)pane.hidden=key!==button.dataset.view;});$('view-title').textContent=names[button.dataset.view];const heading=viewHeadings[button.dataset.view];document.querySelector('.page-heading h1').textContent=heading[0];document.querySelector('.page-heading .muted').textContent=heading[1];if(button.dataset.view==='audit')loadAudit();if(button.dataset.view==='users')loadUsers();if(button.dataset.view==='wallboard')renderWallboard(selected(),[]);if(button.dataset.view==='policies'||(button.dataset.view==='agents'&&!policyState))loadPolicyEditor();if(button.dataset.view==='agents')loadMembershipEditor();
  });
  const empty=(message,columns)=>`<tr><td colspan="${columns}" class="empty">${esc(message)}</td></tr>`;
- const metric=(label,value,detail,icon='↗',kind='')=>`<article class="metric ${kind}"><span class="icon" aria-hidden="true">${icon}</span><p>${esc(label)}</p><b>${esc(value)}</b><small>${esc(detail)}</small></article>`;
+ const metric=(label,value,detail,icon='↗',kind='')=>`<article class="metric ${kind} has-inline-help"><span class="icon" aria-hidden="true">${icon}</span><p>${esc(label)}${window.SaneQueueHelp?.button('live_'+kind)||''}</p><b>${esc(value)}</b><small>${esc(detail)}</small></article>`;
  function selected(){const filter=$('queue-filter').value,search=$('search').value.trim().toLocaleLowerCase();return Object.entries(queues).map(([name,q])=>{if(kpiPeriod!=='today')return [name,q];const m=observedToday.queues?.[name]||{};const answered=n(m.answered),total=answered+n(m.abandoned);return [name,{...q,Completed:answered,Abandoned:n(m.abandoned),Holdtime:answered?n(m.wait_seconds)/answered:null,TalkTime:answered?n(m.talk_seconds)/answered:null,ServicelevelPerf:total&&n(m.sla_known)===answered?100*n(m.sla_met)/total:null}];}).filter(([name,q])=>(!filter||name===filter)&&(!search||name.toLocaleLowerCase().includes(search)||Object.entries(q.members||{}).some(([key,m])=>(key+' '+(m.Name||'')).toLocaleLowerCase().includes(search))));}
 
  function updateKpiPeriod(){
@@ -337,6 +337,7 @@
    const replacement=[...$(focusKey.pane).querySelectorAll('button')].find(button=>Object.entries(focusKey.data).every(([key,value])=>button.dataset[key]===value));
    if(replacement&&!replacement.disabled)replacement.focus({preventScroll:true});
   }
+  window.SaneQueueHelp?.refresh();
  }
  function renderQueueFocus(data,threshold){
   const cards=data.map(([name,q])=>{

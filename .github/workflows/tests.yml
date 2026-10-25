@@ -27,6 +27,7 @@ jobs:
       - run: pybabel compile -d qpanel/translations
       - run: python -m pytest tests --ignore=tests/historical
       - run: node --check qpanel/themes/qpanel/static/js/operations.js
+      - run: node --check qpanel/themes/qpanel/static/js/context-help.js
       - run: node --check qpanel/themes/qpanel/static/js/planning.js
       - run: node --check qpanel/themes/qpanel/static/js/activity.js
       - run: node --check qpanel/themes/qpanel/static/js/organization.js

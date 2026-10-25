@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="{{ theme_static('css/operations.css') }}?v={{ current_version() }}">
 <link rel="stylesheet" href="{{ theme_static('css/accessibility.css') }}?v={{ current_version() }}">
 <link rel="stylesheet" href="{{ theme_static('css/overview.css') }}?v={{ current_version() }}">
-<link rel="stylesheet" href="{{ theme_static('css/reports.css') }}?v={{ current_version() }}"><link rel="stylesheet" href="{{ theme_static('css/navigation.css') }}?v={{ current_version() }}"></head>
+<link rel="stylesheet" href="{{ theme_static('css/reports.css') }}?v={{ current_version() }}"><link rel="stylesheet" href="{{ theme_static('css/navigation.css') }}?v={{ current_version() }}"><link rel="stylesheet" href="{{ theme_static('css/context-help.css') }}?v=20261026-1"></head>
 <body data-view="live">
 <a class="skip" href="#main">{{ t('رفتن به محتوا','Skip to content') }}</a>
 <aside class="sidebar">
@@ -38,9 +38,9 @@
 <div class="overview-column overview-queues"><section class="panel ref-queues"><div class="panel-heading"><div><h2>{{ t('وضعیت صف‌ها','Queue status') }}</h2><p>{{ t('درصد آمادگی و ظرفیت لحظه‌ای','Readiness percentage and live capacity') }}</p></div><span class="tag" id="queue-count">—</span></div><div id="queue-cards" class="queue-cards"></div></section></div>
 <div class="overview-column overview-traffic"><section class="panel ref-waiting"><div class="panel-heading"><div><h2>{{ t('تماس‌های منتظر','Waiting calls') }}</h2><p>{{ t('جایگاه، زمان انتظار و صف','Position, wait time and queue') }}</p></div><span class="tag waiting-count-chip" id="waiting-count">—</span></div><div class="table-wrap"><table class="compact-table"><thead><tr><th>{{ t('تماس‌گیرنده','Caller') }}</th><th>{{ t('صف','Queue') }}</th><th>{{ t('ترانک ورودی','Ingress trunk') }}</th><th>{{ t('موقعیت','Position') }}</th><th>{{ t('انتظار','Wait') }}</th><th>{{ t('اولویت','Priority') }}</th></tr></thead><tbody id="call-rows"></tbody></table></div></section><section class="panel ref-active"><div class="panel-heading"><div><h2>{{ t('تماس‌های جاری','Current calls') }}</h2><p>{{ t('عضویت‌های درگیر مکالمه یا زنگ؛ معادل تعداد تماس یکتا نیست','Busy/ringing memberships, not unique calls') }}</p></div><span class="tag" id="dashboard-active-count">—</span></div><div class="table-wrap"><table class="compact-table"><thead><tr><th>{{ t('کارشناس','Agent') }}</th><th>{{ t('صف','Queue') }}</th><th>{{ t('وضعیت','State') }}</th><th>{{ t('مدت','Duration') }}</th></tr></thead><tbody id="dashboard-active-rows"></tbody></table></div></section></div>
 <div class="overview-column overview-team"><section class="panel ref-agents dashboard-team"><div class="panel-heading"><div><h2>{{ t('کارشناسان','Agents') }}</h2><p>{{ t('وضعیت آنلاین و حضور در صف','Availability and queue membership') }}</p></div><button class="subtle-link" data-open="agents">{{ t('همه','All') }} ↗</button></div><div class="agent-filter-summary" id="overview-agent-totals">—</div><div id="overview-agent-list" class="dashboard-agent-list"></div></section><section class="panel action-overview"><div class="panel-heading"><div><h2>{{ t('عملیات سریع','Quick operations') }}</h2><p>{{ t('پیش از ارسال دستور، عضو یا تماس آزمایشی را انتخاب کن','Select a verified test target first') }}</p></div></div><div class="quick-grid">
-    <button data-open="calls"><span>◉</span>{{ t('شنود','Listen') }}</button>
-    <button data-open="calls"><span>◎</span>{{ t('نجوا','Whisper') }}</button>
-    <button data-open="calls"><span>♙</span>{{ t('ورود به مکالمه','Barge') }}</button>
+    <button data-open="calls" data-help-key="spy_shortcut"><span>◉</span>{{ t('شنود','Listen') }}</button>
+    <button data-open="calls" data-help-key="whisper_shortcut"><span>◎</span>{{ t('نجوا','Whisper') }}</button>
+    <button data-open="calls" data-help-key="barge_shortcut"><span>♙</span>{{ t('ورود به مکالمه','Barge') }}</button>
     <button data-open="control"><span>⇄</span>{{ t('مرکز کنترل','Controls') }}</button>
     <button data-open="waiting"><span>⌁</span>{{ t('انتظار','Waiting') }}</button>
     <button data-open="agents"><span>Ⅱ</span>{{ t('توقف/ادامه','Pause/Resume') }}</button>
@@ -437,11 +437,12 @@
  <footer><span>صانع · SaneQueue <strong>{{ current_version() }}</strong></span><span>{{ t('اطلاعات مجوز در فایل NOTICE','License information in NOTICE') }}</span></footer>
  </main></div>
 <script id="ops-config" type="application/json">{{ ops_config|tojson }}</script>
-<script src="{{ theme_static('js/operations.js') }}?v={{ current_version() }}" defer></script>
+<script src="{{ theme_static('js/context-help.js') }}?v=20261026-1" defer></script>
+<script src="{{ theme_static('js/operations.js') }}?v={{ current_version() }}&help=1" defer></script>
 <dialog id="activity-dialog" class="activity-dialog" aria-labelledby="activity-title"><div class="summary-dialog-head"><h2 id="activity-title">{{ t('کارکرد روزانهٔ عضویت صف','Daily queue membership activity') }}</h2><button id="activity-close" type="button" aria-label="{{ t('بستن','Close') }}">×</button></div><p class="report-note">{{ t('هر عضویت صف مستقل است؛ زمان صف‌های هم‌زمان با هم جمع نمی‌شود. فقط بازه‌هایی که شنودگر متصل بوده ثبت می‌شوند. نگهداری تا ۹۰ روز و حداکثر ۵۰۰هزار تغییر وضعیت.','Each queue membership is independent; concurrent queues are not combined as work hours. Only collector-observed intervals are recorded. Retention is up to 90 days and 500,000 transitions.') }}</p><div class="report-filters"><label>{{ t('تاریخ (شمسی)','Date (Gregorian)') }}<select id="activity-day"></select></label><label>{{ t('صف','Queue') }}<select id="activity-queue"><option value="">—</option></select></label><button id="activity-refresh" type="button">↻ {{ t('بازخوانی','Refresh') }}</button></div><p id="activity-feedback" class="report-note" role="status"></p><div id="activity-results" class="activity-results"></div></dialog>
 <script src="{{ theme_static('js/activity.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/planning.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/organization.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/telephony.js') }}?v={{ current_version() }}" defer></script>
-<script src="{{ theme_static('js/reports.js') }}?v={{ current_version() }}" defer></script>
+<script src="{{ theme_static('js/reports.js') }}?v={{ current_version() }}&help=1" defer></script>
 <script src="{{ theme_static('js/navigation.js') }}?v={{ current_version() }}" defer></script></body></html>
