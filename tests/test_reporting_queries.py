@@ -132,11 +132,16 @@ class ReportTests(unittest.TestCase):
         audio.mkdir()
         (audio / 'test.wav').write_bytes(b'RIFF0123456789')
         self.archive.append([Event('cdr', 'audio-id', self.stamp, 'CDR',
-                                   dict(uniqueid='a', linkedid='a', recordingfile='test.wav'))])
+                                   dict(uniqueid='a', linkedid='a', recordingfile='test.wav')),
+                             Event('cdr', 'audio-second-leg', self.stamp, 'CDR',
+                                   dict(uniqueid='second-leg', linkedid='a', recordingfile='test.wav'))])
         project_batch(self.archive)
         ident = visits(self.archive, self.scope, self.stamp, self.stamp + 100)['rows'][0]['id']
         url = '/api/history/visits/' + ident + '/recordings/audio-id' + self.dates
         client = self.client()
+        recording_refs = client.get('/api/history/visits/' + ident + self.dates).json['recordings']
+        self.assertEqual(len(recording_refs), 1)
+        self.assertNotIn('recording', recording_refs[0])
         response = client.get(url, headers={'Range': 'bytes=4-7'})
         self.assertEqual(response.status_code, 206)
         self.assertEqual(response.data, b'0123')
@@ -187,6 +192,29 @@ class ReportTests(unittest.TestCase):
         self.assertIsNone(transferred['talk_seconds'])
         self.assertIsNone(transferred['segment_ended_by'])
         self.assertEqual(overview(self.archive, Scope(('8001',)), self.stamp, self.stamp + 100)['queues'][0]['transferred'], 1)
+
+    def test_completion_after_transfer_is_not_a_second_visit(self):
+        self.archive.append([
+            self.event('a', '8001', 'ENTERQUEUE', 0),
+            self.event('a', '8001', 'CONNECT', 1, ['1']),
+            self.event('a', '8001', 'TRANSFER', 36, ['300']),
+        ])
+        project_batch(self.archive)
+        self.archive.append([self.event('a', '8001', 'COMPLETEAGENT', 303, ['1', '302', '1'])])
+        project_batch(self.archive)
+        rows = visits(self.archive, Scope(('8001',)), self.stamp, self.stamp + 400)['rows']
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['outcome'], 'transferred')
+        self.assertIsNone(rows[0]['segment_ended_by'])
+        self.assertIsNone(rows[0]['talk_seconds'])
+        self.assertEqual(rows[0]['ended'], self.stamp + 36)
+        # A real second queue entry must still produce a separate visit.
+        self.archive.append([
+            self.event('a', '8001', 'ENTERQUEUE', 310),
+            self.event('a', '8001', 'ABANDON', 320, ['1', '1', '10']),
+        ])
+        project_batch(self.archive)
+        self.assertEqual(len(visits(self.archive, Scope(('8001',)), self.stamp, self.stamp + 400)['rows']), 2)
 
 
 if __name__ == '__main__':

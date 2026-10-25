@@ -101,9 +101,17 @@ def detail(archive, scope, start, end, visit_id):
           WHERE pbx=? AND queue=? AND callid=? AND ts>=? AND (? IS NULL OR ts<=?)
           ORDER BY ts,event_id LIMIT 1000''', (archive.pbx, row['queue'], row['callid'],
                                              row['entered'], row['ended'], row['ended']))]
-        recordings = [dict(r) for r in db.execute('''SELECT source_key id,ts,uid,linkedid,billsec,
-          disposition FROM report_cdr WHERE pbx=? AND (uid=? OR linkedid=?) AND recording<>''
+        recording_rows = [dict(r) for r in db.execute('''SELECT source_key id,ts,uid,linkedid,billsec,
+          disposition,recording FROM report_cdr WHERE pbx=? AND (uid=? OR linkedid=?) AND recording<>''
           ORDER BY ts,source_key LIMIT 100''', (archive.pbx, row['callid'], row['callid']))]
+        # Several CDR legs can reference the same MixMonitor file. Keep one
+        # authorized opaque reference, without exposing private storage paths.
+        recordings, seen = [], set()
+        for recording in recording_rows:
+            reference = recording.pop('recording')
+            if reference not in seen:
+                seen.add(reference)
+                recordings.append(recording)
     return dict(visit=row, timeline=events, recordings=recordings,
                 hangup_evidence='queue_segment_only' if row['segment_ended_by'] else 'unknown',
                 final_conversation_ended_by=None)

@@ -67,6 +67,13 @@ def _rebuild_visits(db, pbx, queue, callid):
         elif kind in ('CONNECT', 'COMPLETECALLER', 'COMPLETEAGENT', 'ABANDON',
                       'EXITWITHTIMEOUT', 'EXITEMPTY', 'EXITWITHKEY', 'TRANSFER',
                       'BLINDTRANSFER', 'ATTENDEDTRANSFER'):
+            if (current and current['outcome'] == 'transferred'
+                    and kind in ('COMPLETECALLER', 'COMPLETEAGENT')):
+                # A redirected Queue application can complete after transfer.
+                # Its duration spans the downstream conversation, not just
+                # this agent's queue segment. Preserve raw evidence without
+                # creating a second visit or attributing a final hangup.
+                continue
             if current is None or current['ended'] is not None:
                 current = dict(id=_visit_id(pbx, queue, callid, event_id), entered=ts,
                                answered=None, ended=None, caller='', agent='', outcome='unknown',
