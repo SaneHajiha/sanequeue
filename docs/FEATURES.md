@@ -1,4 +1,4 @@
-# Monitoring feature matrix · beta.23
+# Monitoring feature matrix · beta.24
 
 Status describes implemented behavior, not a promise of universal PBX compatibility.
 
@@ -35,4 +35,4 @@ Status describes implemented behavior, not a promise of universal PBX compatibil
 
 ChanSpy behavior and mode flags follow the [official Asterisk documentation](https://docs.asterisk.org/Asterisk_20_Documentation/API_Documentation/Dialplan_Applications/ChanSpy/).
 
-Current evidence, partial inventory privileges and limits: [beta.23 audit](AUDIT_BETA23.md). [Automatic installation](INSTALL.md) is the standard path.
+Current evidence, partial inventory privileges and limits: [beta.24 audit](AUDIT_BETA24.md). [Automatic installation](INSTALL.md) is the standard path.

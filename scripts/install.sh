@@ -5,7 +5,7 @@ set -euo pipefail
 command -v systemctl >/dev/null || { echo 'A systemd Linux host is required.'; exit 1; }
 command -v asterisk >/dev/null || { echo 'Install on the PBX host.'; exit 1; }
 SOURCE=$(cd -- "$(dirname -- "$0")/.." && pwd)
-REF=${SANEQUEUE_REF:-v2.1.0-beta.23}
+REF=${SANEQUEUE_REF:-v2.1.0-beta.24}
 [[ "$REF" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'Invalid release reference.'; exit 1; }
 STAGE=$(mktemp -d /tmp/sanequeue-install.XXXXXXXX)
 cleanup() { case "$STAGE" in /tmp/sanequeue-install.*) rm -rf -- "$STAGE" ;; esac; }
