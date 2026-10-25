@@ -37,6 +37,7 @@
   if(view){
    activate(view.dataset.view);remember(view.dataset.view);
    nav.querySelectorAll('.module-shortcut').forEach(item=>item.removeAttribute('aria-current'));
+   document.querySelector('.topbar')?.scrollIntoView({block:'start',behavior:'instant'});
   }
  });
  // Group the compact mobile selector using the same authorized DOM. Never
