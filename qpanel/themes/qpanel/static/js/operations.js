@@ -120,7 +120,7 @@
   const waitAbove=calls.filter(({c})=>n(c.Wait)>=n($('threshold').value)).length;
   const congested=entries.filter(([,q])=>n(q.Calls)>=n($('waiting-threshold').value)).length;
   const roleLabel=({admin:t('مدیر','Administrator'),supervisor:t('سرپرست','Supervisor'),agent:t('کارشناس','Agent'),viewer:t('مشاهده‌گر','Viewer')})[cfg.role]||t('مشاهده‌گر','Viewer');
-  const sourceText=currentDataSource==='ami-live'?t('AMI • داده زنده','AMI • LIVE'):t('DEMO • داده ساختگی','DEMO • SAMPLE');
+  const sourceText=currentDataSource==='ami-live'?t('AMI • داده زنده','AMI • LIVE'):cfg.demo_mode?t('DEMO • داده ساختگی','DEMO • SAMPLE'):t('دادهٔ زنده دریافت نشده','Live data not received');
   document.querySelectorAll('[data-source-label]').forEach(node=>{node.textContent=sourceText;node.classList.toggle('is-live',currentDataSource==='ami-live');});
   const model={
    queues:[fmt(entries.length),fmt(waiting),fmt(counts.ready),fmt(noReady)],
@@ -843,5 +843,13 @@ $('test-controls-disable').onclick=async()=>{
  document.addEventListener('click',event=>{const b=event.target.closest('[data-queue-summary]');if(b)showQueueSummary(b.dataset.queueSummary);});
 function clock(){$('wb-clock').textContent=new Date().toLocaleTimeString(fa?'fa-IR':'en-GB');$('clock').textContent=new Intl.DateTimeFormat(fa?'fa-IR-u-ca-persian':'en-GB',{dateStyle:'medium',timeStyle:'short'}).format(new Date());if(lastReceipt&&performance.now()-lastReceipt>Math.max(20000,cfg.interval*3)){$('connection').className='badge pending';$('connection').textContent=t('داده‌ها قدیمی است','Data is stale');$('wb-connection').textContent=t('داده قدیمی؛ اتصال قطع','STALE / OFFLINE');currentDataSource='stale';cfg.test_controls_enabled=false;document.body.dataset.connection='stale';updateControlBadge({enabled:false});}}
  renderGuide('live');if(cfg.allowed_sections&&!cfg.allowed_sections.includes('live')){const first=document.querySelector('nav [data-view]');if(first)first.click();else document.querySelectorAll('.view').forEach(pane=>pane.hidden=true);}
- clock();setInterval(clock,10000);loadAmiSettings();loadPolicyEditor();updateControlBadge();if(!cfg.realtime_push)setInterval(updateControlBadge,15000);refresh();connectSocket();
+ clock();setInterval(clock,10000);
+ const allowedViews=cfg.allowed_sections||Object.keys(names);
+ if(cfg.role==='admin'&&allowedViews.includes('settings'))loadAmiSettings();
+ if(allowedViews.some(key=>['policies','users','agents'].includes(key)))loadPolicyEditor();
+ if(allowedViews.some(key=>['live','queues','calls','waiting','agents','presence','wallboard','alerts','control'].includes(key))){
+  updateControlBadge();if(!cfg.realtime_push)setInterval(updateControlBadge,15000);refresh();connectSocket();
+ }else{
+  $('connection').className='badge';$('connection').textContent=t('فضای کار با دسترسی محدود','Section-scoped workspace');$('refresh').hidden=true;
+ }
 })();
