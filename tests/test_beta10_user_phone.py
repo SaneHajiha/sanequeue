@@ -49,13 +49,13 @@ class Beta10IdentityTests(unittest.TestCase):
             self.assertEqual(read_accounts(path)['sup']['password_hash'],before)
     def test_no_default_survey_reason(self):
         self.assertNotIn('survey',[v['id'] for v in DEFAULT_REASONS])
-    def test_old_survey_reason_filtered_on_loading(self):
+    def test_custom_survey_reason_preserved_on_loading(self):
         with tempfile.TemporaryDirectory() as tmp:
             store=QueuePolicyStore(Path(tmp)/'policies.json')
             data=store.export();data['queues']['8001']=store.queue('8001')
             data['queues']['8001']['pause_reasons'].append({'id':'survey','label':'Old survey'})
             store.replace(data,visible_queues={'8001'})
-            self.assertNotIn('survey',[r['id'] for r in store.reasons('8001')])
+            self.assertIn('survey',[r['id'] for r in store.reasons('8001')])
     # Historical snapshot assertion retained in tests/historical.
     pass
     def test_adapter_preserves_queue_holdtime(self):
@@ -64,7 +64,7 @@ class Beta10IdentityTests(unittest.TestCase):
     def test_frontend_has_multi_queue_summary_and_one_row_operations(self):
         js=(ROOT/'qpanel/themes/qpanel/static/js/operations.js').read_text(encoding='utf-8')
         css=(ROOT/'qpanel/themes/qpanel/static/css/operations.css').read_text(encoding='utf-8')
-        self.assertIn('queue-mini-summary',js)
+        self.assertIn('queue-overview-kpis',js)
         self.assertIn('queueMean(q,\'Holdtime\')',js)
         self.assertIn('flex-wrap:nowrap',css)
         self.assertNotIn("id:'survey'",js)

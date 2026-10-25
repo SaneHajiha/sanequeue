@@ -24,3 +24,4 @@ uvicorn>=0.35,<1
 websockets>=15,<17
 Pillow>=12,<14
 tzdata>=2025.1
+imageio-ffmpeg>=0.5,<1

@@ -14,7 +14,7 @@
  }
  async function save(kind,payload){const response=await fetch('/api/planning/'+kind,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':cfg.csrf},body:JSON.stringify(payload)});const result=await response.json();if(!response.ok)throw Error(result.error||'request_failed');await load(kind);}
  document.addEventListener('click',async event=>{
-  const nav=event.target.closest('[data-view]');if(nav&&['shifts','directory'].includes(nav.dataset.view))load(nav.dataset.view);
+  const nav=event.target.closest('button[data-view]');if(nav&&['shifts','directory'].includes(nav.dataset.view))load(nav.dataset.view);
   const refresh=event.target.closest('[data-planning-load]');if(refresh)load(refresh.dataset.planningLoad);
   const dial=event.target.closest('[data-contact-dial]');
   if(dial&&confirm(t('ابتدا تلفن اختصاصی شما زنگ می‌خورد؛ پس از پاسخ، تماس با مخاطب برقرار می‌شود: ','Your assigned phone rings first. Answer to connect to: ')+dial.dataset.contactName)){
@@ -26,6 +26,6 @@
   const del=event.target.closest('[data-planning-delete]');if(del&&confirm(t('این مورد حذف شود؟','Delete this record?'))){try{await save(del.dataset.planningDelete,{id:Number(del.dataset.id),queue:del.dataset.queue,delete:true});}catch(error){alert(t('حذف انجام نشد.','Could not delete record.'));}}
  });
  document.addEventListener('submit',async event=>{const form=event.target.closest('[data-planning-form]');if(!form)return;event.preventDefault();const kind=form.dataset.planningForm,payload=Object.fromEntries(new FormData(form)),submit=form.querySelector('[type=submit]');submit.disabled=true;
-  try{if(kind==='shifts'){payload.starts=new Date(payload.starts).toISOString();payload.ends=new Date(payload.ends).toISOString();}await save(kind,payload);}catch(error){document.getElementById(kind+'-message').textContent=error.message==='overlapping_shift'?t('این کارشناس در بازه انتخاب‌شده شیفت دیگری دارد.','This agent already has an overlapping shift.'):t('ذخیره انجام نشد؛ مقادیر و دسترسی را بررسی کنید.','Could not save. Check values and permissions.');}finally{submit.disabled=false;}
+  try{if(kind==='shifts'){payload.starts=new Date(payload.starts).toISOString();payload.ends=new Date(payload.ends).toISOString();}await save(kind,payload);document.getElementById(kind+'-message').textContent=t('ذخیره شد.','Saved.');}catch(error){document.getElementById(kind+'-message').textContent=error.message==='overlapping_shift'?t('این کارشناس در بازه انتخاب‌شده شیفت دیگری دارد.','This agent already has an overlapping shift.'):t('ذخیره انجام نشد؛ مقادیر و دسترسی را بررسی کنید.','Could not save. Check values and permissions.');}finally{submit.disabled=false;}
  });
 })();

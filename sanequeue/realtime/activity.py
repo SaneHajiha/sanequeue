@@ -51,7 +51,7 @@ class ActivityStore:
         finally:
             db.close()
 
-    def daily(self, queues, day, *, agent='', timezone='Asia/Tehran', now=None,not_before=0):
+    def daily(self, queues, day, *, agent='', agents=None,timezone='Asia/Tehran', now=None,not_before=0):
         zone=ZoneInfo(timezone)
         date=datetime.strptime(day,'%Y-%m-%d').date()
         start=max(datetime.combine(date,day_time(),zone).timestamp(),float(not_before))
@@ -72,6 +72,14 @@ class ActivityStore:
             args=[cutoff,cutoff,start,start,cutoff,cutoff,*allowed,cutoff,cutoff,start]
             if agent:
                 sql+=' AND agent=?';args.append(agent)
+            elif agents is not None:
+                if not agents:return result
+                sql+=' AND agent IN ('+','.join('?' for _ in agents)+')';args.extend(agents)
+            interval_sql='SELECT queue,agent,state,reason,MAX(starts,?) AS first,MIN(COALESCE(ends,?),?) AS last,ends IS NULL AS active FROM activity WHERE queue IN ('+placeholders+') AND starts<? AND COALESCE(ends,?)>? AND state=\'paused\''
+            interval_args=[start,cutoff,cutoff,*allowed,cutoff,cutoff,start]
+            if agent:interval_sql+=' AND agent=?';interval_args.append(agent)
+            elif agents is not None:interval_sql+=' AND agent IN ('+','.join('?' for _ in agents)+')';interval_args.extend(agents)
+            result['intervals']=[dict(row) for row in db.execute(interval_sql+' ORDER BY starts DESC LIMIT 500',interval_args)]
             sql+=' GROUP BY queue,agent,state,reason,on_duty HAVING seconds>0 ORDER BY queue,agent,state,reason'
             result['rows']=[dict(row) for row in db.execute(sql,args)]
             return result

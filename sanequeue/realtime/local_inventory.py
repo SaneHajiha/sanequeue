@@ -78,7 +78,8 @@ def snapshot(config_dir=Path('/etc/asterisk')):
                 match=re.search(r'OK \((\d+) ms\)',row['state'],re.I)
                 row['qualify_rtt_ms']=int(match[1]) if match else None
                 rows[(technology,row['endpoint'])]=row
-    return dict(observed_at=time.time(),source='local-read-only-adapter',drivers=drivers,endpoints=list(rows.values())[:2000])
+    usage=shutil.disk_usage('/var/lib/sanequeue' if Path('/var/lib/sanequeue').exists() else '/')
+    return dict(observed_at=time.time(),source='local-read-only-adapter',drivers=drivers,endpoints=list(rows.values())[:2000],disk_used_percent=100*usage.used/usage.total)
 
 
 def read_snapshot(path, *, now=None):

@@ -21,7 +21,7 @@ def clean_avatar(content):
     with warnings.catch_warnings():
         warnings.simplefilter('error',Image.DecompressionBombWarning)
         with Image.open(io.BytesIO(content)) as image:
-            if image.format not in ('PNG','JPEG','WEBP') or image.width*image.height>4_000_000:
+            if image.format not in ('PNG','JPEG','WEBP','AVIF') or image.width*image.height>4_000_000:
                 raise ValueError('avatar_format_or_dimensions')
             image=ImageOps.exif_transpose(image)
             image.thumbnail((256,256),Image.Resampling.LANCZOS)

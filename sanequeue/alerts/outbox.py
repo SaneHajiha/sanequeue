@@ -19,7 +19,7 @@ class AlertOutbox(ActionLedger):
             if 'provider' not in columns:
                 db.execute("ALTER TABLE deliveries ADD COLUMN provider TEXT NOT NULL DEFAULT 'bale'")
 
-    def observe(self,alerts,policies,*,delivery_enabled=False):
+    def observe(self,alerts,policies,*,delivery_enabled=False,system_rules=None):
         now=self.clock()
         enabled={'bale'} if delivery_enabled is True else set(delivery_enabled or ())
         with self.db() as db:
@@ -27,9 +27,14 @@ class AlertOutbox(ActionLedger):
             db.execute('UPDATE alert_state SET active=0')
             for alert in alerts:
                 queue,kind=alert['queue'],alert['type']
-                safe={k:alert[k] for k in ('queue','type','value','threshold','label') if k in alert}
+                safe={k:alert[k] for k in ('queue','type','value','threshold','label','scope') if k in alert}
                 payload=json.dumps(safe,ensure_ascii=False)
-                rules=policies.queue(queue)['alerts']
+                rules=system_rules if alert.get('scope')=='system' else policies.queue(queue)['alerts']
+                if not rules:continue
+                # Each trunk gets its own debounce/cooldown identity.
+                if alert.get('scope')=='system':
+                    import hashlib
+                    kind=kind+':'+hashlib.sha256(str(alert.get('label','')).encode()).hexdigest()[:12]
                 row=db.execute('SELECT last_enqueued FROM alert_state WHERE queue=? AND type=?',(queue,kind)).fetchone()
                 last=row[0] if row else -1e20
                 for provider in sorted(enabled & {'telegram','bale'}):
@@ -70,8 +75,8 @@ class AlertOutbox(ActionLedger):
             db.execute('UPDATE deliveries SET state=?,attempts=?,next_at=?,lease=?,lease_until=0,updated=? WHERE id=? AND lease=?',
                        (state,attempts,now+min(120,2**attempts),'',now,job['id'],job['token']))
 
-    def report(self,allowed):
-        names=list(allowed)
+    def report(self,allowed,include_system=False):
+        names=list(allowed)+(['__system__'] if include_system else [])
         if not names:return dict(alerts=[],notification_status={'sent':0,'failed':0,'pending':0})
         slots=','.join('?' for _ in names)
         with self.db() as db:

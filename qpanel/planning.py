@@ -12,6 +12,7 @@ class PlanningStore:
     def __init__(self, path):
         self.path = str(path)
         self._labels={}
+        self.number_policy=None
         self._label_lock=threading.RLock()
 
     def contact(self, ident, queue):
@@ -28,8 +29,11 @@ class PlanningStore:
             cached=self._labels.get(key)
             if cached is None or time.monotonic()-cached[0]>15:
                 labels={}
+                policy=self.number_policy() if callable(self.number_policy) else {}
+                from sanequeue.pbx.features import normalize_number
                 for row in self.list('directory',queues):
                     phone=re.sub(r'[^+0-9]','',row['phone'])
+                    if policy.get('enabled'):phone=normalize_number(phone,policy)
                     if phone:labels.setdefault((row['queue'],phone),row['name'])
                 if len(self._labels)>=32:self._labels.clear()
                 self._labels[key]=(time.monotonic(),labels)
@@ -93,8 +97,9 @@ class PlanningStore:
                 if ident:db.execute('UPDATE shifts SET queue=?,agent=?,starts=?,ends=?,note=? WHERE id=?',fields+(ident,))
                 else:db.execute('INSERT INTO shifts(queue,agent,starts,ends,note) VALUES (?,?,?,?,?)',fields)
             else:
-                name,phone=str(data.get('name','')).strip(),str(data.get('phone','')).strip()
+                name,phone=str(data.get('name','')).strip(),str(data.get('phone','')).strip().translate(str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩','01234567890123456789'))
                 if not name or len(name)>100 or not phone or len(phone)>40 or any(c not in '+0123456789*# -()' for c in phone):raise ValueError('invalid_contact')
+                if not ident and db.execute('SELECT COUNT(*) FROM directory').fetchone()[0]>=5000:raise ValueError('directory_limit_reached')
                 fields=(queue,name,phone,note)
                 if ident:db.execute('UPDATE directory SET queue=?,name=?,phone=?,note=? WHERE id=?',fields+(ident,))
                 else:db.execute('INSERT INTO directory(queue,name,phone,note) VALUES (?,?,?,?)',fields)

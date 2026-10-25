@@ -11,7 +11,7 @@ FIELDS={
  'QueueRemove':{'Queue','Interface'},
  'QueueChangePriorityCaller':{'Queue','Caller','Priority','Immediate'},
  'Hangup':{'Channel'},
- 'Originate':{'Channel','Application','Data','Async','Timeout','CallerID','Exten','Context','Priority'},
+ 'Originate':{'Channel','Application','Data','Async','Timeout','CallerID','Exten','Context','Priority','Variable'},
  'BlindTransfer':{'Channel','Context','Exten'}, 'Atxfer':{'Channel','Context','Exten'},
  'CancelAtxfer':{'Channel'},
  'Park':{'Channel','TimeoutChannel','Parkinglot','ParkingSpace','Timeout'},

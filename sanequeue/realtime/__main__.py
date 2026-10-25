@@ -28,7 +28,9 @@ async def main(args):
             return
         from .activity import ActivityRecorder,ActivityStore
         activity=ActivityRecorder(ActivityStore(Path(os.getenv('SANEQUEUE_STATE_DIR','/var/lib/sanequeue'))/'activity.sqlite3'))
-        task = asyncio.create_task(Collector(settings, store,activity).run())
+        from .calls import CallRecorder,CallStore
+        calls=CallRecorder(CallStore(Path(os.getenv('SANEQUEUE_STATE_DIR','/var/lib/sanequeue'))/'calls.sqlite3'),os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json'))
+        task = asyncio.create_task(Collector(settings, store,activity,calls).run())
         loop = asyncio.get_running_loop()
         for signum in (signal.SIGINT, signal.SIGTERM):
             try:

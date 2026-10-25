@@ -1,0 +1,24 @@
+[Unit]
+Description=SaneQueue internal telephone lookup service
+After=asterisk.service sanequeue-pbx-apply.service
+ConditionPathExists=/var/spool/asterisk/sanequeue/runtime.json
+ConditionPathExists=!/var/lib/sanequeue/module.disabled
+[Service]
+Type=simple
+User=asterisk
+Group=asterisk
+WorkingDirectory=/opt/sanequeue
+ExecStart=/opt/sanequeue/.venv/bin/python -m sanequeue.pbx.agi
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/spool/asterisk/sanequeue
+MemoryMax=128M
+TasksMax=48
+TimeoutStopSec=5
+[Install]
+WantedBy=multi-user.target

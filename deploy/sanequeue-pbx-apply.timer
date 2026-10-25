@@ -1,0 +1,9 @@
+[Unit]
+Description=Apply validated SaneQueue telephone settings
+[Timer]
+OnBootSec=20
+OnUnitActiveSec=30
+AccuracySec=2
+Unit=sanequeue-pbx-apply.service
+[Install]
+WantedBy=timers.target

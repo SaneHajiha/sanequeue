@@ -192,11 +192,11 @@ def install(app, cfg, backend, get_data, render):
         if role()!='admin':abort(403)
         settings=app.config.get('SANEQUEUE_NOTIFICATIONS')
         if settings is None:return jsonify(error='notification_service_unavailable'),503
-        if request.method=='GET':return jsonify(providers=settings.public())
+        if request.method=='GET':return jsonify(providers=settings.public(),system_rules=settings.system_rules())
         if not hmac.compare_digest(request.headers.get('X-CSRF-Token',''),session.get('csrf_token','')) or not session.get('csrf_token'):
             abort(403)
         if (request.content_length or 0)>4096:return jsonify(error='payload_too_large'),413
-        try:return jsonify(providers=settings.replace(request.get_json(silent=True)))
+        try:return jsonify(providers=settings.replace(request.get_json(silent=True)),system_rules=settings.system_rules())
         except ValueError:return jsonify(error='invalid_notification_settings'),400
 
     @app.route('/api/notifications/test', methods=['POST'])
@@ -214,6 +214,22 @@ def install(app, cfg, backend, get_data, render):
         try:
             success=settings.send(payload['provider'],test=True)
             return jsonify(accepted=success),200 if success else 502
+        except MessagingError as error:return jsonify(error=str(error)),502
+
+    @app.route('/api/notifications/destinations',methods=['POST'])
+    @login_required
+    def ops_notification_destinations():
+        if role()!='admin':abort(403)
+        if not session.get('csrf_token') or not hmac.compare_digest(request.headers.get('X-CSRF-Token',''),session['csrf_token']):abort(403)
+        if (request.content_length or 0)>1024:return jsonify(error='payload_too_large'),413
+        if time.time()-session.get('notification_discovery_at',0)<10:return jsonify(error='discovery_rate_limited'),429
+        body=request.get_json(silent=True)
+        if not isinstance(body,dict) or body.get('provider') not in ('telegram','bale'):return jsonify(error='invalid_provider'),400
+        settings=app.config.get('SANEQUEUE_NOTIFICATIONS')
+        if settings is None:return jsonify(error='notification_service_unavailable'),503
+        session['notification_discovery_at']=time.time()
+        from sanequeue.alerts.messaging import MessagingError
+        try:return jsonify(destinations=settings.destinations(body['provider'],str(body.get('token',''))))
         except MessagingError as error:return jsonify(error=str(error)),502
 
     @app.route('/api/operations')
@@ -291,7 +307,9 @@ def install(app, cfg, backend, get_data, render):
         if callable(enrich) and numbers_allowed:
             try:data=enrich(data)
             except (OSError,__import__('sqlite3').Error):pass
-        return jsonify(permissions={q:sorted(action for action in ALLOWED_GRANTS if can_access_queue(q,action)) for q in data},call_journeys=journeys, queues=public_queue_snapshot(data, privileged=role() in ('admin','supervisor'), reveal_numbers=(role()=='admin' or (role()=='supervisor' and all(can_access_queue(q,'caller_details') for q in data)))), policy_alerts=policy_result['alerts'], notification_status=policy_result['notification_status'],timestamp=int(time.time()), role=role(), caller_numbers_visible=(role()=='admin' or (role()=='supervisor' and all(can_access_queue(q,'caller_details') for q in data))),
+        daily_provider=app.config.get('SANEQUEUE_DAILY_METRICS')
+        daily=daily_provider(data.keys()) if callable(daily_provider) else {}
+        return jsonify(observed_today=daily,permissions={q:sorted(action for action in ALLOWED_GRANTS if can_access_queue(q,action)) for q in data},call_journeys=journeys, queues=public_queue_snapshot(data, privileged=role() in ('admin','supervisor'), reveal_numbers=(role()=='admin' or (role()=='supervisor' and all(can_access_queue(q,'caller_details') for q in data)))), policy_alerts=policy_result['alerts'], notification_status=policy_result['notification_status'],timestamp=int(time.time()), role=role(), caller_numbers_visible=(role()=='admin' or (role()=='supervisor' and all(can_access_queue(q,'caller_details') for q in data))),
                        control_status=(app.config.get('SANEQUEUE_CONTROL_STATE') or (lambda:None))(),
                        channel_details=channel_details, controls_enabled=bool(app.config.get('SANEQUEUE_TEST_CONTROLS_STATUS', lambda:False)()) and getattr(backend, 'live_source', '') == 'ami-live',
                        minimum_ready=number(option('minimum_ready', 0)), minimum_ready_percent=number(option('minimum_ready_percent', 0)),
