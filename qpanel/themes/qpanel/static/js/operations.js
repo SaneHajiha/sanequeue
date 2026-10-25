@@ -103,7 +103,7 @@
   $('trend-points').textContent=fmt(samples.length)+' '+t('نمونه','samples');
   $('trend-time-label').textContent=samples.length?new Date(samples[0].ts).toLocaleTimeString(fa?'fa-IR':'en-GB',{hour:'2-digit',minute:'2-digit'}):'—';
   const total=counts.ready+counts.busy+counts.paused+counts.offline;const donut=$('capacity-donut');
-  const names=[['ready','#21c99b'],['busy','#388efa'],['paused','#f3b12d'],['offline','#c83d64']];let angle=0;
+  const names=[['ready','var(--chart-ready)'],['busy','var(--chart-busy)'],['paused','var(--chart-paused)'],['offline','var(--chart-offline)']];let angle=0;
   donut.style.background=total?`conic-gradient(${names.map(([name,color])=>{const end=angle+counts[name]/total*360;const part=`${color} ${angle}deg ${end}deg`;angle=end;return part;}).join(',')})`:'conic-gradient(#1d3a55 0deg 360deg)';
   $('capacity-donut-label').textContent=fmt(counts.ready)+'/'+fmt(total);
   $('capacity-counts').innerHTML=names.map(([key,color])=>`<div><i style="background:${color}"></i>${labels[key]}<b>${fmt(counts[key])}</b></div>`).join('');
@@ -362,7 +362,7 @@
  }
  $('refresh').onclick=refresh;$('search').oninput=render;$('status-filter').onchange=render;
  $('queue-filter').onchange=()=>{updateSamples(currentDataSource+'|'+$('queue-filter').value);render();};
- document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('refresh').hidden)refresh();});
  
  async function chooseAgentPauseReason(options){
   const modal=$('pause-reason-dialog'),select=$('pause-reason-select'),hint=$('pause-reason-description');

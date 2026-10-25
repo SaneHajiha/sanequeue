@@ -8,6 +8,8 @@
 - Real fullscreen supervisor wallboard with optional permission-checked caller numbers, rotating waiting lists and clearer capacity/trend charts.
 - Contextual Persian/English help for all 17 sections, generated illustrated manuals and updated installation/validation records.
 - Actual RTCP reception and bounded 100-concurrent-Local-call acceptance; these do not certify 100 SIP/RTP calls or all Issabel/Asterisk versions.
+- External review regressions: discard expired collector snapshot replies, restore AMI configuration if uninstall reload fails, and bound account sessions/branding inputs.
+- Explicit root-owned internal-context allowlist supports customized PBX dialplans without admitting numeric trunks by name; theme-aware capacity colors and section-only tab refresh.
 
 # Changelog
 

@@ -9,7 +9,7 @@ from PIL import Image
 from sanequeue.security.organization import Organization,install,disabled
 from sanequeue.api.state import StateReader,StateUnavailable
 from sanequeue.realtime.collector import Collector
-from scripts.module_control import without_managed_access,UNITS
+from scripts.module_control import without_managed_access,remove_managed_ami,UNITS
 
 
 class OrganizationTests(unittest.TestCase):
@@ -73,6 +73,16 @@ class OrganizationTests(unittest.TestCase):
         self.assertNotIn('secret=removed',value)
         self.assertTrue(all(unit.startswith('sanequeue') for unit in UNITS))
         self.assertNotIn('asterisk.service',UNITS)
+
+    def test_failed_manager_reload_restores_original_configuration(self):
+        manager=self.root/'manager_custom.conf';backup=self.root/'backup';backup.mkdir()
+        original='[other]\nsecret=retained\n; BEGIN SANEQUEUE MANAGED ACCESS\n[ours]\nsecret=removed\n; END SANEQUEUE MANAGED ACCESS\n'
+        manager.write_text(original)
+        with patch('scripts.module_control.os.chown',create=True),patch('scripts.module_control.os.chmod'):
+            with self.assertRaisesRegex(RuntimeError,'original_configuration_restored'):
+                remove_managed_ami(manager,backup,lambda:1)
+        self.assertEqual(manager.read_text(),original)
+        self.assertEqual((backup/manager.name).read_text(),original)
 
 
 class DisabledCollectorTests(unittest.IsolatedAsyncioTestCase):

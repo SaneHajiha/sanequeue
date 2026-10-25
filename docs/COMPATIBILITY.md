@@ -10,7 +10,7 @@
 | Python 3.10–3.12 | CI matrix and isolated-runtime design | OS/runtime availability on each target |
 | Docker / remote PBX | Supplied advanced configuration | Image/network/volume and privileged inventory adapter validation |
 
-Standard local discovery expects internal endpoint context `from-internal`. Custom contexts need an adapted explicit classification policy. Unsupported/unavailable values remain unknown. No driver migration or endpoint/dialplan change is performed. Issabel's native ACL/Smarty integration is not claimed; this is an independently authenticated web application.
+Standard local discovery defaults to internal endpoint context `from-internal`. Customized contexts are supported by the root-owned `/etc/sanequeue/inventory.ini` exact allowlist (`[inventory] internal_contexts=from-internal,internal-sales`, up to 32 names, no wildcard); the installer preserves existing configuration. Never classify trunk contexts as internal. Unsupported/unavailable values remain unknown. No driver migration or endpoint/dialplan change is performed. Issabel's native ACL/Smarty integration is not claimed; this is an independently authenticated web application.
 
 ## Monitoring cost
 

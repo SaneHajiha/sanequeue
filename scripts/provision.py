@@ -133,6 +133,7 @@ def main():
         output=io.StringIO();cfg.write(output);private(etc/'config.ini',output.getvalue())
         private(etc/'collector.ini',f'[ami]\nhost=127.0.0.1\nport=5038\nuser=sanequeue_collector_auto\npassword={read_secret}\n[collector]\nredis_url=redis://:{redis_secret}@127.0.0.1:16379/0\npbx_id=primary\nreconcile_seconds=120\npublish_seconds=1\nheartbeat_seconds=10\n')
         private(etc/'control.ini',f'[ami]\nhost=127.0.0.1\nport=5038\nuser=sanequeue_control_auto\npassword={control_secret}\n')
+        if not (etc/'inventory.ini').exists():private(etc/'inventory.ini','[inventory]\ninternal_contexts=from-internal\n')
         private(etc/'gateway.env',f'SANEQUEUE_PUBLIC_ORIGINS={origin},http://127.0.0.1:5000\nSANEQUEUE_HTTPS={int(parsed.scheme=="https")}\nSANEQUEUE_CONTROL_MODE=rbac\nSANEQUEUE_ADVANCED_ACTIONS=transfer,attended_transfer,cancel_transfer,park,retrieve,pickup,dial,hangup_active\nSANEQUEUE_TRANSFER_CONTEXT=from-internal\nSANEQUEUE_PARKING_LOT=default\nSANEQUEUE_AUTO_EXTENSIONS=1\n')
         private(etc/'redis.conf',f'bind 127.0.0.1\nport 16379\nprotected-mode yes\nrequirepass {redis_secret}\nsave ""\nappendonly no\nmaxmemory 128mb\nmaxmemory-policy noeviction\ndaemonize no\n')
         for root,dirs,files in os.walk(state):

@@ -2,10 +2,27 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from sanequeue.realtime.local_inventory import definitions,endpoint_states,read_snapshot,projection
+from sanequeue.realtime.local_inventory import definitions,endpoint_states,read_snapshot,projection,internal_contexts
 
 
 class LocalInventoryTests(unittest.TestCase):
+    def test_custom_context_is_explicit_and_does_not_admit_numeric_trunks(self):
+        source='[100]\ntype=endpoint\ncontext=from-internal-sales\n[99999]\ntype=endpoint\ncontext=from-pstn\n'
+        self.assertEqual(definitions(source,'PJSIP')[0]['category'],'trunk')
+        rows=definitions(source,'PJSIP',{'from-internal','from-internal-sales'})
+        self.assertEqual([row['endpoint'] for row in rows if row['category']=='extension'],['100'])
+        self.assertEqual(rows[1]['category'],'trunk')
+
+    def test_custom_context_configuration_is_bounded_and_validated(self):
+        with tempfile.TemporaryDirectory() as root:
+            path=Path(root)/'inventory.ini'
+            self.assertEqual(internal_contexts(path),{'from-internal'})
+            path.write_text('[inventory]\ninternal_contexts=from-internal,internal-sales\n')
+            self.assertEqual(internal_contexts(path),{'from-internal','internal-sales'})
+            for value in ('', 'from-internal,*', ','.join('ctx'+str(i) for i in range(33))):
+                path.write_text('[inventory]\ninternal_contexts='+value+'\n')
+                with self.assertRaises(ValueError):internal_contexts(path)
+
     def test_numeric_trunk_is_not_an_extension_and_secrets_are_dropped(self):
         source='[100]\ntype=endpoint\ncontext=from-internal\nsecret=never-return\n[auth100]\ntype=auth\nusername=100\n[99999999]\ntype=endpoint\ncontext=from-pstn\n'
         rows=definitions(source,'PJSIP')

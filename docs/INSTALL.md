@@ -24,7 +24,7 @@ On first install, choose an administrator username, a 12–200 character passwor
 - `sanequeue`, `sanequeue-collector`, `sanequeue-redis` services and `sanequeue-inventory.timer`.
 - Root-only inventory task every 30 seconds. It exports a sanitized internal-phone/trunk list to `/run/sanequeue/inventory.json`; the web service does not read SIP secrets or execute the Asterisk CLI.
 
-Queues are discovered from AMI automatically. Standard Issabel internal phones are classified from generated endpoint definitions with `context=from-internal`; numeric trunk names are not treated as extensions. Custom endpoint contexts require adapter configuration/development before acceptance. An unsupported driver or missing RTCP value remains unavailable, not healthy.
+Queues are discovered from AMI automatically. Standard Issabel internal phones are classified from generated endpoint definitions with `context=from-internal`; numeric trunk names are not treated as extensions. For customized dialplans, a local administrator can edit `/etc/sanequeue/inventory.ini`: section `[inventory]`, `internal_contexts=from-internal,internal-sales`. This is an exact allowlist (up to 32 names, no wildcard); never add a trunk context. The installer preserves existing values. Refresh with `systemctl start sanequeue-inventory.service`; active calls are unaffected. Configure the separate transfer context for the site's dialplan as appropriate. An unsupported driver or missing RTCP value remains unavailable, not healthy.
 
 ## Network and permissions
 

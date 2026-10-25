@@ -112,7 +112,9 @@ class AsyncAMI:
                         if (complete and packet.get('event', '').lower() == complete.lower()) or (
                                 not complete and 'response' in packet):
                             future.set_result(packets)
-                elif packet.get('event'):
+                elif packet.get('event') and not packet.get('actionid', '').startswith('sq-'):
+                    # Late replies to our expired/cancelled snapshots are not live events.
+                    # Preserve events tagged by other AMI clients (supervisor actions).
                     self.on_event(packet)
                 if self.sequence % 100 == 0:
                     await asyncio.sleep(0)

@@ -3,6 +3,7 @@
 The web worker never executes CLI commands or reads SIP authentication files.
 """
 import argparse
+import configparser
 import json
 import math
 import os
@@ -18,8 +19,19 @@ CONFIGS = {'PJSIP': ('pjsip_additional.conf','pjsip_custom.conf','pjsip_custom_p
            'SIP': ('sip_additional.conf','sip_custom.conf','sip_custom_post.conf')}
 
 
-def definitions(text, technology):
+def internal_contexts(path=Path('/etc/sanequeue/inventory.ini')):
+    """Only a local administrator may declare additional trusted phone contexts."""
+    cfg=configparser.ConfigParser(interpolation=None)
+    if not cfg.read(path,encoding='utf-8'):return frozenset({'from-internal'})
+    values=[value.strip() for value in cfg.get('inventory','internal_contexts',fallback='from-internal').split(',')]
+    if not 1<=len(values)<=32 or any(not re.fullmatch(r'[A-Za-z0-9_-]{1,64}',value) for value in values):
+        raise ValueError('invalid_internal_contexts')
+    return frozenset(values)
+
+
+def definitions(text, technology, contexts=None):
     """Read only type/context; never retain passwords, contacts or network addresses."""
+    contexts=frozenset({'from-internal'}) if contexts is None else contexts
     result=[];current=None
     for raw in text.splitlines():
         line=raw.split(';',1)[0].strip()
@@ -29,7 +41,7 @@ def definitions(text, technology):
         elif current is not None and '=' in line:
             key,value=line.split('=',1);key=key.strip().lower()
             if key in ('context','type'):current[key]=value.strip()
-    return [dict(endpoint=r['endpoint'],technology=technology,category='extension' if r['context']=='from-internal' else 'trunk')
+    return [dict(endpoint=r['endpoint'],technology=technology,category='extension' if r['context'] in contexts else 'trunk')
             for r in result if IDENTIFIER.fullmatch(r['endpoint']) and r.get('context')
             and (r.get('type')=='endpoint' if technology=='PJSIP' else r.get('type') in ('friend','peer','user'))]
 
@@ -46,7 +58,7 @@ def endpoint_states(text, technology):
 
 
 def snapshot(config_dir=Path('/etc/asterisk')):
-    rows={};drivers={}
+    rows={};drivers={};contexts=internal_contexts()
     for technology,files in CONFIGS.items():
         try:
             command='pjsip show endpoints' if technology=='PJSIP' else 'sip show peers'
@@ -59,7 +71,7 @@ def snapshot(config_dir=Path('/etc/asterisk')):
         for name in files:
             path=config_dir/name
             if not path.is_file() or path.stat().st_size>10*1024*1024:continue
-            for row in definitions(path.read_text(errors='replace'),technology):
+            for row in definitions(path.read_text(errors='replace'),technology,contexts):
                 row['state']=states.get(row['endpoint'],'Unknown')
                 state=row['state'].lower().replace('_',' ')
                 row['reachable']=state.startswith('ok') or state in ('not in use','in use','busy','ringing','ring+inuse')

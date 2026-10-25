@@ -8,8 +8,9 @@ The release includes automatic local deployment, a persistent AMI collector, Red
 
 | Check | Result |
 |---|---|
-| Windows Python 3.11 | 296 passed, 4 platform/Redis skips, 79 subtests passed |
-| Linux Python 3.11 + actual dedicated Redis DB | 300 passed, 84 subtests passed |
+| Windows Python 3.11, latest engine/lifecycle review | 311 passed, 4 platform/Redis skips, 79 subtests passed |
+| Linux/Python CI 3.10, 3.11, 3.12 at 5497a36 | 313 passed on each version; two newer engine/lifecycle regression cases pending CI |
+| Earlier live Linux Python 3.11 + actual dedicated Redis DB | 300 passed, 84 subtests passed before subsequent identity/review additions |
 | JavaScript | operations.js, planning.js, organization.js syntax checked |
 | Live account acceptance | Discovered PJSIP phones; rejected numeric SIP trunk assignment; queue scope, forbidden admin APIs, cross-queue pause rejection |
 | Personal profile | Temporary account avatar, old-password verification, password change/relogin and ignored role-escalation input |
@@ -79,4 +80,6 @@ All 17 menu sections were traversed with contextual English help present and no 
 
 ## Independent review follow-up
 
-[Coverage, verified fixes and the remaining external-review gate](INDEPENDENT_REVIEW_BETA22.md). The external reviewer did not extract the whole repository. Its confirmed session, branding, upload, phone and avatar findings were fixed with regression tests. In-house follow-up also added canonical identities, NAT-safe login budgets, serialized deletion, atomic runtime identity snapshots and policy-based alert audio. Windows follow-up passed 308 tests and 79 subtests before the additional legacy-session migration case; final CI identity is recorded in the pull request. The local registry currently supports at most 100 accounts and policies at most 100 queues; requests above the account limit are rejected before writing.
+[Coverage, verified fixes and the remaining external-review gate](INDEPENDENT_REVIEW_BETA22.md). The external reviewer did not extract the whole repository; source was supplied as text in targeted module rounds. Confirmed session, branding, upload, phone, avatar, expired AMI reply and failed-removal rollback findings were fixed with regression tests. In-house follow-up also added canonical identities, NAT-safe login budgets, serialized deletion, atomic runtime identity snapshots and policy-based alert audio. Windows follow-up passed 311 tests and 79 subtests; final CI identity is recorded in the pull request. The local registry currently supports at most 100 accounts and policies at most 100 queues; requests above the account limit are rejected before writing.
+
+After the reviewed collector transport patch, a live read-only smoke verified both laboratory queues, HTTP 200, and active gateway, collector, private Redis and Asterisk services. A byte comparison of 328 installed public runtime/deployment files matched the reviewed index before these final two patches, which were then deployed with private backups.

@@ -14,6 +14,26 @@ UNITS=('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.ti
 def without_managed_access(text):
     return re.sub(r'(?m)^; BEGIN SANEQUEUE MANAGED ACCESS\n.*?^; END SANEQUEUE MANAGED ACCESS\n?','',text,flags=re.S)
 
+def remove_managed_ami(manager, backup, reload_manager):
+    """Restore the exact original configuration if applying removal fails."""
+    if not manager.exists():return
+    original=manager.read_text();updated=without_managed_access(original)
+    if updated==original:return
+    metadata=manager.stat();saved=backup/manager.name
+    shutil.copy2(manager,saved)
+    try:
+        manager.write_text(updated)
+        os.chown(manager,metadata.st_uid,metadata.st_gid)
+        os.chmod(manager,metadata.st_mode & 0o777)
+        if reload_manager():raise RuntimeError('manager_reload_failed')
+    except Exception:
+        shutil.copy2(saved,manager)
+        os.chown(manager,metadata.st_uid,metadata.st_gid)
+        os.chmod(manager,metadata.st_mode & 0o777)
+        try:reload_manager()
+        except Exception:pass
+        raise RuntimeError('manager_removal_failed_original_configuration_restored') from None
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action',choices=('status','disable','enable','uninstall'))
@@ -43,13 +63,8 @@ def main():
         backup=Path('/var/backups/sanequeue')/(time.strftime('%Y%m%d-%H%M%S')+'-uninstall')
         backup.mkdir(parents=True,mode=0o700)
         manager=Path('/etc/asterisk/manager_custom.conf')
-        if manager.exists():
-            original=manager.read_text();updated=without_managed_access(original)
-            if updated!=original:
-                metadata=manager.stat();shutil.copy2(manager,backup/manager.name)
-                manager.write_text(updated);os.chown(manager,metadata.st_uid,metadata.st_gid);os.chmod(manager,metadata.st_mode & 0o777)
-                binary=shutil.which('asterisk') or '/usr/sbin/asterisk'
-                if run(binary,'-rx','manager reload').returncode:raise RuntimeError('manager_reload_failed_backup_retained')
+        binary=shutil.which('asterisk') or '/usr/sbin/asterisk'
+        remove_managed_ami(manager,backup,lambda:run(binary,'-rx','manager reload').returncode)
         for unit in UNITS:
             target=Path('/etc/systemd/system')/unit
             if target.is_file():shutil.copy2(target,backup/unit);target.unlink()
