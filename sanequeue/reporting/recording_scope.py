@@ -9,7 +9,7 @@ import json
 import time
 
 
-def permitted(archive, recording_id, capability, can_queue, *, fallback_queues=()):
+def ownership(archive, recording_id, *, fallback_queues=()):
     with archive.reader() as db:
         now=time.time()
         # Never authorize from a partly rebuilt projection or while SQL/CEL
@@ -47,6 +47,16 @@ def permitted(archive, recording_id, capability, can_queue, *, fallback_queues=(
                            (archive.pbx, *identities, *identities)).fetchall()
         if len(chain) > 1000:
             return False
+        if any(c['duration'] is None or c['ts']+c['duration']>now-120 for c in chain):return False
+        checkpoint=db.execute('SELECT value FROM checkpoints WHERE pbx=? AND source=?',
+                              (archive.pbx,'queue_log')).fetchone()
+        checkpoint=json.loads(checkpoint[0]) if checkpoint else {}
+        gaps=checkpoint.get('coverage_gaps',[])
+        if not gaps and checkpoint.get('last_rotation_detected'):
+            gaps=[[0,checkpoint['last_rotation_detected']]]
+        # The file can begin before the selected queue visit (for example in
+        # IVR). Check its entire observed CDR span, not only that queue span.
+        if any(c['ts']<=right and c['ts']+c['duration']>=left for c in chain for left,right in gaps):return False
         expanded = {value for item in chain for value in (item['uid'], item['linkedid']) if value}
         if expanded - identities:
             # A second identity hop requires a complete conversation ownership
@@ -68,10 +78,7 @@ def permitted(archive, recording_id, capability, can_queue, *, fallback_queues=(
             # An unobserved downstream leg must not ride on the original
             # queue's permission while a transfer CEL event is still late.
             if any(c['duration'] is None or c['ts']+c['duration']>end+2 for c in chain):return False
-            checkpoint=db.execute('SELECT value FROM checkpoints WHERE pbx=? AND source=?',
-                                  (archive.pbx,'queue_log')).fetchone()
-            rotation=json.loads(checkpoint[0]).get('last_rotation_detected') if checkpoint else None
-            if rotation and min(v['entered'] for v in visits)<rotation:return False
+            if any(v['entered']<=right and v['ended']>=left for v in visits for left,right in gaps):return False
         if not visits:
             # Non-queue survey calls require one proven CDR leg and its
             # observed pause memberships. Multi-leg ownership is ambiguous.
@@ -85,4 +92,9 @@ def permitted(archive, recording_id, capability, can_queue, *, fallback_queues=(
             if len(memberships)>1000:return False
             queues.update(item['queue'] for item in memberships)
             queues.update(fallback_queues)
-        return bool(queues) and all(can_queue(queue, capability) for queue in queues)
+        return frozenset(queues)
+
+
+def permitted(archive, recording_id, capability, can_queue, *, fallback_queues=()):
+    queues=ownership(archive,recording_id,fallback_queues=fallback_queues)
+    return bool(queues) and all(can_queue(queue,capability) for queue in queues)

@@ -3,6 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 import time
+from unittest.mock import patch
 
 from flask import Flask
 from flask_login import LoginManager, UserMixin
@@ -188,7 +189,10 @@ class ReportTests(unittest.TestCase):
         ident = visits(self.archive, self.scope, self.stamp, self.stamp + 100)['rows'][0]['id']
         url = '/api/history/visits/' + ident + '/recordings/audio-id' + self.dates
         client = self.client()
-        recording_refs = client.get('/api/history/visits/' + ident + self.dates).json['recordings']
+        from sanequeue.reporting.recording_scope import ownership
+        with patch('sanequeue.api.reports.recording_ownership',wraps=ownership) as proof:
+            recording_refs = client.get('/api/history/visits/' + ident + self.dates).json['recordings']
+            self.assertEqual(proof.call_count,1)
         self.assertEqual(len(recording_refs), 1)
         self.assertNotIn('recording', recording_refs[0])
         response = client.get(url, headers={'Range': 'bytes=4-7'})
@@ -248,6 +252,13 @@ class ReportTests(unittest.TestCase):
         self.assertFalse(permitted(self.archive,'audio','recording_play',allow))
         project_batch(self.archive)
         self.assertTrue(permitted(self.archive,'audio','recording_play',allow))
+        self.archive.append([],checkpoint_source='queue_log',checkpoint=dict(last_rotation_detected=self.stamp+90,
+            coverage_gaps=[[self.stamp+50,self.stamp+90]]))
+        self.assertTrue(permitted(self.archive,'audio','recording_play',allow))
+        self.archive.append([],checkpoint_source='queue_log',checkpoint=dict(last_rotation_detected=self.stamp+90,
+            coverage_gaps=[[self.stamp+20,self.stamp+90]]))
+        self.assertFalse(permitted(self.archive,'audio','recording_play',allow))
+        self.archive.append([],checkpoint_source='queue_log',checkpoint={})
         self.archive.append([],checkpoint_source='health:sql',checkpoint=dict(ok=True,checked=time.time()-100,
             progress=dict(cel_caught_up=True,cdr_caught_up=True)))
         self.assertFalse(permitted(self.archive,'audio','recording_play',allow))
@@ -256,6 +267,12 @@ class ReportTests(unittest.TestCase):
         # A CDR extending past the known queue end cannot be authorized while
         # a transfer event is still missing, even when health looks current.
         self.archive.append([Event('cdr','audio',self.stamp,'CDR',dict(uniqueid='a',linkedid='a',duration=80,recordingfile='voice.wav'))])
+        project_batch(self.archive)
+        self.assertFalse(permitted(self.archive,'audio','recording_play',allow))
+        # A gap before the known visit can hide an earlier queue in the same
+        # recording; its CDR span, not just visit time, must also be checked.
+        self.archive.append([],checkpoint_source='queue_log',checkpoint=dict(coverage_gaps=[[self.stamp-20,self.stamp-10]]))
+        self.archive.append([Event('cdr','audio',self.stamp-30,'CDR',dict(uniqueid='a',linkedid='a',duration=70,recordingfile='voice.wav'))])
         project_batch(self.archive)
         self.assertFalse(permitted(self.archive,'audio','recording_play',allow))
 

@@ -29,4 +29,8 @@ Identity evidence is frozen at first projection, reused on rebuild, and reused a
 
 ## Scope
 
+Recording ownership is computed once per recording within each HTTP request, with a shared one-second proof budget and a maximum 200ms SQLite reader budget per proof; grants are rechecked separately and are never cached between users or requests. If the proof budget is exhausted, remaining recording controls stay unavailable for that response.
+
+New queue-log checkpoints bound rotation uncertainty using the last caught-up observation (or the source timestamp while behind), with a 120-second safety margin. Only calls overlapping a retained gap are denied: calls completed safely before that boundary remain eligible. Up to 32 gap ranges are retained; older ranges are conservatively merged rather than forgotten. Legacy rotation markers without a lower boundary remain ambiguous and need explicit reconciliation.
+
 This is navigation and reporting hardening in a draft preview, not a production certification. The collector, importer, web service and telephony adapter remain independent. Async large exports, scheduled reports, adherence analytics, full post-transfer conversation ownership and durable AI jobs are still separate work. Cross-version PBX and real RTP load tests remain necessary.

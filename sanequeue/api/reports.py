@@ -6,9 +6,10 @@ import io
 import os
 from pathlib import Path
 import sqlite3
+import time
 from zoneinfo import ZoneInfo
 
-from flask import abort, jsonify, request, Response
+from flask import abort, jsonify, request, Response, g
 from flask_login import login_required, current_user
 from werkzeug.exceptions import HTTPException
 
@@ -16,7 +17,7 @@ from sanequeue.reporting import queries
 from sanequeue.reporting import exports
 from sanequeue.reporting import activity_queries
 from sanequeue.reporting import outbound
-from sanequeue.reporting.recording_scope import permitted as recording_permitted
+from sanequeue.reporting.recording_scope import ownership as recording_ownership
 from sanequeue.reporting.audio import byte_range, open_recording
 from sanequeue.reporting.privacy import display_number
 from sanequeue.reporting.store import Archive, QueryDeadline
@@ -26,6 +27,23 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             recording_root='/var/spool/asterisk/monitor', pbx='primary',reason_label=lambda queue,reason:reason):
     archive = Archive(path, pbx=pbx)
     app.config['SANEQUEUE_HISTORY_INSTALLED'] = True
+
+    def recording_permitted(archive,ident,capability,can_queue,*,fallback_queues=()):
+        # Cache ownership only within this HTTP request, then recheck each
+        # capability. Never cache grants across requests or users. A page of
+        # audio proofs has a shared one-second budget, not N times five seconds.
+        cache=g.setdefault('report_recording_proofs',{})
+        deadline=g.setdefault('report_recording_deadline',time.monotonic()+1)
+        key=(ident,tuple(sorted(fallback_queues)))
+        if key not in cache:
+            remaining=deadline-time.monotonic()
+            if remaining<=0:cache[key]=False
+            else:
+                bounded=Archive(archive.path,pbx=archive.pbx,read_seconds=min(.2,remaining))
+                try:cache[key]=recording_ownership(bounded,ident,fallback_queues=fallback_queues)
+                except QueryDeadline:cache[key]=False
+        queues=cache[key]
+        return bool(queues) and all(can_queue(queue,capability) for queue in queues)
 
     def context():
         if 'reports' not in sections():
