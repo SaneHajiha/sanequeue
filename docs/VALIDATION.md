@@ -1,6 +1,6 @@
 # Current validation · beta.22
 
-[Current acceptance, defects, resource measurements and remaining gates](AUDIT_BETA22.md). Windows: 296 passed / 4 skips / 79 subtests. Linux with actual Redis: 300 passed / 84 subtests. Earlier results below are historical.
+[Current acceptance, defects, resource measurements and target-environment checks](AUDIT_BETA22.md). Final runtime CI at eefed9d: 317 passed on Python 3.10, 3.11 and 3.12. Windows engine/lifecycle follow-up: 311 passed / 4 skips / 79 subtests; subsequent focused inventory suite: 5 passed. Earlier Linux and browser results below are historical and remain scoped to their recorded versions.
 
 ---
 
