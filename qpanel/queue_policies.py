@@ -74,7 +74,7 @@ def validate_config(raw):
             base['staffing'][key]=_bounded_int(staffing.get(key,base['staffing'][key]),lo,hi,key)
         base['staffing']['enabled']=staffing.get('enabled',base['staffing']['roster_size']>0) is True
         if base['staffing']['enabled'] and not base['staffing']['roster_size']:raise ValueError('staffing_roster_required')
-        reasons=[r for r in q.get('pause_reasons',DEFAULT_REASONS) if isinstance(r,dict) and r.get('id')!='survey']
+        reasons=[r for r in q.get('pause_reasons',DEFAULT_REASONS) if isinstance(r,dict)]
         if not isinstance(reasons,list) or len(reasons)>30: raise ValueError('invalid_pause_reasons')
         used=set();base['pause_reasons']=[]
         for r in reasons:

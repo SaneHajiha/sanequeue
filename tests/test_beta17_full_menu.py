@@ -7,7 +7,7 @@ from jinja2 import Environment
 ROOT=Path(__file__).resolve().parents[1]
 HTML=(ROOT/'qpanel/themes/qpanel/templates/operations.html').read_text(encoding='utf-8')
 JS=(ROOT/'qpanel/themes/qpanel/static/js/operations.js').read_text(encoding='utf-8')
-ALL=['live','queues','calls','waiting','agents','presence','pbx','features','control','wallboard','alerts','audit','policies','users','settings','shifts','directory']
+ALL=['live','queues','calls','waiting','agents','presence','pbx','features','control','wallboard','alerts','audit','policies','users','telephony','settings','shifts','directory']
 
 class FullMenuTests(unittest.TestCase):
     def test_template_is_valid_jinja(self):

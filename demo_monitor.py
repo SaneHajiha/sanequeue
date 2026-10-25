@@ -202,22 +202,33 @@ if os.environ.get('SANEQUEUE_COLLECTOR_CONFIG'):
     module.app.config['SANEQUEUE_NOTIFICATIONS']=NOTIFICATIONS
     WORKER_HEALTH={'reconcile_last_ok':None,'reconcile_failures':0,'delivery_failures':0}
     module.app.config['SANEQUEUE_WORKER_HEALTH']=WORKER_HEALTH
-    module.app.config['SANEQUEUE_ALERT_PROVIDER']=ACTION_OUTBOX.report
+    module.app.config['SANEQUEUE_ALERT_PROVIDER']=lambda queues:ACTION_OUTBOX.report(queues,include_system=cfg.get_value_set_default('roles',current_user.get_id() or '','viewer') in ('admin','supervisor'))
+    from sanequeue.alerts.system import SystemAlerts
+    SYSTEM_ALERTS=SystemAlerts()
     def bale_enabled():
         return os.getenv('SANEQUEUE_ENABLE_BALE_ALERTS')=='1' and bool(os.getenv('SANEQUEUE_BALE_BOT_TOKEN') and os.getenv('SANEQUEUE_BALE_CHAT_ID'))
     def reconcile_commands():
         while True:
             time.sleep(2)
+            if module_disabled():continue
+            connected=False;state={};alerts=[]
             try:
                 state,health=PERSISTENT_READER.read()
+                connected=True
                 ACTION_LEDGER.reconcile(state)
                 report=POLICIES.evaluate(legacy_queues(state))
-                ACTION_OUTBOX.observe(report['alerts'],POLICIES,delivery_enabled=NOTIFICATIONS.enabled() | ({'bale'} if bale_enabled() else set()))
+                alerts=report['alerts']
                 WORKER_HEALTH['reconcile_last_ok']=time.time()
             except Exception:
                 WORKER_HEALTH['reconcile_failures']+=1
                 try:ACTION_LEDGER.reconcile({})
                 except Exception:pass
+            try:
+                from sanequeue.realtime.local_inventory import read_snapshot
+                rules=NOTIFICATIONS.system_rules()
+                critical=SYSTEM_ALERTS.evaluate(read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json')),state.get('inventory',{}).get('live_endpoints',{}),connected,rules)
+                ACTION_OUTBOX.observe(alerts+critical,POLICIES,delivery_enabled=NOTIFICATIONS.enabled() | ({'bale'} if bale_enabled() else set()),system_rules=rules)
+            except Exception:WORKER_HEALTH['reconcile_failures']+=1
     def deliver_notifications():
         from qpanel.queue_policies import send_bale_alert
         while True:
@@ -1087,6 +1098,8 @@ def runtime_metrics():
 
 from qpanel.planning import PlanningStore
 PLANNING = PlanningStore(STATE / 'planning.sqlite3')
+from sanequeue.pbx.features import FeatureStore
+PLANNING.number_policy=lambda:FeatureStore(STATE).read()['caller_id']
 module.app.config['SANEQUEUE_CONTACT_PROVIDER']=PLANNING.contact
 module.app.config['SANEQUEUE_CONTACT_ENRICHER']=PLANNING.enrich
 def profile_dial_options():
@@ -1102,7 +1115,8 @@ install_activity(module.app,STATE/'activity.sqlite3',
     lambda:cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'),
     lambda:[value.strip() for value in cfg.get_value_set_default('agent_interfaces',current_user.get_id() or '','').split(',') if value.strip()],
     POLICIES.queue,
-    lambda:read_accounts(ACCOUNTS_PATH).get(current_user.get_id(),{}).get('phone_assigned_at',0))
+    lambda:read_accounts(ACCOUNTS_PATH).get(current_user.get_id(),{}).get('phone_assigned_at',0),
+    lambda queue:POLICIES.access(current_user.get_id() or '',cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'),queue,'caller_details'))
 
 @module.app.route('/api/planning/<kind>', methods=['GET','POST'])
 @login_required
@@ -1131,9 +1145,24 @@ def planning_api(kind):
     return jsonify(rows=rows,queues=list(allowed),editable=role in ('admin','supervisor'),dial_queues=dial_queues,
                    assigned_phone=cfg.get_value_set_default('supervisor_extensions',current_user.get_id() or '',''))
 
+from sanequeue.pbx.features import install as install_pbx_features
+install_pbx_features(module.app,STATE,lambda:cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'))
+
+def run_callbacks():
+    from sanequeue.pbx.callbacks import CallbackWorker
+    worker=CallbackWorker(STATE)
+    while True:
+        time.sleep(3)
+        if module_disabled():continue
+        try:
+            state,health=PERSISTENT_READER.read()
+            if health.get('connected') and health.get('complete'):worker.tick(state)
+        except Exception:module.app.logger.warning('Callback worker deferred; see PBX module status')
+
 if PERSISTENT_READER is not None and SERVER_MODE:
     threading.Thread(target=reconcile_commands,name='command-alert-reconcile',daemon=True).start()
     threading.Thread(target=deliver_notifications,name='alert-delivery',daemon=True).start()
+    threading.Thread(target=run_callbacks,name='internal-callback',daemon=True).start()
 elif os.getenv('SANEQUEUE_ENABLE_BALE_ALERTS') == '1':
     threading.Thread(target=_background_alert_loop, name='sanequeue-bale-alerts', daemon=True).start()
 

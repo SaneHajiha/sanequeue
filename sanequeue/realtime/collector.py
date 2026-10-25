@@ -14,7 +14,7 @@ log = logging.getLogger('sanequeue.collector')
 
 
 class Collector:
-    def __init__(self, settings, store, activity=None):
+    def __init__(self, settings, store, activity=None,calls=None):
         self.settings, self.store = settings, store
         self.state = QueueState()
         self.journeys = JourneyEngine()
@@ -29,10 +29,22 @@ class Collector:
         self.metrics = {'connections': 0, 'reconnects': 0, 'resyncs': 0, 'events': 0}
         self.reason = 'starting'
         self.activity=activity
+        self.calls=calls
+        from sanequeue.pbx.events import CallbackEvents
+        self.callback_events=CallbackEvents()
 
     def event(self, packet):
         self.metrics['events'] += 1
+        if packet.get('event','').lower() in ('peerstatus','contactstatus'):
+            import re
+            peer=packet.get('peer') or ('PJSIP/'+packet.get('endpointname',''))
+            if re.fullmatch(r'(?:SIP|PJSIP)/[A-Za-z0-9_.-]{1,48}',peer):
+                table=self.state.inventory.setdefault('live_endpoints',{})
+                if peer in table or len(table)<2000:
+                    table[peer]=dict(state=packet.get('peerstatus') or packet.get('contactstatus','unknown'),observed_at=time.time())
+                    self.state.version+=1
         self.journeys.ingest(packet)
+        if self.calls:self.calls.ingest(packet,self.state.queues)
         if packet.get('event', '').lower() in ('reload', 'fullybooted'):
             self.complete = False
             self.resync_requested = True
@@ -42,6 +54,7 @@ class Collector:
             self.journal.append((dict(packet), time.time()))
         else:
             handled=self.state.ingest(packet)
+            self.callback_events.observe(packet,self.state)
             if not handled and str(packet.get('event','')).lower()=='newexten' and str(packet.get('context','')).lower().startswith('ivr-'):
                 self.state.version+=1
             kind=str(packet.get('event','')).lower()
@@ -86,6 +99,7 @@ class Collector:
                     packet = dict(packet, _skip_counter='1')
                 staged.clock = lambda observed=observed: observed
                 staged.ingest(packet)
+                self.callback_events.observe(packet,staged)
             staged.clock = time.time
             # Seed only associations actually present in the initial waiting list.
             for name, queue in staged.queues.items():
@@ -128,6 +142,7 @@ class Collector:
         while True:
             self.state.expire_timers()
             if self.activity and self.connected and self.complete:self.activity.observe(self.state.queues,time.time())
+            if self.calls and self.connected and self.complete:self.calls.observed=time.time()
             marker = (self.generation, self.state.version, self.connected, self.complete, self.reason)
             changed = marker != previous
             body = self.snapshot() if changed else None
@@ -141,6 +156,7 @@ class Collector:
             await asyncio.sleep(5)
             if not await self.store.renew():raise ConnectionError('collector_lease_lost')
             await self.activity.flush()
+            if self.calls:await self.calls.flush()
 
     def snapshot(self):
         return dict(self.state.snapshot(), generation=self.generation,
@@ -229,6 +245,7 @@ class Collector:
         self.generation = uuid.uuid4().hex
         if self.activity:self.activity.reset(self.generation)
         self.state = QueueState()
+        self.callback_events.by_uid.clear()
         self.journeys = JourneyEngine()
         self.journey_seeded = False
         self.connected, self.complete, self.reason = False, False, 'synchronizing'
@@ -249,9 +266,12 @@ class Collector:
             await asyncio.gather(*tasks, return_exceptions=True)
             if self.activity:
                 try:
-                    if await self.store.renew():await self.activity.flush()
+                    if await self.store.renew():
+                        await self.activity.flush()
+                        if self.calls:await self.calls.flush()
                 except Exception:
                     log.warning('activity_flush_skipped_after_lease_loss')
+            if self.calls:self.calls.disconnected()
             try:
                 await self.store.publish(self.snapshot(), self.health())
             except Exception:

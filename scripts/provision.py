@@ -61,6 +61,8 @@ def main():
     if args.check:
         print(json.dumps({'preflight':'passed','python':sys.version.split()[0],'system_python_unchanged':True,'automatic_queue_discovery':True}));return
     state=Path('/var/lib/sanequeue');etc=Path('/etc/sanequeue');link=Path('/opt/sanequeue')
+    resolved_state=state.resolve()
+    if resolved_state.parent!=Path('/var/lib') or not resolved_state.name.startswith('sanequeue'):raise ValueError('unsafe_private_state_target')
     existing=read_accounts(state/'local_accounts.json')
     username=password=phone=None
     if not existing:
@@ -85,14 +87,14 @@ def main():
     stamp=time.strftime('%Y%m%d-%H%M%S')
     backup=Path('/var/backups/sanequeue')/(stamp+'-installer');backup.mkdir(parents=True,mode=0o700)
     os.chmod(backup,0o700)
-    units=('sanequeue.service','sanequeue-collector.service','sanequeue-redis.service','sanequeue-inventory.service','sanequeue-inventory.timer')
+    units=('sanequeue.service','sanequeue-collector.service','sanequeue-redis.service','sanequeue-inventory.service','sanequeue-inventory.timer','sanequeue-fastagi.service','sanequeue-pbx-apply.service','sanequeue-pbx-apply.timer')
     active={unit:subprocess.run(['systemctl','is-active','--quiet',unit]).returncode==0 for unit in units}
     old_link=str(link.resolve()) if link.exists() else None
     old_physical=None
     created_control_link=False
     changed=[]
     try:
-        for unit in ('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer'):
+        for unit in ('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer','sanequeue-fastagi.service','sanequeue-pbx-apply.timer','sanequeue-pbx-apply.service'):
             if active[unit] or (Path('/etc/systemd/system')/unit).exists():
                 run(['systemctl','stop',unit])
         if etc.exists():shutil.copytree(etc,backup/'etc')
@@ -109,11 +111,11 @@ def main():
         state.mkdir(parents=True,exist_ok=True)
         def private(path,content):
             path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
-            with os.fdopen(os.open(path,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o640),'w') as stream:stream.write(content)
+            with os.fdopen(os.open(path,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|getattr(os,'O_NOFOLLOW',0),0o640),'w') as stream:stream.write(content)
             os.chown(path,0,group.gr_gid);os.chmod(path,0o640);changed.append(path)
         def asterisk_config(path,content):
             previous=path.stat() if path.exists() else None
-            with os.fdopen(os.open(path,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o640),'w') as stream:stream.write(content)
+            with os.fdopen(os.open(path,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|getattr(os,'O_NOFOLLOW',0),0o640),'w') as stream:stream.write(content)
             os.chown(path,previous.st_uid if previous else 0,previous.st_gid if previous else grp.getgrnam('asterisk').gr_gid)
             os.chmod(path,stat.S_IMODE(previous.st_mode) if previous else 0o640)
         read_secret,control_secret,redis_secret=(secrets.token_hex(32) for _ in range(3))
@@ -139,9 +141,12 @@ def main():
         if not (etc/'inventory.ini').exists():private(etc/'inventory.ini','[inventory]\ninternal_contexts=from-internal\n')
         private(etc/'gateway.env',f'SANEQUEUE_PUBLIC_ORIGINS={origin},http://127.0.0.1:5000\nSANEQUEUE_HTTPS={int(parsed.scheme=="https")}\nSANEQUEUE_CONTROL_MODE=rbac\nSANEQUEUE_ADVANCED_ACTIONS=transfer,attended_transfer,cancel_transfer,park,retrieve,pickup,dial,hangup_active\nSANEQUEUE_TRANSFER_CONTEXT=from-internal\nSANEQUEUE_PARKING_LOT=default\nSANEQUEUE_AUTO_EXTENSIONS=1\n')
         private(etc/'redis.conf',f'bind 127.0.0.1\nport 16379\nprotected-mode yes\nrequirepass {redis_secret}\nsave ""\nappendonly no\nmaxmemory 128mb\nmaxmemory-policy noeviction\ndaemonize no\n')
-        for root,dirs,files in os.walk(state):
-            os.chown(root,owner.pw_uid,group.gr_gid);os.chmod(root,0o750)
-            for name in files:os.chown(Path(root)/name,owner.pw_uid,group.gr_gid);os.chmod(Path(root)/name,0o600)
+        for root,dirs,files in os.walk(resolved_state):
+            if Path(root).is_symlink() or any((Path(root)/name).is_symlink() for name in dirs+files):raise ValueError('symlink_in_private_state_refused')
+            os.chown(root,owner.pw_uid,group.gr_gid,follow_symlinks=False);os.chmod(root,0o750,follow_symlinks=False)
+            for name in files:
+                path=Path(root)/name
+                os.chown(path,owner.pw_uid,group.gr_gid,follow_symlinks=False);os.chmod(path,0o600,follow_symlinks=False)
         if link.exists() and not link.is_symlink():
             if not link.resolve().is_relative_to(Path('/opt')):raise ValueError('unsafe_existing_source')
             old_physical=Path('/opt')/('sanequeue-before-'+stamp);link.rename(old_physical)
@@ -153,7 +158,7 @@ def main():
             if not control_link.is_symlink() or str(control_link.readlink())!='/opt/sanequeue/scripts/sanequeuectl':raise RuntimeError('sanequeuectl_path_collision')
         else:
             control_link.symlink_to('/opt/sanequeue/scripts/sanequeuectl');created_control_link=True
-        for source,destination in (('sanequeue-asgi.service','sanequeue.service'),('sanequeue-collector.service','sanequeue-collector.service'),('sanequeue-inventory.service','sanequeue-inventory.service'),('sanequeue-inventory.timer','sanequeue-inventory.timer')):
+        for source,destination in (('sanequeue-asgi.service','sanequeue.service'),('sanequeue-collector.service','sanequeue-collector.service'),('sanequeue-inventory.service','sanequeue-inventory.service'),('sanequeue-inventory.timer','sanequeue-inventory.timer'),('sanequeue-fastagi.service','sanequeue-fastagi.service'),('sanequeue-pbx-apply.service','sanequeue-pbx-apply.service'),('sanequeue-pbx-apply.timer','sanequeue-pbx-apply.timer')):
             text=(release/'deploy'/source).read_text()
             if destination=='sanequeue.service':text=text.replace('--host 127.0.0.1 --port 5000','--host '+bind+' --port '+str(web_port))
             (Path('/etc/systemd/system')/destination).write_text(text)
@@ -161,7 +166,9 @@ def main():
         Path('/etc/systemd/system/sanequeue-redis.service').write_text(redis_unit)
         run(['systemctl','daemon-reload']);run(['systemctl','restart','sanequeue-redis'])
         run(['systemctl','start','sanequeue-inventory.service'])
-        run(['systemctl','enable','--now','sanequeue-inventory.timer','sanequeue-collector.service','sanequeue.service','sanequeue-redis.service'])
+        (Path('/var/lib/asterisk/sounds/custom')).mkdir(parents=True,exist_ok=True)
+        run(['systemctl','start','sanequeue-pbx-apply.service'])
+        run(['systemctl','enable','--now','sanequeue-inventory.timer','sanequeue-collector.service','sanequeue.service','sanequeue-redis.service','sanequeue-pbx-apply.timer','sanequeue-fastagi.service'])
         from redis import Redis
         cache=Redis(host='127.0.0.1',port=16379,password=redis_secret,socket_timeout=3)
         maintenance=(state/'module.disabled').exists()

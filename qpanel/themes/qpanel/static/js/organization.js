@@ -34,7 +34,7 @@
    document.querySelectorAll('[data-organization-mark]').forEach(node=>node.hidden=Boolean(value.logo_url));
    form.elements.logo.value='';form.elements.remove_logo.checked=false;
    feedback.textContent=t('هویت سازمان ذخیره شد؛ صفحهٔ ورود هم همین تنظیمات را نمایش می‌دهد.','Organization saved; the sign-in page uses the same identity.');
-  }catch(error){feedback.textContent=t('ذخیره انجام نشد؛ نام و تصویر PNG/JPEG/WebP حداکثر ۵۱۲ کیلوبایت را بررسی کنید.','Save failed; check the name and PNG/JPEG/WebP image up to 512 KB.');}
+  }catch(error){feedback.textContent=t('ذخیره انجام نشد؛ قالب واقعی فایل و نام را بررسی کنید.  نام و تصویر PNG/JPEG/WebP/AVIF حداکثر ۵۱۲ کیلوبایت را بررسی کنید.','Save failed; check the name and PNG/JPEG/WebP/AVIF image up to 512 KB.');}
   finally{button.disabled=false;}
  });
  for(const enabled of [false,true])document.getElementById(enabled?'module-enable':'module-disable').addEventListener('click',async()=>{
@@ -42,5 +42,5 @@
    const value=await api('/api/module',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});moduleState(value);
   }catch(error){moduleStatus.textContent=t('تغییر وضعیت انجام نشد؛ از فرمان اضطراری روی سرور استفاده کنید.','State change failed; use the server emergency command.');}
  });
- document.querySelector('[data-view="settings"]')?.addEventListener('click',load);
+ document.querySelector('nav button[data-view="settings"]')?.addEventListener('click',load);
 })();

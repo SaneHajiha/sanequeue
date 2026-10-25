@@ -1,3 +1,12 @@
+# 2.1.0-beta.25 · 2026-10-25
+
+- Queue/operations visual hierarchy, accurate health labels and fullscreen summaries.
+- Explicit observed daily metrics, agent activity and callback outcome evidence.
+- Optional bounded FastAGI callback/waiting/caller-ID modules with bundled audio and safe restore.
+- Notification languages and debounced critical PBX health alerts.
+- Directory editing, AVIF logo upload and immediate telephone-module disable fixes.
+- See [release notes](docs/RELEASE_BETA25.md) and [test evidence / pilot limits](docs/AUDIT_BETA25.md).
+
 # 2.1.0-beta.24 · 2026-10-25
 
 - Browser visual follow-up: keep all three dashboard panels in their desktop columns, remove legacy queue-card grid tracks and prevent mobile profile-header overflow.

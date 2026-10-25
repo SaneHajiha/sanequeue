@@ -5,8 +5,9 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{ organization.name }} | {{ t('مرکز عملیات تماس', 'Contact center') }}</title>
 <link rel="stylesheet" href="{{ theme_static('css/operations.css') }}?v={{ current_version() }}">
-<link rel="stylesheet" href="{{ theme_static('css/accessibility.css') }}?v={{ current_version() }}"></head>
-<body>
+<link rel="stylesheet" href="{{ theme_static('css/accessibility.css') }}?v={{ current_version() }}">
+<link rel="stylesheet" href="{{ theme_static('css/overview.css') }}?v={{ current_version() }}"></head>
+<body data-view="live">
 <a class="skip" href="#main">{{ t('رفتن به محتوا','Skip to content') }}</a>
 <aside class="sidebar">
  <a class="brand" href="/operations"><img class="organization-logo" data-organization-logo {% if organization.logo_url %}src="{{ organization.logo_url }}"{% else %}hidden{% endif %} alt="{{ organization.name }}"><span class="mark" data-organization-mark {% if organization.logo_url %}hidden{% endif %}>S</span><span><b data-organization-name>{{ organization.name }}</b><small data-organization-subtitle>{{ organization.subtitle }}</small></span></a>
@@ -29,6 +30,7 @@
   <p class="nav-caption">{{ t('مدیریت','ADMIN') }}</p>
   {% if can_view_section('policies') %}<button type="button" class="nav-item" data-view="policies"><span>⚖</span>{{ t('قوانین صف و دسترسی','Queue policies & access') }}</button>{% endif %}
   {% if can_view_section('users') %}<button type="button" class="nav-item" data-view="users"><span>♧</span>{{ t('کاربران و دسترسی‌ها','Users & permissions') }}</button>{% endif %}
+  {% if can_view_section('telephony') %}<button type="button" class="nav-item" data-view="telephony"><span>☎</span>{{ t('ماژول‌های تلفنی','Telephone modules') }}</button>{% endif %}
   {% if can_view_section('settings') %}<button type="button" class="nav-item" data-view="settings"><span>⚙</span>{{ t('تنظیمات سازمان و سرویس','Organization & service') }}</button>{% endif %}
   {% endif %}
  {% if can_view_section('shifts') %}<button type="button" class="nav-item" data-view="shifts"><span>◷</span>{{ t('برنامه شیفت','Shift planning') }}</button>{% endif %}
@@ -46,19 +48,18 @@
  <div id="error" class="notice danger" role="alert" hidden></div>
  <details class="contextual-help" id="context-help"><summary><span aria-hidden="true">ⓘ</span> {{ t('راهنمای این بخش','Help for this section') }}<small id="context-help-title"></small></summary><div id="context-help-content"></div></details>
  <section class="toolbar" aria-label="{{ t('فیلترها','Filters') }}"><label class="search"><span>⌕</span><input id="search" type="search" placeholder="{{ t('جست‌وجوی صف یا کارشناس…','Search queues or agents…') }}" aria-label="{{ t('جست‌وجو','Search') }}"></label><label>{{ t('صف','Queue') }} <select id="queue-filter"><option value="">{{ t('همه صف‌ها','All queues') }}</option></select></label><label>{{ t('برجسته‌سازی انتظار','Wait highlight') }} <input id="threshold" type="number" min="5" max="3600" step="5" value="{{ ops_config.wait_threshold }}"> {{ t('ثانیه','sec') }}</label><button id="wallboard" title="Wallboard / Escape">⛶ {{ t('نمای دیواری','Wallboard') }}</button></section>
+ <details class="monitor-preferences"><summary>{{ t('بازه شاخص‌ها، منبع آمار و گزینه‌های نمایش','KPI period, metric source & display preferences') }} <span aria-hidden="true">⌄</span></summary><div class="monitor-preferences-body"> <div class="monitor-options kpi-period-control"><label>{{ t('بازه شاخص‌های عملکرد','Performance KPI period') }} <select id="kpi-period"><option value="pbx">{{ t('شمارنده تجمیعی مرکز تلفن','PBX cumulative counters') }}</option><option value="today" selected>{{ t('امروز؛ تماس‌های ثبت‌شده ماژول','Today; module-observed calls') }}</option></select></label><span id="kpi-period-note" class="report-note" role="status"></span></div>
  <div class="monitor-options"><button id="sound-toggle" aria-pressed="false">{{ t('هشدار صوتی: خاموش','Sound alerts: off') }}</button><label {% if ops_config.realtime_push %}hidden{% endif %}>{{ t('هشدار تعداد منتظر','Waiting count alert') }} <input id="waiting-threshold" type="number" min="1" max="1000" value="5"></label><label>{{ t('هشدار استراحت (دقیقه)','Pause alert (min)') }} <input id="pause-threshold" type="number" min="1" max="480" value="15"></label><span id="staffing-info" class="muted"></span></div>
+</div></details>
  <section id="live-view" class="view">
-  <div class="section-label"><h2>{{ t('در یک نگاه','At a glance') }}</h2><span>{{ t('شمارنده‌ها از آخرین بازنشانی صف','Counters since last queue reset') }} · <span id="updated">—</span></span></div>
+  <div class="section-label"><h2>{{ t('در یک نگاه','At a glance') }}</h2><span><span id="kpi-period-short">{{ t('شمارنده‌ها از آخرین بازنشانی صف','Counters since last queue reset') }}</span> · <span id="updated">—</span></span></div>
   <div id="metrics" class="metrics" aria-live="polite"></div>
 
+  <section class="panel ref-alerts"><div class="panel-heading"><div><h2>{{ t('هشدارهای عملیاتی','Operational alerts') }}</h2><p>{{ t('هشدارهای فعال صف و سلامت تلفن؛ برای رسیدگی وارد جزئیات شوید.','Active queue and telephony health alerts; open details to investigate.') }}</p></div><button type="button" data-open="alerts" class="subtle-link">{{ t('نمایش همه','View all') }} ↗</button></div><div id="alerts" class="ref-alert-items"></div><div class="legend"><span><i class="dot ready"></i>{{ t('آماده','Ready') }}</span><span><i class="dot busy"></i>{{ t('مشغول','Busy') }}</span><span><i class="dot paused"></i>{{ t('استراحت','Paused') }}</span><span><i class="dot offline"></i>{{ t('خارج از دسترس','Offline') }}</span></div></section>
   <div class="reference-three-panel" role="region" aria-label="{{ t('داشبورد صف و انتظار و کارشناسان','Queue, waiting and agent dashboard') }}">
-   <section class="panel ref-queues"><div class="panel-heading"><div><h2>{{ t('وضعیت صف‌ها','Queue status') }}</h2><p>{{ t('درصد آمادگی و ظرفیت لحظه‌ای','Readiness percentage and live capacity') }}</p></div><span class="tag" id="queue-count">—</span></div><div id="queue-cards" class="queue-cards"></div></section>
-   <section class="panel ref-waiting"><div class="panel-heading"><div><h2>{{ t('تماس‌های منتظر','Waiting calls') }}</h2><p>{{ t('جایگاه، زمان انتظار و صف','Position, wait time and queue') }}</p></div><span class="tag waiting-count-chip" id="waiting-count">—</span></div><div class="table-wrap"><table class="compact-table"><thead><tr><th>{{ t('تماس‌گیرنده','Caller') }}</th><th>{{ t('صف','Queue') }}</th><th>{{ t('ترانک ورودی','Ingress trunk') }}</th><th>{{ t('موقعیت','Position') }}</th><th>{{ t('انتظار','Wait') }}</th><th>{{ t('اولویت','Priority') }}</th></tr></thead><tbody id="call-rows"></tbody></table></div></section>
-   <section class="panel ref-agents dashboard-team"><div class="panel-heading"><div><h2>{{ t('کارشناسان','Agents') }}</h2><p>{{ t('وضعیت آنلاین و حضور در صف','Availability and queue membership') }}</p></div><button class="subtle-link" data-open="agents">{{ t('همه','All') }} ↗</button></div><div class="agent-filter-summary" id="overview-agent-totals">—</div><div id="overview-agent-list" class="dashboard-agent-list"></div></section>
-  </div>
-  <div class="dashboard-bottom">
-   <section class="panel ref-active"><div class="panel-heading"><div><h2>{{ t('تماس‌های جاری','Current calls') }}</h2><p>{{ t('عضویت‌های درگیر مکالمه یا زنگ؛ معادل تعداد تماس یکتا نیست','Busy/ringing memberships, not unique calls') }}</p></div><span class="tag" id="dashboard-active-count">—</span></div><div class="table-wrap"><table class="compact-table"><thead><tr><th>{{ t('کارشناس','Agent') }}</th><th>{{ t('صف','Queue') }}</th><th>{{ t('وضعیت','State') }}</th><th>{{ t('مدت','Duration') }}</th></tr></thead><tbody id="dashboard-active-rows"></tbody></table></div></section>
-   <section class="panel action-overview"><div class="panel-heading"><div><h2>{{ t('عملیات سریع','Quick operations') }}</h2><p>{{ t('پیش از ارسال دستور، عضو یا تماس آزمایشی را انتخاب کن','Select a verified test target first') }}</p></div></div><div class="quick-grid">
+<div class="overview-column overview-queues"><section class="panel ref-queues"><div class="panel-heading"><div><h2>{{ t('وضعیت صف‌ها','Queue status') }}</h2><p>{{ t('درصد آمادگی و ظرفیت لحظه‌ای','Readiness percentage and live capacity') }}</p></div><span class="tag" id="queue-count">—</span></div><div id="queue-cards" class="queue-cards"></div></section></div>
+<div class="overview-column overview-traffic"><section class="panel ref-waiting"><div class="panel-heading"><div><h2>{{ t('تماس‌های منتظر','Waiting calls') }}</h2><p>{{ t('جایگاه، زمان انتظار و صف','Position, wait time and queue') }}</p></div><span class="tag waiting-count-chip" id="waiting-count">—</span></div><div class="table-wrap"><table class="compact-table"><thead><tr><th>{{ t('تماس‌گیرنده','Caller') }}</th><th>{{ t('صف','Queue') }}</th><th>{{ t('ترانک ورودی','Ingress trunk') }}</th><th>{{ t('موقعیت','Position') }}</th><th>{{ t('انتظار','Wait') }}</th><th>{{ t('اولویت','Priority') }}</th></tr></thead><tbody id="call-rows"></tbody></table></div></section><section class="panel ref-active"><div class="panel-heading"><div><h2>{{ t('تماس‌های جاری','Current calls') }}</h2><p>{{ t('عضویت‌های درگیر مکالمه یا زنگ؛ معادل تعداد تماس یکتا نیست','Busy/ringing memberships, not unique calls') }}</p></div><span class="tag" id="dashboard-active-count">—</span></div><div class="table-wrap"><table class="compact-table"><thead><tr><th>{{ t('کارشناس','Agent') }}</th><th>{{ t('صف','Queue') }}</th><th>{{ t('وضعیت','State') }}</th><th>{{ t('مدت','Duration') }}</th></tr></thead><tbody id="dashboard-active-rows"></tbody></table></div></section></div>
+<div class="overview-column overview-team"><section class="panel ref-agents dashboard-team"><div class="panel-heading"><div><h2>{{ t('کارشناسان','Agents') }}</h2><p>{{ t('وضعیت آنلاین و حضور در صف','Availability and queue membership') }}</p></div><button class="subtle-link" data-open="agents">{{ t('همه','All') }} ↗</button></div><div class="agent-filter-summary" id="overview-agent-totals">—</div><div id="overview-agent-list" class="dashboard-agent-list"></div></section><section class="panel action-overview"><div class="panel-heading"><div><h2>{{ t('عملیات سریع','Quick operations') }}</h2><p>{{ t('پیش از ارسال دستور، عضو یا تماس آزمایشی را انتخاب کن','Select a verified test target first') }}</p></div></div><div class="quick-grid">
     <button data-open="calls"><span>◉</span>{{ t('شنود','Listen') }}</button>
     <button data-open="calls"><span>◎</span>{{ t('نجوا','Whisper') }}</button>
     <button data-open="calls"><span>♙</span>{{ t('ورود به مکالمه','Barge') }}</button>
@@ -67,10 +68,10 @@
     <button data-open="agents"><span>Ⅱ</span>{{ t('توقف/ادامه','Pause/Resume') }}</button>
     <button data-open="wallboard"><span>▣</span>{{ t('Wallboard','Wallboard') }}</button>
     <button data-open="pbx"><span>◫</span>{{ t('سلامت PBX','PBX health') }}</button>
-   </div><p class="quick-note">{{ t('وضعیت زنده، مجوز صف و مجوز عملیات قبل از هر فرمان بررسی می‌شوند.','Fresh state, queue scope and action permissions are checked before every command.') }}</p></section>
-  </div>
+   </div><p class="quick-note">{{ t('وضعیت زنده، مجوز صف و مجوز عملیات قبل از هر فرمان بررسی می‌شوند.','Fresh state, queue scope and action permissions are checked before every command.') }}</p></section></div>
+</div>
   <section class="panel sq-journey-panel"><div class="panel-heading"><div><h2>{{ t('تماس‌های انتقال‌یافته','Transferred calls') }}</h2><p>{{ t('تماس‌های مرتبط با صف، حتی پس از خروج از صف','Queue-related calls, even after transfer') }}</p></div><button class="subtle-link" type="button" data-open="calls">{{ t('تایم‌لاین کامل','Full journey') }} ↗</button></div><div id="dashboard-journey-cards" class="sq-journey-list compact" aria-live="polite"></div></section>
-  <section class="panel ref-alerts"><div class="panel-heading"><div><h2>{{ t('هشدارهای عملیاتی','Operational alerts') }}</h2><p>{{ t('فقط صف‌های دارای عضویت یا تماس بررسی می‌شوند','Only active/configured queues trigger staffing alerts') }}</p></div><button type="button" data-open="alerts" class="subtle-link">{{ t('نمایش همه','View all') }} ↗</button></div><div id="alerts" class="ref-alert-items"></div><div class="legend"><span><i class="dot ready"></i>{{ t('آماده','Ready') }}</span><span><i class="dot busy"></i>{{ t('مشغول','Busy') }}</span><span><i class="dot paused"></i>{{ t('استراحت','Paused') }}</span><span><i class="dot offline"></i>{{ t('خارج از دسترس','Offline') }}</span></div></section>
+
   <div class="insights-strip"><div class="source-caption"><span class="soft-dot"></span><b>{{ t('نمودارهای زنده','Live charts') }}</b><small>{{ t('از نمونه‌های مشاهده‌شده توسط همین مرورگر، بدون داده تاریخی ساختگی','Only browser-observed samples, no fabricated historical data') }}</small></div><button type="button" class="subtle-link" data-open="pbx">{{ t('سلامت مرکز تلفن','PBX health') }} ↗</button></div>
   <section class="realtime-graphs" aria-label="{{ t('نمودارهای زنده','Live charts') }}">
     <article class="panel trend-panel"><div class="panel-heading"><div><h2>{{ t('روند تماس‌های منتظر','Waiting trend') }}</h2><p>{{ t('از لحظه بازشدن صفحه','From page opening') }} · <span id="trend-points">—</span></p></div><span class="live-chip">LIVE</span></div><div id="trend-wait" class="trend-svg"></div><div class="chart-legend"><span><i class="dot busy"></i>{{ t('تعداد منتظر','Waiting') }}</span><span id="trend-time-label">—</span></div></article>
@@ -206,7 +207,7 @@
   <label class="wallboard-private-control"><input type="checkbox" id="wb-private">{{ t('نمای خصوصی سرپرست: نمایش شماره‌ها با مجوز','Private supervisor view: show permitted caller numbers') }}</label>
   <div id="wallboard-queues" class="wallboard-grid" aria-live="polite"></div>
   <section class="wb-journey-area"><div class="wb-journey-heading"><h3>{{ t('تماس‌های جاری و منتقل‌شده','Active and transferred calls') }}</h3><span id="wb-journey-status">—</span></div><div id="wb-journey-rows" class="wb-journey-grid"></div><p class="wallboard-privacy">{{ t('شماره مشتری و شناسه کانال روی نمایشگر عمومی نمایش داده نمی‌شوند.','Caller numbers and channel IDs are never shown on public wallboards.') }}</p></section>
-  <div class="wallboard-bottom">{{ t('شمارنده پاسخ‌داده و رهاشده از آخرین بازنشانی Asterisk هستند؛ تعداد منتظر و وضعیت کارشناسان لحظه‌ای‌اند.','Answered and abandoned are since Asterisk queue reset; waiting and member presence are live.') }}</div>
+  <div id="wb-stats-period" class="wallboard-bottom">{{ t('شمارنده پاسخ‌داده و رهاشده از آخرین بازنشانی Asterisk هستند؛ تعداد منتظر و وضعیت کارشناسان لحظه‌ای‌اند.','Answered and abandoned are since Asterisk queue reset; waiting and member presence are live.') }}</div>
  </div>
 </section>
 <section id="alerts-view" class="view" hidden><div class="rule-preview"><p>{{ t('هشدارهای این صفحه از قوانین مستقل هر صف می‌آیند. صف را از فیلتر بالا انتخاب کنید. تعداد، زمان و ترکیب شرط‌ها در «قوانین صف» تنظیم می‌شوند؛ اتصال ربات‌ها در «تنظیمات سازمان و سرویس» است.','These alerts use each queue’s independent rules. Use the queue filter above. Configure count/time conditions under Queue policies; configure messaging connections under Organization & service.') }}</p>{% if can_view_section('policies') %}<button type="button" data-open="policies">⚖ {{ t('تنظیم قوانین هر صف','Configure per-queue rules') }}</button>{% endif %}{% if can_view_section('settings') %}<button type="button" data-open="settings">{{ t('اتصال و تست پیام‌رسان‌ها','Messaging setup & test') }} ↗</button>{% endif %}</div>
@@ -309,12 +310,12 @@
  <form id="organization-form" class="settings-grid">
  <label>{{ t('نام سازمان','Organization name') }}<input name="name" maxlength="65" required></label>
  <label>{{ t('عنوان یا توضیح کوتاه','Subtitle') }}<input name="subtitle" maxlength="90"></label>
- <label>{{ t('لوگوی سازمان','Organization logo') }}<input type="file" name="logo" accept="image/png,image/jpeg,image/webp"><small>PNG / JPEG / WebP · 512 KB · 4 MP</small></label>
+ <label>{{ t('لوگوی سازمان','Organization logo') }}<input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/avif"><small>PNG / JPEG / WebP / AVIF · 512 KB · 4 MP</small></label>
  <label><input type="checkbox" name="remove_logo">{{ t('حذف لوگوی فعلی','Remove current logo') }}</label>
  <button type="submit">{{ t('ذخیره هویت سازمان','Save organization identity') }}</button><p id="organization-feedback" role="status" aria-live="polite"></p>
  </form></section>
  <section class="panel module-maintenance"><div class="panel-heading"><div><h2>{{ t('فعال‌سازی ماژول و توقف اضطراری','Module and emergency stop') }}</h2><p>{{ t('توقف مانیتورینگ، دریافت AMI، هشدار و کنترل تماس این ماژول؛ تماس‌های مرکز تلفن قطع نمی‌شوند.','Pause this module’s AMI monitoring, alerts and call controls; PBX calls continue.') }}</p></div></div>
- <div class="settings-actions"><button id="module-disable" type="button">{{ t('غیرفعال‌کردن مانیتورینگ','Disable monitoring') }}</button><button id="module-enable" type="button">{{ t('فعال‌کردن مانیتورینگ','Enable monitoring') }}</button></div><p id="module-status" role="status" aria-live="polite"></p>
+ <div class="settings-actions"><button id="module-disable" type="button">{{ t('غیرفعال‌کردن ماژول','Disable module') }}</button><button id="module-enable" type="button">{{ t('فعال‌کردن ماژول','Enable module') }}</button></div><p id="module-status" role="status" aria-live="polite"></p>
  <p class="muted">{{ t('اگر خود پنل باز نمی‌شود، روی سرور اجرا کنید:','If the panel is unavailable, run on the server:') }} <code dir="ltr">sudo sanequeuectl disable</code></p>
  <p class="muted">{{ t('حذف سرویس‌های ماژول با حفظ داده و تنظیمات خصوصی:','Remove module services while preserving private data and configuration:') }} <code dir="ltr">sudo sanequeuectl uninstall --yes</code></p>
  </section>
@@ -326,12 +327,23 @@
   {% for provider, title in [('telegram','Telegram'),('bale','Bale')] %}
    <fieldset><legend>{{ title }}</legend>
     <label class="policy-check"><input type="checkbox" id="notify-{{provider}}-enabled">{{ t('فعال','Enabled') }}</label>
+    <label>{{ t('زبان پیام‌های این پیام‌رسان','Message language for this provider') }}<select id="notify-{{provider}}-language"><option value="fa">فارسی</option><option value="en">English</option><option value="both">فارسی + English</option></select></label>
     <label>{{ t('توکن ربات (خالی: حفظ توکن قبلی)','Bot token (blank keeps stored token)') }}<input type="password" id="notify-{{provider}}-token" autocomplete="new-password" dir="ltr" maxlength="150"></label>
     <label>{{ t('شناسه عددی مقصد','Numeric destination ID') }}<input id="notify-{{provider}}-chat" dir="ltr" maxlength="23" inputmode="numeric"></label>
+    <button type="button" data-notification-discover="{{provider}}">{{ t('یافتن مقصد پس از Start ربات','Find destination after starting the bot') }}</button><select id="notify-{{provider}}-destinations" hidden aria-label="{{ t('انتخاب مقصد پیام','Choose notification destination') }}"></select>
     <p id="notify-{{provider}}-status" class="muted"></p>
     <button type="button" data-notification-test="{{provider}}">{{ t('ارسال پیام آزمایشی','Send test notification') }}</button>
    </fieldset>
   {% endfor %}
+   <fieldset class="system-alert-settings"><legend>{{ t('هشدارهای حساس مرکز تلفن','Critical PBX alerts') }}</legend>
+   {% for key,fa_label,en_label in [('trunk_down','خارج‌شدن ترانک از دسترس','Trunk unavailable'),('monitoring_unavailable','قطع اتصال مانیتورینگ','Monitoring disconnected'),('inventory_stale','قدیمی‌شدن اطلاعات سلامت','Health inventory stale'),('disk_critical','پرشدن دیسک سرور','Server disk critical'),('telegram_enabled','ارسال هشدارهای حساس به تلگرام','Send critical alerts to Telegram'),('bale_enabled','ارسال هشدارهای حساس به بله','Send critical alerts to Bale')] %}
+    <label class="policy-check"><input type="checkbox" id="notify-system-{{key}}">{{ t(fa_label,en_label) }}</label>
+   {% endfor %}
+    <label>{{ t('پایداری خطا پیش از هشدار (ثانیه)','Condition persistence before alert (seconds)') }}<input id="notify-system-debounce_seconds" type="number" min="5" max="120" value="10"></label>
+    <label>{{ t('فاصله تکرار (ثانیه)','Repeat interval (seconds)') }}<input id="notify-system-cooldown_seconds" type="number" min="60" max="86400" value="300"></label>
+    <label>{{ t('درصد مصرف بحرانی دیسک','Critical disk used percent') }}<input id="notify-system-disk_used_percent" type="number" min="80" max="99" value="95"></label>
+   </fieldset>
+   <p class="notification-steps">{{ t('۱. ربات اختصاصی بسازید و در گفت‌وگوی مقصد Start بزنید. ۲. توکن را وارد و مقصد را پیدا/انتخاب کنید. ۳. زبان و ارسال را انتخاب و ذخیره کنید. ۴. پیام آزمایشی بفرستید. ۵. برای ازدحام هر صف، شرط و پیام‌رسان را در «قوانین و هشدارهای صف» فعال کنید. هشدارهای حساس بالا مستقل از قواعد صف هستند.','1. Create a dedicated bot and start it in the destination chat. 2. Enter its token and discover/select the destination. 3. Choose language and delivery, then save. 4. Send a test. 5. Enable each queue threshold and provider in Queue policies. Critical alerts above are independent of queue thresholds.') }}</p>
    <button type="submit">{{ t('ذخیره اتصال پیام‌رسان‌ها','Save messaging connections') }}</button>
    <p id="notification-feedback" role="status" aria-live="polite"></p>
   </form>
@@ -400,7 +412,7 @@
  <p class="muted">{{ t('فقط داخلی آزاد و شناسایی‌شده قابل انتخاب است. برای تغییر داخلی یا رمز، رمز فعلی لازم است و نشست‌ها بسته می‌شوند.','Only discovered, unassigned extensions are selectable. Changing phone or password requires your current password and signs out sessions.') }}</p>
  <label>{{ t('رمز فعلی','Current password') }}<input name="current_password" type="password" autocomplete="current-password" maxlength="200"></label>
  <label>{{ t('رمز جدید (اختیاری، حداقل ۱۲ نویسه)','New password (optional, at least 12 characters)') }}<input name="new_password" type="password" autocomplete="new-password" minlength="12" maxlength="200"></label>
- <label>{{ t('تصویر پروفایل','Profile picture') }}<input name="avatar" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG / JPEG / WebP · {{ t('حداکثر ۵۱۲ کیلوبایت و ۴ مگاپیکسل','Maximum 512 KB and 4 megapixels') }}</small></label>
+ <label>{{ t('تصویر پروفایل','Profile picture') }}<input name="avatar" type="file" accept="image/png,image/jpeg,image/webp,image/avif"><small>PNG / JPEG / WebP · {{ t('حداکثر ۵۱۲ کیلوبایت و ۴ مگاپیکسل','Maximum 512 KB and 4 megapixels') }}</small></label>
  <label><input type="checkbox" name="remove_avatar" value="true">{{ t('حذف تصویر فعلی','Remove current picture') }}</label>
  <button type="submit">{{ t('ذخیره پروفایل','Save profile') }}</button><p id="profile-feedback" role="status"></p>
  </form></dialog>
@@ -408,6 +420,35 @@
  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
  <dialog id="pause-reason-dialog" class="reason-dialog" aria-labelledby="pause-reason-title"><form id="pause-reason-form" method="dialog"><h2 id="pause-reason-title">{{ t('انتخاب فعالیت خارج از صف','Choose out-of-queue activity') }}</h2><p class="muted">{{ t('کارشناس موقتاً از دریافت تماس‌های ورودی این صف خارج می‌شود. این علت فقط وضعیت کارشناس را در صف مشخص می‌کند.','Agent pauses inbound queue membership. The reason is recorded for this queue membership.') }}</p><div>{{ t('علت خروج','Reason') }}<div id="pause-reason-cards" class="reason-choices"></div><select hidden id="pause-reason-select" required></select></div><p id="pause-reason-description" class="pause-reason-hint"></p><div class="dialog-actions"><button type="button" id="pause-reason-cancel">{{ t('انصراف','Cancel') }}</button><button type="submit" class="primary">{{ t('ثبت علت و خروج موقت','Pause with reason') }}</button></div></form></dialog>
 <dialog id="action-dialog" aria-labelledby="action-title" aria-describedby="action-description"><form id="action-form"><h2 id="action-title"></h2><p id="action-description" class="muted"></p><div id="action-fields"></div><p id="action-error" role="alert" class="overdue"></p><div class="dialog-actions"><button type="button" id="action-cancel">{{ t('انصراف','Cancel') }}</button><button type="submit" class="primary">{{ t('اجرای عملیات','Apply action') }}</button></div></form></dialog>
+<section id="telephony-view" class="view" hidden>
+<section class="panel"><div class="panel-heading"><div><h2>{{ t('انتظار داخلی و تماس برگشتی','Extension waiting & callback') }}</h2><p>{{ t('فقط بین داخلی‌های شناسایی‌شده؛ شماره‌گیری بیرونی مجاز نیست.','Discovered internal extensions only; no external callback dialing.') }}</p></div><button id="telephony-refresh" type="button">↻ {{ t('بازخوانی','Refresh') }}</button></div>
+<form id="telephony-form" class="pbx-feature-form">
+<div class="pbx-feature-grid"><fieldset><legend>{{ t('انتظار و کال‌بک','Waiting & callback') }}</legend>
+<label class="feature-switch"><input type="checkbox" name="callback_enabled">{{ t('فعال‌سازی منوی داخلی مشغول','Enable busy-extension menu') }}</label>
+<label class="feature-switch"><input type="checkbox" name="waiting_enabled">{{ t('کلید ۱: منتظر آزاد شدن داخلی بماند','Key 1: wait until the extension is available') }}</label>
+<label class="feature-switch"><input type="checkbox" name="return_enabled">{{ t('کلید ۲: درخواست تماس برگشتی','Key 2: request callback') }}</label>
+<label>{{ t('حداکثر انتظار (ثانیه)','Maximum wait (seconds)') }}<input name="max_wait_seconds" type="number" min="30" max="1800" required></label>
+<label>{{ t('اعتبار درخواست کال‌بک (ثانیه)','Callback expiry (seconds)') }}<input name="expiry_seconds" type="number" min="30" max="1800" required></label>
+<label>{{ t('فاصله بررسی آزاد بودن (ثانیه)','Availability check interval (seconds)') }}<input name="retry_seconds" type="number" min="5" max="60" required></label>
+<p class="report-note">{{ t('پس از آزاد شدن هر دو داخلی، ابتدا درخواست‌کننده زنگ می‌خورد و با پاسخ او، مقصد شماره‌گیری می‌شود. درخواست با نتیجه نامشخص خودکار تکرار نمی‌شود.','When both phones are idle, the requester rings first; answering dials the target. An uncertain dispatch is not retried automatically.') }}</p>
+</fieldset><fieldset><legend>{{ t('اصلاح شماره تماس‌گیرنده','Caller ID number formatting') }}</legend>
+<label class="feature-switch"><input type="checkbox" name="cid_enabled">{{ t('فعال‌سازی اصلاح شماره ورودی','Enable inbound number formatting') }}</label>
+<label class="feature-switch"><input type="checkbox" name="provider_prefixes">{{ t('قواعد پیشوندهای غیرعادی اپراتورهای ایران','Iranian provider prefix anomalies') }}</label>
+<label class="feature-switch"><input type="checkbox" name="expand_local">{{ t('افزودن کد شهر به شماره محلی','Expand local numbers with area code') }}</label>
+<label class="feature-switch"><input type="checkbox" name="directory_names">{{ t('نمایش نام مخاطب صف روی تلفن کارشناس','Show queue contact names on agent phones') }}</label>
+<div class="pbx-feature-grid"><label>{{ t('کد کشور','Country code') }}<input name="country_code" inputmode="numeric" pattern="[0-9]{1,5}" required></label><label>{{ t('پیش‌شماره ملی','National prefix') }}<input name="national_prefix" inputmode="numeric" pattern="[0-9]{1,5}" required></label><label>{{ t('کد شهر بدون صفر','Area code without zero') }}<input name="area_code" inputmode="numeric" pattern="[0-9]{1,5}" required></label></div>
+<div class="pbx-feature-grid"><label>{{ t('طول شماره محلی','Local number digits') }}<input name="local_digits" type="number" min="3" max="15" required></label><label>{{ t('طول شماره ملی بدون صفر','National number digits without zero') }}<input name="mobile_digits" type="number" min="3" max="15" required></label></div>
+<p class="report-note">{{ t('قالب‌های +98، 0098، 98 و صفر موبایل اصلاح می‌شوند. گزینه اپراتور، پیشوندهای 0000، 002198، 21098 و قالب‌های کوتاه قدیمی را نیز بررسی می‌کند. پیش‌نمایش را با نمونه واقعی ترانک خود آزمایش کنید.','Normalizes +98, 0098, 98 and mobile zero. Provider mode also handles 0000, 002198, 21098 and legacy short formats. Preview actual trunk examples before enabling.') }}</p>
+<div class="pbx-inline-actions"><input id="cid-preview-number" dir="ltr" maxlength="30" placeholder="+989121234567" aria-label="{{ t('شماره نمونه','Example number') }}"><button type="button" id="cid-preview">{{ t('پیش‌نمایش تبدیل','Preview conversion') }}</button><output id="cid-preview-result" dir="ltr"></output></div>
+</fieldset></div>
+<div class="dialog-actions"><button type="submit" class="primary">{{ t('ذخیره و اعمال تنظیمات','Save & apply settings') }}</button></div><p id="telephony-feedback" role="status" aria-live="polite"></p>
+</form><p id="telephony-status" class="report-note" role="status"></p>
+<details class="contextual-help"><summary>{{ t('نحوه عملکرد و برگشت تنظیمات','How it works & rollback') }}</summary><p>{{ t('تنظیمات پس از ذخیره، حداکثر طی ۳۰ ثانیه اعمال می‌شوند. فقط آداپتور شناخته‌شده تغییر می‌کند؛ مسیر ناشناخته دست‌نخورده می‌ماند و خطا نمایش داده می‌شود. اتصال ترانک باید از مسیر اصلاح شماره عبور کند؛ این صفحه مسیر ترانک‌ها را خودکار عوض نمی‌کند. در توقف اضطراری ماژول، تماس‌ها از منوی افزوده‌شده عبور می‌کنند. حذف ماژول فایل‌های اصلی را از پشتیبان خصوصی برمی‌گرداند.','Saved settings apply within 30 seconds. Only supported adapters are changed; unknown dialplans are refused. Inbound trunks must route through the formatter context; trunk routes are not silently changed. Emergency disable bypasses added prompts. Uninstall restores original dialplan files from private backup.') }}</p></details>
+</section>
+<section class="panel"><div class="panel-heading"><div><h2>{{ t('پیام‌های صوتی','Voice prompts') }}</h2><p>{{ t('حداکثر ۶۰ ثانیه و ۸ مگابایت؛ تبدیل خودکار به WAV تلفنی. متن منو باید کلیدهای فعال ۱ و ۲ را توضیح دهد.','Up to 60 seconds and 8 MB; automatically converted to telephone WAV. The menu recording must describe enabled keys 1 and 2.') }}</p></div></div><div id="pbx-audio-slots" class="pbx-feature-grid"></div><p id="pbx-audio-feedback" role="status"></p></section>
+<section class="panel"><div class="panel-heading"><h2>{{ t('آخرین درخواست‌های کال‌بک','Recent callback requests') }}</h2></div><div id="callback-jobs" class="table-wrap"></div></section>
+</section>
+
  <section id="shifts-view" class="view" hidden><section class="panel"><div class="panel-heading"><div><h2>{{ t('برنامه شیفت کارشناسان','Agent shift planning') }}</h2><p>{{ t('برنامه زمانی مستقل؛ وضعیت واقعی کارشناس را به‌صورت خودکار تغییر نمی‌دهد.','Scheduling only; never automatically changes an agent’s PBX state.') }}</p></div><button data-planning-load="shifts">{{ t('به‌روزرسانی','Refresh') }}</button></div><div id="shifts-content"></div></section></section>
  <section id="directory-view" class="view" hidden><section class="panel"><div class="panel-heading"><div><h2>{{ t('دفترچه تلفن صف','Queue directory') }}</h2><p>{{ t('مخاطبان دارای محدوده دسترسی صف؛ این صفحه خودکار شماره‌گیری نمی‌کند.','Queue-scoped contacts; this page does not place calls.') }}</p></div><button data-planning-load="directory">{{ t('به‌روزرسانی','Refresh') }}</button></div><div id="directory-content"></div></section></section>
  <footer><span>صانع · SaneQueue <strong>{{ current_version() }}</strong></span><span>{{ t('اطلاعات مجوز در فایل NOTICE','License information in NOTICE') }}</span></footer>
@@ -418,4 +459,5 @@
 <script src="{{ theme_static('js/activity.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/planning.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/organization.js') }}?v={{ current_version() }}" defer></script>
+<script src="{{ theme_static('js/telephony.js') }}?v={{ current_version() }}" defer></script>
 </body></html>

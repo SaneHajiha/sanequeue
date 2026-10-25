@@ -97,11 +97,20 @@ def install(app,state,role):
             obj=request.get_json(silent=True)
             if not isinstance(obj,dict) or not isinstance(obj.get('enabled'),bool):return jsonify(error='invalid_module_state'),400
             target=Path(os.getenv('SANEQUEUE_DISABLE_FILE','/var/lib/sanequeue/module.disabled'))
-            if obj['enabled']:
-                target.unlink(missing_ok=True)
-            else:
-                target.parent.mkdir(parents=True,exist_ok=True)
-                descriptor=os.open(target,os.O_CREAT|os.O_WRONLY|os.O_TRUNC,0o600)
-                with os.fdopen(descriptor,'w') as stream:stream.write('Monitoring disabled by administrator\n')
+            spool=Path(os.getenv('SANEQUEUE_PBX_SPOOL','/var/spool/asterisk/sanequeue'))
+            def sentinel(path):
+                if obj['enabled']:path.unlink(missing_ok=True);return
+                path.parent.mkdir(parents=True,exist_ok=True)
+                descriptor,temporary=tempfile.mkstemp(prefix='.disable-',dir=path.parent)
+                try:
+                    with os.fdopen(descriptor,'w') as stream:stream.write('Module disabled by administrator\n');stream.flush();os.fsync(stream.fileno())
+                    os.replace(temporary,path)
+                finally:
+                    if os.path.exists(temporary):os.unlink(temporary)
+            try:
+                if spool.is_symlink():raise OSError('invalid_spool')
+                if spool.is_dir():sentinel(spool/'disabled')
+                sentinel(target)
+            except OSError:return jsonify(error='module_state_write_failed_use_sanequeuectl'),503
         response=jsonify(enabled=not disabled(),scope='sanequeue_monitoring',asterisk_restarted=False)
         response.headers['Cache-Control']='no-store';return response

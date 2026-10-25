@@ -4,13 +4,13 @@
 
 Persian and English live queue monitoring for Asterisk-based contact centers. MIT licensed.
 
-**2.1.0-beta.24 · Redis and WebSocket monitoring beta · [راهنمای فارسی](README.fa.md)**
+**2.1.0-beta.25 · Redis and WebSocket monitoring beta · [راهنمای فارسی](README.fa.md)**
 
 ![English operations dashboard with synthetic demonstration data](docs/images/dashboard-en.png)
 
 ## Automatic installation, scoped controls and contextual help
 
-The standard installer now connects the existing dashboard to Redis and an authenticated ASGI WebSocket gateway. A separate read-only AMI collector handles queue events independently of browser count. See [deployment](docs/REALTIME_DEPLOYMENT.md), [architecture](docs/REALTIME_ARCHITECTURE.md), [beta.24 audit and scores](docs/AUDIT_BETA24.md) and [admin password recovery](docs/ADMIN_ACCESS.md). Reporting remains the next phase.
+The standard installer now connects the existing dashboard to Redis and an authenticated ASGI WebSocket gateway. A separate read-only AMI collector handles queue events independently of browser count. See [deployment](docs/REALTIME_DEPLOYMENT.md), [architecture](docs/REALTIME_ARCHITECTURE.md), [beta.25 audit and scores](docs/AUDIT_BETA25.md) and [admin password recovery](docs/ADMIN_ACCESS.md). Reporting remains the next phase.
 
 ## What you can use
 
@@ -36,14 +36,17 @@ sudo bash scripts/install.sh
 
 The installer reuses or downloads isolated Python 3.10–3.12, provisions a private Redis instance and two restricted local AMI identities, and installs the collector, gateway and inventory timer. It asks you to choose the initial administrator password and panel origin; there is no shared default password. Queues and internal phones are discovered automatically. Existing accounts are preserved on upgrade. It reloads AMI configuration without restarting Asterisk. See [installation and rollback](docs/INSTALL.md).
 
-Each of the 17 menu sections includes collapsible Persian/English help. [فارسی](docs/USER_GUIDE.fa.md) · [English manual](docs/USER_GUIDE.en.md). Roles, allowed menus and per-queue operations are checked independently by the server. Users can update their own name, phone, picture and password from the avatar button.
+Each of the 18 menu sections includes collapsible Persian/English help. [فارسی](docs/USER_GUIDE.fa.md) · [English manual](docs/USER_GUIDE.en.md). Roles, allowed menus and per-queue operations are checked independently by the server. Users can update their own name, phone, picture and password from the avatar button.
 
 ## Verified scope
 
-See [beta.24 validation](docs/AUDIT_BETA24.md) for automated tests, actual Telegram/Bale delivery, real RTCP observations and a bounded 100-concurrent-Local-call test. That load test does **not** certify 100 SIP/RTP audio calls. Actual installation was exercised on Rocky Linux 8.10 / Asterisk 20.12.0; Asterisk 16/18 event fixtures do not establish complete Issabel 4/5 installation compatibility. This remains a beta release.
+See [beta.25 validation](docs/AUDIT_BETA25.md) for automated tests, actual Telegram/Bale delivery, real RTCP observations and a bounded 100-concurrent-Local-call test. That load test does **not** certify 100 SIP/RTP audio calls. Actual installation was exercised on Rocky Linux 8.10 / Asterisk 20.12.0; Asterisk 16/18 event fixtures do not establish complete Issabel 4/5 installation compatibility. This remains a beta release.
 
 Current help screenshots use the laboratory PBX; older demonstration screenshots use synthetic data. Historical notes are retained for provenance and do not override the current installation guide.
 
 ## Attribution
 
 Third-party copyright and license notices are preserved in [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+
+[ماژول‌های تلفنی و صوت پیش‌فرض](docs/TELEPHONY_MODULES.fa.md) · [Telephone modules and bundled audio](docs/TELEPHONY_MODULES.en.md) · [Beta.25 release notes](docs/RELEASE_BETA25.md)

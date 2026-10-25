@@ -23,6 +23,7 @@ This manual and in-panel help share one source. Screenshots illustrate the inter
 - [Shift planning](#shifts)
 - [Contact directory](#directory)
 - [Capabilities and limits](#features)
+- [Telephone modules](#telephony)
 
 <a id="live"></a>
 
@@ -33,6 +34,7 @@ A quick view of queue pressure and staffing. Counters start at the last Asterisk
 1. Filter the queue or agent at the top.
 2. Compare waiting callers and longest wait with agent availability.
 3. Trend charts use samples collected by this browser only.
+4. Select the KPI period: cumulative PBX counters with unknown reset time, or Tehran today from module-observed calls since recording coverage began. Refresh never resets counters.
 
 > A stale-data warning means the live state cannot be trusted; wait for reconnection before controlling calls.
 
@@ -142,6 +144,8 @@ Review current threshold alerts and notification delivery status.
 2. Browser audio needs a user gesture to enable sound.
 3. Delivery counts mean provider API acceptance; verify the destination conversation too.
 4. The toolbar wait highlight is a personal display setting. In persistent mode, queue alarms and their sound follow server-side queue rules.
+5. Define conditions in Queue policies: choose a queue and enable count, wait or staffing rules independently.
+6. Queue color and sound follow these rules. Telegram/Bale delivery must be enabled in both the queue rule and organization messaging settings.
 
 <a id="audit"></a>
 
@@ -166,6 +170,10 @@ Manage connection diagnostics and alert messaging here.
 5. Save your organization name, subtitle and logo; the sign-in page uses the same identity.
 6. Disable monitoring to stop this module’s AMI reception and call controls while PBX calls continue.
 7. Panel unavailable: sudo sanequeuectl disable. Restore: sudo sanequeuectl enable. Remove services while retaining data: sudo sanequeuectl uninstall --yes.
+8. Choose Persian, English or both independently for Telegram and Bale.
+9. Create the bot in the messenger and enter its token only in the panel. Send Start to the bot or add it to the destination group; discover, select and save the destination.
+10. Discovery refuses active webhooks without changing them; enter the numeric destination ID manually. Test each provider separately.
+11. Configure trunk failures, monitoring outages, stale inventory and disk thresholds under critical alerts. Queue thresholds remain per-queue policies.
 
 > A blank token keeps the previous secret. Do not include tokens in screenshots, tickets or public repositories.
 
@@ -219,6 +227,7 @@ A shared per-queue directory identifies waiting callers and supports permissione
 2. A matching caller in that queue displays the saved name; name updates may take up to 15 seconds.
 3. Call requires a Dial grant and your assigned phone. Your phone rings first; answer it to dial the contact.
 4. Internal destinations are allowed by default; an administrator can authorize outbound saved contacts per queue.
+5. Agent-phone contact names require the Telephone modules directory option and a supported dial adapter; only the matching queue contact is used.
 
 > Saving a contact never starts a call. Names remain within the authorized queue. This directory is not a full CRM.
 
@@ -232,9 +241,24 @@ Actual feature availability and implementation limits.
 2. Beta features need acceptance testing on your PBX.
 3. Planned means the feature is not available yet.
 
+<a id="telephony"></a>
+
+## Telephone modules
+
+Independent extension waiting, callback and caller-number formatting; restricted to administrators with this menu grant.
+
+1. Enable the busy-extension menu and required keys 1/2 in Telephone modules.
+2. Set maximum wait, callback expiry and availability check interval; save.
+3. The installer includes the default Persian menu. Upload a recording up to 60 seconds and 8 MB for each slot, then preview it.
+4. Set country/national prefixes and optional provider rules. Preview representative real trunk numbers.
+5. Refresh to verify successful application. Dialplan replacement is deferred while calls are active.
+6. The callback report appears below the settings. Request, requester answer, verified target bridge and end are separate. Duration requires observed bridge connection and end; older rows without evidence have no invented timestamps.
+
+> Callbacks are internal-only and ring the requester first. AMI acceptance does not prove destination answer. Unknown dialplans are refused instead of overwritten; check adapter status.
+
 ## Profile and password
 
-Use My profile & status to manage first/last name, assigned phone and picture, change your queue status, and view daily activity. Personal history is clipped to the current phone assignment. Click-to-call rings your own phone first and requires a queue Dial grant. Password or phone changes require the current password and revoke existing account sessions. PNG/JPEG/WebP images up to 512 KB and 4 megapixels are decoded, resized and stripped of metadata.
+Use My profile & status to manage first/last name, assigned phone and picture, change your queue status, and view daily activity. Personal history is clipped to the current phone assignment. Click-to-call rings your own phone first and requires a queue Dial grant. Password or phone changes require the current password and revoke existing account sessions. PNG/JPEG/WebP/AVIF images up to 512 KB and 4 megapixels are decoded, resized and stripped of metadata.
 
 ![Profile](images/profile-en-beta22.png)
 

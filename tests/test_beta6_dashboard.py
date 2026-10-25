@@ -11,8 +11,8 @@ class DashboardReference(unittest.TestCase):
   for id_ in ('queue-cards','call-rows','overview-agent-list','dashboard-active-rows','capacity-donut'):
    self.assertIn('id="'+id_+'"',HTML)
   self.assertLess(HTML.index('id="metrics"'),HTML.index('reference-three-panel'))
-  self.assertLess(HTML.index('reference-three-panel'),HTML.index('dashboard-bottom'))
-  self.assertLess(HTML.index('dashboard-bottom'),HTML.index('realtime-graphs'))
+  self.assertLess(HTML.index('reference-three-panel'),HTML.index('overview-traffic'))
+  self.assertLess(HTML.index('overview-team'),HTML.index('realtime-graphs'))
  def test_agent_actions_grid_consistent_and_scoped(self):
   self.assertIn('agent-action-grid',JS)
   self.assertIn('agent-primary-action',JS)

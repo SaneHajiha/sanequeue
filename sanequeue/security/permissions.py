@@ -1,10 +1,10 @@
 """Role ceilings, optional per-user sections, and independent queue grants."""
-SECTIONS = frozenset(('live','queues','calls','waiting','agents','presence','pbx','features','control','wallboard','alerts','audit','settings','users','policies','shifts','directory'))
+SECTIONS = frozenset(('live','queues','calls','waiting','agents','presence','pbx','features','control','wallboard','alerts','audit','settings','users','policies','shifts','directory','telephony'))
 ROLE_SECTIONS = {
     'admin':SECTIONS,
-    'supervisor':SECTIONS-{'settings','users','policies','pbx'},
-    'agent':SECTIONS-{'settings','users','policies','pbx','control','audit'},
-    'viewer':SECTIONS-{'settings','users','policies','pbx','control','audit','shifts'},
+    'supervisor':SECTIONS-{'settings','users','policies','pbx','telephony'},
+    'agent':SECTIONS-{'settings','users','policies','pbx','control','audit','telephony'},
+    'viewer':SECTIONS-{'settings','users','policies','pbx','control','audit','shifts','telephony'},
 }
 ROLE_ACTIONS = {
     'admin':frozenset(('view','pause','membership','monitor','hangup','priority','caller_details','transfer','park','pickup','dial')),

@@ -2,9 +2,9 @@
 
 مانیتورینگ زندهٔ صف برای مراکز تماس مبتنی بر Asterisk، با مجوز MIT.
 
-**نسخهٔ 2.1.0-beta.24 · [English](README.md)**
+**نسخهٔ 2.1.0-beta.25 · [English](README.md)**
 
-نصب‌کنندهٔ استاندارد با Collector پایدار اکنون داشبورد را به Redis و WebSocket احراز هویت‌شده متصل می‌کند. خواندن عادی وب اتصال AMI جدید ایجاد نمی‌کند. [راه‌اندازی فارسی](docs/REALTIME_DEPLOYMENT.fa.md)، [معماری](docs/REALTIME_ARCHITECTURE.fa.md)، [ممیزی جدید و امتیاز سخت‌گیرانه](docs/AUDIT_BETA24.md)، [ورود مدیر و بازیابی رمز](docs/ADMIN_ACCESS.fa.md). گزارش‌گیری فاز بعد است.
+نصب‌کنندهٔ استاندارد با Collector پایدار اکنون داشبورد را به Redis و WebSocket احراز هویت‌شده متصل می‌کند. خواندن عادی وب اتصال AMI جدید ایجاد نمی‌کند. [راه‌اندازی فارسی](docs/REALTIME_DEPLOYMENT.fa.md)، [معماری](docs/REALTIME_ARCHITECTURE.fa.md)، [ممیزی جدید و امتیاز سخت‌گیرانه](docs/AUDIT_BETA25.md)، [ورود مدیر و بازیابی رمز](docs/ADMIN_ACCESS.fa.md). گزارش‌گیری فاز بعد است.
 
 ![داشبورد فارسی با داده ساختگی](docs/images/dashboard-fa.png)
 
@@ -24,6 +24,9 @@ sudo bash scripts/install.sh
 
 هر ۱۷ منو راهنمای بازشوندهٔ فارسی/انگلیسی دارد. [راهنمای تصویری فارسی](docs/USER_GUIDE.fa.md) · [English manual](docs/USER_GUIDE.en.md). نقش، منوهای مجاز و عملیات مجاز هر صف مستقل کنترل می‌شوند. از دکمهٔ تصویر بالای پنل می‌توان نام، داخلی، عکس و رمز خود را تغییر داد؛ تغییر رمز یا داخلی نیازمند رمز فعلی است.
 
-ارسال واقعی هشدار تلگرام و بله، دریافت RTCP تماس PJSIP و آزمون محدود ۱۰۰ تماس هم‌زمان Local انجام شده‌اند. این آزمون بار، تأیید ۱۰۰ تماس صوتی SIP/RTP نیست. نصب واقعی روی Rocky 8.10 و Asterisk 20.12 آزموده شده؛ همهٔ نسخه‌های ایزابل ۴/۵ و Asterisk ۱۶/۱۸ هنوز پذیرش عملی مستقل لازم دارند. [نتیجه و محدودیت‌های beta.24](docs/AUDIT_BETA24.md).
+ارسال واقعی هشدار تلگرام و بله، دریافت RTCP تماس PJSIP و آزمون محدود ۱۰۰ تماس هم‌زمان Local انجام شده‌اند. این آزمون بار، تأیید ۱۰۰ تماس صوتی SIP/RTP نیست. نصب واقعی روی Rocky 8.10 و Asterisk 20.12 آزموده شده؛ همهٔ نسخه‌های ایزابل ۴/۵ و Asterisk ۱۶/۱۸ هنوز پذیرش عملی مستقل لازم دارند. [نتیجه و محدودیت‌های beta.25](docs/AUDIT_BETA25.md).
 
 اعلان حقوقی کدهای اقتباس‌شده و کتابخانه‌های همراه در LICENSE و NOTICE محفوظ است.
+
+
+[ماژول‌های تلفنی و صوت پیش‌فرض](docs/TELEPHONY_MODULES.fa.md) · [Telephone modules and bundled audio](docs/TELEPHONY_MODULES.en.md) · [Beta.25 release notes](docs/RELEASE_BETA25.md)

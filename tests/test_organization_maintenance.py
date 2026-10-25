@@ -45,6 +45,15 @@ class OrganizationTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/module',json={'enabled':True},headers=self.headers).status_code,200)
         self.assertFalse(disabled())
 
+    def test_web_disable_immediately_bypasses_telephone_features(self):
+        spool=self.root/'pbx-spool';spool.mkdir()
+        with patch.dict('os.environ',SANEQUEUE_PBX_SPOOL=str(spool)):
+            self.assertEqual(self.client.post('/api/module',json={'enabled':False},headers=self.headers).status_code,200)
+            self.assertTrue((spool/'disabled').is_file())
+            self.assertEqual(self.client.post('/api/module',json={'enabled':False},headers=self.headers).status_code,200)
+            self.assertEqual(self.client.post('/api/module',json={'enabled':True},headers=self.headers).status_code,200)
+            self.assertFalse((spool/'disabled').exists())
+
     def test_organization_and_module_require_settings_permission(self):
         self.app.config['SANEQUEUE_MENU_PROVIDER']=lambda user,role:{'queues'}
         self.assertEqual(self.client.get('/api/organization').status_code,403)
