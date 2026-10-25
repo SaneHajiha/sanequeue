@@ -130,6 +130,21 @@ class ReportTests(unittest.TestCase):
         self.assertTrue(excel.data.startswith(b'PK'))
         self.assertEqual(self.client(denied=('report_export',)).get('/api/history/export.xlsx'+self.dates).status_code,403)
 
+    def test_activity_api_enforces_menu_queue_and_agent_scope(self):
+        self.archive.append([Event('activity',str(i),self.stamp,'ACTIVITY_INTERVAL',dict(queue=queue,agent=agent,
+            canonical_agent=agent,state='paused',reason='survey',starts=self.stamp,ends=self.stamp+30,on_duty=False))
+            for i,(queue,agent) in enumerate((('8001','Local/100@from-queue/n'),('8001','PJSIP/200'),('8002','PJSIP/300')))],
+            checkpoint_source='activity_cache',checkpoint=dict(observed=self.stamp+40))
+        project_batch(self.archive)
+        for endpoint in ('activity','activity/intervals'):
+            response=self.client(role='agent').get('/api/history/'+endpoint+self.dates)
+            self.assertEqual(response.status_code,200)
+            self.assertEqual({row['agent'] for row in response.json['rows']},{'Local/100@from-queue/n'})
+            self.assertEqual(self.client(menus=()).get('/api/history/'+endpoint+self.dates).status_code,403)
+            self.assertEqual(self.client().get('/api/history/'+endpoint+self.dates+'&queue=8002').status_code,403)
+        bad=self.client().get('/api/history/activity/intervals'+self.dates+'&before_time=NaN&before_id=x')
+        self.assertEqual(bad.status_code,400)
+
     def test_audio_authorizes_before_open_supports_ranges_and_no_paths(self):
         self.seed()
         audio = self.root / 'audio'

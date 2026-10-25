@@ -1,7 +1,7 @@
 """Low-priority bounded imports/projections, independent of the HTTP process.
 
-JSONL inputs are immutable source snapshots. This worker does not pretend to
-be a direct SQL replication adapter. Live queue_log is followed incrementally.
+JSONL inputs are immutable snapshots. Optional local SQL is read with indexed,
+bounded queries. No ingestion runs in an HTTP request.
 """
 import argparse
 import json
@@ -15,18 +15,50 @@ import time
 from .facts import project_batch
 from .sources import QueueLog, import_json_lines
 from .store import Archive
+from .activity_source import ActivitySource
+from .sql_source import SQLSource
 
 LOG = logging.getLogger('sanequeue.reporting.worker')
 
 
-def cycle(archive, *, queue_log=None, cdr_json=None, cel_json=None):
+class SourceRunner:
+    """Isolate source failures and back off without stopping other imports."""
+    def __init__(self):
+        self.failures={}
+        self.due={}
+
+    def run(self,archive,name,function,*,interval=0):
+        now=time.time()
+        if now<self.due.get(name,0):return dict(deferred=True)
+        try:
+            result=function()
+        except Exception as error:
+            count=self.failures.get(name,0)+1
+            self.failures[name]=count
+            self.due[name]=now+min(300,2**min(count,8))
+            status=dict(ok=False,checked=now,error=type(error).__name__,retry_after=self.due[name])
+        else:
+            self.failures.pop(name,None)
+            self.due[name]=now+interval
+            status=dict(ok=True,checked=now,progress={key:value for key,value in result.items()
+                        if key in ('cel_caught_up','cdr_caught_up','cdr_overlap_caught_up','caught_up')})
+        archive.append([],checkpoint_source='health:'+name,checkpoint=status)
+        return result if status['ok'] else status
+
+
+def cycle(archive, *, queue_log=None, cdr_json=None, cel_json=None, activity_cache=None, sql_source=None, runner=None):
     """One bounded cycle; source positions and facts survive cancellation."""
     result = {}
+    runner=runner or SourceRunner()
     if queue_log:
-        result['queue_log'] = QueueLog(queue_log).ingest(archive, max_events=250, seconds=.05)
+        result['queue_log'] = runner.run(archive,'queue_log',lambda:QueueLog(queue_log).ingest(archive, max_events=250, seconds=.05))
     for source, path in (('cdr', cdr_json), ('cel', cel_json)):
         if path:
-            result[source] = import_json_lines(archive, path, source, max_events=250)
+            result[source] = runner.run(archive,source,lambda:import_json_lines(archive, path, source, max_events=250))
+    if activity_cache:
+        result['activity']=runner.run(archive,'activity',lambda:ActivitySource(activity_cache).ingest(archive))
+    if sql_source:
+        result['sql']=runner.run(archive,'sql',lambda:sql_source.ingest(archive),interval=15)
     result['projection'] = project_batch(archive, limit=500)
     return result
 
@@ -38,6 +70,8 @@ def main():
     parser.add_argument('--queue-log')
     parser.add_argument('--cdr-json')
     parser.add_argument('--cel-json')
+    parser.add_argument('--activity-cache')
+    parser.add_argument('--mysql-config')
     parser.add_argument('--disabled-file')
     parser.add_argument('--interval', type=float, default=3)
     parser.add_argument('--once', action='store_true')
@@ -52,6 +86,8 @@ def main():
         signal.signal(sig, lambda *_: stopped.set())
     archive = Archive(args.database, pbx=args.pbx)
     archive.initialize()
+    sql_source=SQLSource.from_file(args.mysql_config) if args.mysql_config else None
+    runner=SourceRunner()
     checkpoint_at = time.monotonic()
     while not stopped.is_set():
         if args.disabled_file and Path(args.disabled_file).exists():
@@ -61,7 +97,7 @@ def main():
             stopped.wait(args.interval)
             continue
         try:
-            result = cycle(archive, queue_log=args.queue_log, cdr_json=args.cdr_json, cel_json=args.cel_json)
+            result = cycle(archive, queue_log=args.queue_log, cdr_json=args.cdr_json, cel_json=args.cel_json,activity_cache=args.activity_cache,sql_source=sql_source,runner=runner)
             if args.once:
                 print(json.dumps(result))
                 return

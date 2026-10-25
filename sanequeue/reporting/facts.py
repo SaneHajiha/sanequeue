@@ -36,8 +36,13 @@ CREATE TABLE IF NOT EXISTS report_cel_transfers(
  PRIMARY KEY(pbx,source_key));
 CREATE INDEX IF NOT EXISTS rct_link ON report_cel_transfers(pbx,linkedid,ts);
 CREATE INDEX IF NOT EXISTS rct_uid ON report_cel_transfers(pbx,uid,ts);
+CREATE TABLE IF NOT EXISTS report_activity(
+ pbx TEXT,source_key TEXT,event_id INTEGER,queue TEXT,agent TEXT,state TEXT,reason TEXT,
+ starts REAL,ends REAL,on_duty INTEGER,coverage TEXT,canonical_agent TEXT,PRIMARY KEY(pbx,source_key));
+CREATE INDEX IF NOT EXISTS ra_queue ON report_activity(pbx,queue,starts);
+CREATE INDEX IF NOT EXISTS ra_agent ON report_activity(pbx,agent,starts);
 '''
-PROJECTION_VERSION = 2
+PROJECTION_VERSION = 3
 
 
 def number(value):
@@ -147,6 +152,10 @@ def project_batch(archive, *, limit=500):
     with archive.writer() as db:
         db.executescript(SCHEMA)
         db.execute('BEGIN IMMEDIATE')
+        columns = {row[1] for row in db.execute('PRAGMA table_info(report_activity)')}
+        if 'canonical_agent' not in columns:
+            db.execute('ALTER TABLE report_activity ADD COLUMN canonical_agent TEXT')
+            db.execute('UPDATE report_activity SET canonical_agent=agent')
         previous = db.execute('SELECT after_id FROM report_projection WHERE pbx=?', (archive.pbx,)).fetchone()
         after = previous[0] if previous else 0
         version = db.execute('SELECT version FROM report_projection_version WHERE pbx=?', (archive.pbx,)).fetchone()
@@ -161,7 +170,15 @@ def project_batch(archive, *, limit=500):
         dirty = set()
         for event_id, source, key, ts, kind, payload in events:
             row = json.loads(payload)
-            if source == 'cdr':
+            if source == 'activity':
+                db.execute('''INSERT INTO report_activity VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                  ON CONFLICT(pbx,source_key) DO UPDATE SET event_id=excluded.event_id,
+                  queue=excluded.queue,agent=excluded.agent,state=excluded.state,reason=excluded.reason,
+                  starts=excluded.starts,ends=excluded.ends,on_duty=excluded.on_duty,coverage=excluded.coverage,
+                  canonical_agent=excluded.canonical_agent''',
+                           (archive.pbx,key,event_id,row['queue'],row['agent'],row['state'],row['reason'],
+                            row['starts'],row['ends'],int(row['on_duty']),row.get('coverage','observed'),row.get('canonical_agent',row['agent'])))
+            elif source == 'cdr':
                 values = (archive.pbx, key, event_id, ts, *(str(row.get(k) or '') for k in (
                     'uniqueid', 'linkedid', 'src', 'dst', 'channel', 'dstchannel')),
                           number(row.get('duration')), number(row.get('billsec')),

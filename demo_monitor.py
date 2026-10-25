@@ -1151,13 +1151,20 @@ def planning_api(kind):
                    assigned_phone=cfg.get_value_set_default('supervisor_extensions',current_user.get_id() or '',''))
 
 from sanequeue.api.reports import install as install_reports
+def report_own_interfaces():
+    from sanequeue.reporting.identity import aliases
+    from sanequeue.realtime.local_inventory import read_snapshot
+    assigned=tuple(x.strip() for x in cfg.get_value_set_default('agent_interfaces',current_user.get_id() or '','').split(',') if x.strip())
+    return aliases(assigned,read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json')))
+
 install_reports(module.app, STATE/'history.sqlite3',
     role=lambda:cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'),
     sections=lambda:account_sections(current_user.get_id(),cfg.get_value_set_default('roles',current_user.get_id() or '','viewer')),
     can_queue=lambda queue,action:POLICIES.access(current_user.get_id() or '',cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'),queue,action),
-    own_interfaces=lambda:tuple(x.strip() for x in cfg.get_value_set_default('agent_interfaces',current_user.get_id() or '','').split(',') if x.strip()),
+    own_interfaces=report_own_interfaces,
     own_since=lambda:read_accounts(ACCOUNTS_PATH).get(current_user.get_id(),{}).get('phone_assigned_at',0),
-    recording_root=cfg.get_value_set_default('sanequeue','recording_root','/var/spool/asterisk/monitor'))
+    recording_root=cfg.get_value_set_default('sanequeue','recording_root','/var/spool/asterisk/monitor'),
+    reason_label=lambda queue,reason:next((item['label'] for item in POLICIES.reasons(queue) if item['id']==reason),reason))
 
 from sanequeue.pbx.features import install as install_pbx_features
 install_pbx_features(module.app,STATE,lambda:cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'))

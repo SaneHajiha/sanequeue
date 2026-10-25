@@ -16,11 +16,16 @@ def _where(pbx, scope, start, end):
     start, end = float(start), float(end)
     if not all(math.isfinite(n) for n in (start, end)) or start < 0 or end <= start or end - start > 366 * 86400:
         raise ValueError('invalid_report_range')
+    clause,args = _scope(pbx,scope)
+    return clause+' AND entered>=? AND entered<?',args+[max(start,scope.not_before),end]
+
+
+def _scope(pbx,scope):
     if len(scope.queues) > 256 or len(scope.agents) > 64:
         raise ValueError('report_scope_limit')
     queues = tuple(dict.fromkeys(scope.queues))
-    clause = 'pbx=? AND entered>=? AND entered<?'
-    args = [pbx, max(start, scope.not_before), end]
+    clause = 'pbx=?'
+    args = [pbx]
     if not queues:
         return clause + ' AND 0', args
     clause += ' AND queue IN (' + ','.join('?' for _ in queues) + ')'
@@ -35,7 +40,8 @@ def _where(pbx, scope, start, end):
 
 def queues(archive):
     with archive.reader() as db:
-        return [r[0] for r in db.execute('SELECT DISTINCT queue FROM report_visits WHERE pbx=? ORDER BY queue LIMIT 257', (archive.pbx,))]
+        return [r[0] for r in db.execute('''SELECT queue FROM report_visits WHERE pbx=?
+          UNION SELECT queue FROM report_activity WHERE pbx=? ORDER BY queue LIMIT 257''', (archive.pbx,archive.pbx))]
 
 
 def overview(archive, scope, start, end, *, sla_seconds=20):

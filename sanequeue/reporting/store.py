@@ -64,6 +64,15 @@ class Archive:
                 CREATE TABLE IF NOT EXISTS checkpoints(
                   pbx TEXT,source TEXT,value TEXT,updated REAL,
                   PRIMARY KEY(pbx,source));
+                CREATE TABLE IF NOT EXISTS activity_import_open(
+                  pbx TEXT,source TEXT,row_id INTEGER,source_key TEXT,payload TEXT,
+                  PRIMARY KEY(pbx,source,row_id));
+                CREATE TABLE IF NOT EXISTS sql_cdr_pending(
+                  pbx TEXT,uid TEXT,due REAL,attempts INTEGER,created REAL,
+                  PRIMARY KEY(pbx,uid));
+                CREATE TABLE IF NOT EXISTS sql_cdr_unresolved(
+                  pbx TEXT,uid TEXT,attempts INTEGER,last_checked REAL,reason TEXT,
+                  PRIMARY KEY(pbx,uid));
                 CREATE TABLE IF NOT EXISTS archive_stats(
                   pbx TEXT PRIMARY KEY,events INTEGER NOT NULL DEFAULT 0,
                   rejected INTEGER NOT NULL DEFAULT 0,updated REAL);
@@ -125,7 +134,7 @@ class Archive:
             row = db.execute('SELECT value FROM checkpoints WHERE pbx=? AND source=?', (self.pbx, source)).fetchone()
             return json.loads(row[0]) if row else {}
 
-    def append(self, events, *, checkpoint_source=None, checkpoint=None, rejected=0):
+    def append(self, events, *, checkpoint_source=None, checkpoint=None, rejected=0, update_state=None):
         from .correlate import project
         rows = []
         total_bytes = 0
@@ -165,6 +174,10 @@ class Archive:
                 db.execute('INSERT OR REPLACE INTO checkpoints VALUES(?,?,?,?)', (self.pbx, checkpoint_source, value, time.time()))
             db.execute('INSERT INTO archive_stats VALUES(?,?,?,?) ON CONFLICT(pbx) DO UPDATE SET events=events+excluded.events,rejected=rejected+excluded.rejected,updated=excluded.updated',
                        (self.pbx, inserted, max(0, rejected), time.time()))
+            if update_state is not None:
+                # Trusted importer bookkeeping shares this transaction. A
+                # failure must roll back evidence, cursor and open-row state.
+                update_state(db)
         return inserted
 
     def page(self, *, after=0, limit=100, source=None):

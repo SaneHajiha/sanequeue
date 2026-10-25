@@ -2,3 +2,5 @@
 /* Historical reports have their own date/queue filters and metric definition. */
 body[data-view="reports"] .toolbar,
 body[data-view="reports"] .monitor-preferences { display: none !important; }
+
+.history-navigation{display:flex;gap:8px;flex-wrap:wrap;padding:4px 0}.history-navigation a{padding:10px 16px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);text-decoration:none}.history-navigation a:hover,.history-navigation a:focus-visible{outline:2px solid #3b82f6;outline-offset:2px}.history-section{scroll-margin-top:90px}.history-section table{width:100%;border-collapse:collapse}.history-section td,.history-section th{padding:12px 14px;white-space:nowrap}.history-section tbody tr+tr{border-top:1px solid var(--line)}.history-section .table-wrap+.table-wrap{border-top:1px solid var(--line);margin-top:16px}

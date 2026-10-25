@@ -26,13 +26,13 @@ Date: 2026-10-25. Environment: Asterisk 20.12, isolated reporting preview on por
 
 دکمهٔ پخش روی ضبط تماس واقعی در مرورگر آزمایش شد: زمان پخش جلو رفت، `readyState=4` و خطای رسانه وجود نداشت. این نتیجه به معنی ارزیابی شنیداری یا کیفیت RTP نیست. CSV دو ردیف منتقل‌شده را صادر کرد؛ پس از مشاهدهٔ خروجی فنی نامناسب در Excel، XLSX و CSV خوانا اضافه شدند. XLSX فارسی از دکمهٔ پنل دانلود و در Excel توسط کاربر باز شد؛ خواندن مستقل فایل نیز دو ردیف منتقل‌شده، تاریخ شمسی، شمارهٔ متنی، RTL و ثابت‌بودن سرستون‌ها را تأیید کرد.
 
-پایان دانلود فایل صوتی در مرورگر هنوز تأیید نشده است. ابزار صفحهٔ داخلی دانلودهای Chrome را طبق سیاست امنیتی خود مسدود کرد؛ این محدودیت نباید به‌عنوان موفقیت یا خرابی قطعی دانلود محصول گزارش شود. دریافت بایت و مجوزهای صوت جداگانه آزموده شده‌اند.
+کاربر پس از دانلود فایل صوتی اصلی، پخش صحیح آن را نیز تأیید کرد. دریافت بایت، مجوزهای صوت و پخش مرورگر جداگانه آزموده شدند؛ ارزیابی کیفیت RTP زیر بار همچنان آزمونی مستقل است.
 
 ## English UI acceptance
 
 Attended transfer, park and retrieve were exercised through the panel forms. Parking initially targeted the wrong party because the initiator semantics were unclear; the new label and in-panel confirmation explicitly explain that the opposite party is parked and returns to the initiator on timeout. Retesting the correct initiator parked the caller in slot 71 and retrieved it to the supervisor, confirmed by the human tester. Cancel closes the confirmation without submitting a command; confirmed payload values are captured before the dialog opens.
 
-The real recording's play control advanced playback with readyState 4 and no media error. This is player acceptance, not an auditory/RTP quality test. Two transferred rows were exported through the UI. The user opened the new Persian XLSX in Excel; an independent reader verified its two outcomes, Persian date text, string phone cells, RTL and frozen headers. Browser completion of original-audio download remains unverified: the browser tool blocked access to Chrome's internal downloads page. No bypass was attempted.
+The real recording's play control advanced playback with readyState 4 and no media error. This is player acceptance, not an auditory/RTP quality test. Two transferred rows were exported through the UI. The user opened the new Persian XLSX in Excel; an independent reader verified its two outcomes, Persian date text, string phone cells, RTL and frozen headers. The user subsequently confirmed successful original-audio download and playback. RTP quality under load remains a separate acceptance test.
 
 Four human-operated calls were compared with actual queue_log evidence and the authenticated reporting API: caller hangup (2 s wait, 20 s talk), agent hangup (3 s wait, 16 s talk), abandonment (20 s wait), and transfer followed by delayed Queue completion. Each produced exactly one queue visit after the transfer regression was fixed.
 

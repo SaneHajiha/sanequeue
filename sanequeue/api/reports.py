@@ -14,13 +14,14 @@ from werkzeug.exceptions import HTTPException
 
 from sanequeue.reporting import queries
 from sanequeue.reporting import exports
+from sanequeue.reporting import activity_queries
 from sanequeue.reporting.audio import byte_range, open_recording
 from sanequeue.reporting.privacy import display_number
 from sanequeue.reporting.store import Archive, QueryDeadline
 
 
 def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), own_since=lambda: 0,
-            recording_root='/var/spool/asterisk/monitor', pbx='primary'):
+            recording_root='/var/spool/asterisk/monitor', pbx='primary',reason_label=lambda queue,reason:reason):
     archive = Archive(path, pbx=pbx)
     app.config['SANEQUEUE_HISTORY_INSTALLED'] = True
 
@@ -85,6 +86,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         scope, start, end = context()
         result = queries.overview(archive, scope, start, end, sla_seconds=request.args.get('sla', 20))
         result['timezone'] = 'Asia/Tehran'
+        result['allowed_queues']=list(scope.queues)
+        result['sources']={name:archive.checkpoint('health:'+name) for name in ('queue_log','activity','sql')}
         result['archive'] = archive.status()
         # Checkpoints can identify private source paths; expose only safe fields.
         result['archive'].pop('checkpoints', None)
@@ -107,6 +110,25 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     def history_agents():
         scope, start, end = context()
         return jsonify(queries.agents(archive, scope, start, end))
+
+    @app.get('/api/history/activity')
+    @login_required
+    @safe
+    def history_activity():
+        scope,start,end=context()
+        result=activity_queries.summary(archive,scope,start,end)
+        for row in result['rows']:row['reason_label']=reason_label(row['queue'],row['reason'])
+        return jsonify(result)
+
+    @app.get('/api/history/activity/intervals')
+    @login_required
+    @safe
+    def history_activity_intervals():
+        scope,start,end=context()
+        before=(request.args['before_time'],request.args['before_id']) if 'before_time' in request.args and 'before_id' in request.args else None
+        result=activity_queries.intervals(archive,scope,start,end,before=before)
+        for row in result['rows']:row['reason_label']=reason_label(row['queue'],row['reason'])
+        return jsonify(result)
 
     def authorized_detail(visit_id):
         scope, start, end = context()

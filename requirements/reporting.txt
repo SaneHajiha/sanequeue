@@ -1,0 +1,2 @@
+# Optional local read-only CDR/CEL importer; no ASR/GPU dependencies.
+PyMySQL==1.2.3
