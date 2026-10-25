@@ -29,6 +29,19 @@ def run(args,**kwargs):
     return subprocess.run(args,check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=kwargs.pop('timeout',30),**kwargs)
 
 
+def private_permissions(path,uid,gid,mode):
+    """Use one no-follow descriptor; Linux lchmod support is not required."""
+    descriptor=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    try:
+        metadata=os.fstat(descriptor)
+        if not (stat.S_ISREG(metadata.st_mode) or stat.S_ISDIR(metadata.st_mode)):
+            raise ValueError('invalid_private_state_file')
+        os.fchown(descriptor,uid,gid)
+        os.fchmod(descriptor,mode)
+    finally:
+        os.close(descriptor)
+
+
 def origin_default():
     for token in subprocess.check_output(['hostname','-I']).decode().split():
         try:
@@ -143,10 +156,10 @@ def main():
         private(etc/'redis.conf',f'bind 127.0.0.1\nport 16379\nprotected-mode yes\nrequirepass {redis_secret}\nsave ""\nappendonly no\nmaxmemory 128mb\nmaxmemory-policy noeviction\ndaemonize no\n')
         for root,dirs,files in os.walk(resolved_state):
             if Path(root).is_symlink() or any((Path(root)/name).is_symlink() for name in dirs+files):raise ValueError('symlink_in_private_state_refused')
-            os.chown(root,owner.pw_uid,group.gr_gid,follow_symlinks=False);os.chmod(root,0o750,follow_symlinks=False)
+            private_permissions(root,owner.pw_uid,group.gr_gid,0o750)
             for name in files:
                 path=Path(root)/name
-                os.chown(path,owner.pw_uid,group.gr_gid,follow_symlinks=False);os.chmod(path,0o600,follow_symlinks=False)
+                private_permissions(path,owner.pw_uid,group.gr_gid,0o600)
         if link.exists() and not link.is_symlink():
             if not link.resolve().is_relative_to(Path('/opt')):raise ValueError('unsafe_existing_source')
             old_physical=Path('/opt')/('sanequeue-before-'+stamp);link.rename(old_physical)

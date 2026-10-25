@@ -1,3 +1,9 @@
+# 2.1.0-beta.26 · 2026-10-25
+
+- Fix Rocky/EL8 private-state permission provisioning using no-follow file descriptors; add Linux regression coverage.
+- Includes all beta.25 queue, notification, directory and telephone-module improvements.
+- Beta.25 public installer rolled back safely; use beta.26 for installation.
+
 # 2.1.0-beta.25 · 2026-10-25
 
 - Queue/operations visual hierarchy, accurate health labels and fullscreen summaries.
