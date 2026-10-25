@@ -108,6 +108,8 @@ class ReportingSourceTests(unittest.TestCase):
         path.write_bytes(b'200|v|8001|NONE|ENTERQUEUE||200|1\n' + b'201|v|8001|Local/200|CONNECT|1|dest|1\n' * 4)
         result = importer.ingest(self.store)
         self.assertTrue(result['rotation_detected'])
+        self.assertTrue(result['coverage_gap'])
+        self.assertTrue(importer.ingest(self.store)['coverage_gap'])
         self.assertTrue(self.store.checkpoint('queue_log')['generation'])
         self.assertEqual(self.store.page()[0]['payload']['callid'], 'u')
 

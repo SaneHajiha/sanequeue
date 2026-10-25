@@ -116,6 +116,10 @@ class SQLSource:
                     anchor=cursor.fetchone()
                     if anchor is None or self._anchor(self._event('cel',anchor))!=checkpoint.get('anchor'):
                         raise ValueError('cel_source_reset_requires_new_generation')
+                # Drain independently of the next CEL batch. A full queue must
+                # not prevent the work which frees its own capacity. Verify
+                # the source generation before importing any pending CDRs.
+                pending_result=self._cdr_pending(cursor,archive,now)
                 cursor.execute('SELECT '+columns+' FROM '+self._table('cel')+' WHERE `id`>%s ORDER BY `id` LIMIT %s',(after,limit))
                 rows=cursor.fetchall();events=[self._event('cel',row) for row in rows]
                 identities={str((row.get('linkedid') if 'linkedid' in self.schema['cdr'] else '') or row.get('uniqueid') or '') for row in rows if str(row['eventtype']).upper() in ('CHAN_END','LINKEDID_END','HANGUP')}-{''}
@@ -123,6 +127,9 @@ class SQLSource:
                 def enqueue(db):
                     count=db.execute('SELECT COUNT(*) FROM sql_cdr_pending WHERE pbx=?',(archive.pbx,)).fetchone()[0]
                     for uid in identities:
+                        quarantined=db.execute('SELECT 1 FROM sql_cdr_unresolved WHERE pbx=? AND uid=? AND reason=?',
+                                               (archive.pbx,uid,'identity_fanout_limit')).fetchone()
+                        if quarantined:continue
                         exists=db.execute('SELECT 1 FROM sql_cdr_pending WHERE pbx=? AND uid=?',(archive.pbx,uid)).fetchone()
                         if not exists:
                             if count>=20000:raise ValueError('cdr_pending_capacity')
@@ -133,8 +140,8 @@ class SQLSource:
                            anchor=self._anchor(events[-1]) if events else checkpoint.get('anchor'),observed=now)
                 inserted=archive.append(events,checkpoint_source=name,checkpoint=value,update_state=enqueue)
                 result=dict(cel_inserted=inserted,cel_rows=len(rows),cel_caught_up=len(rows)<limit)
+                result.update(pending_result)
                 result.update(self._cdr_backfill(cursor,archive,limit,now))
-                result.update(self._cdr_pending(cursor,archive,now))
                 if result['cdr_caught_up']:
                     result.update(self._cdr_overlap(cursor,archive,limit,now))
                 return result
@@ -157,19 +164,36 @@ class SQLSource:
         with archive.reader() as db:
             pending=[dict(row) for row in db.execute('SELECT uid,attempts,created FROM sql_cdr_pending WHERE pbx=? AND due<=? ORDER BY created DESC LIMIT 20',(archive.pbx,now))]
         if not pending:return dict(cdr_lookups=0)
-        identities=[row['uid'] for row in pending];events={}
-        for column in ('uniqueid','linkedid'):
-            if column not in self.schema['cdr']:continue
-            cursor.execute('SELECT '+self._columns(cursor,'cdr')+' FROM '+self._table('cdr')+' WHERE '+identifier(column)+' IN ('+','.join('%s' for _ in identities)+') LIMIT 501',identities)
-            rows=cursor.fetchall()
-            if len(rows)>500:raise ValueError('cdr_identity_fanout_limit')
-            for row in rows:
-                event=self._event('cdr',row);events[event.key]=event
+        def lookup(identities):
+            events={}
+            for column in ('uniqueid','linkedid'):
+                if column not in self.schema['cdr']:continue
+                cursor.execute('SELECT '+self._columns(cursor,'cdr')+' FROM '+self._table('cdr')+' WHERE '+identifier(column)+' IN ('+','.join('%s' for _ in identities)+') LIMIT 501',identities)
+                rows=cursor.fetchall()
+                if len(rows)>500:return None
+                for row in rows:
+                    event=self._event('cdr',row);events[event.key]=event
+            return events
+        events=lookup([row['uid'] for row in pending])
+        quarantined=set()
+        if events is None:
+            # A dense identity must not poison the whole batch. Isolate one
+            # job per cycle, with at most two extra indexed SELECTs. Healthy
+            # jobs receive their retry time, so subsequent jobs get a turn.
+            pending=pending[:1]
+            events=lookup([pending[0]['uid']])
+            if events is None or len(events)>500:
+                quarantined.add(pending[0]['uid'])
+                events={}
         def finish(db):
             for row in pending:
+                if row['uid'] in quarantined:
+                    db.execute('INSERT OR REPLACE INTO sql_cdr_unresolved VALUES(?,?,?,?,?)',
+                               (archive.pbx,row['uid'],row['attempts'],now,'identity_fanout_limit'))
+                    db.execute('DELETE FROM sql_cdr_pending WHERE pbx=? AND uid=?',(archive.pbx,row['uid']))
                 # Recheck after initial success: another CDR leg/recording
                 # reference can be committed shortly after the first one.
-                if row['attempts']>=3 and any(row['uid'] in (e.payload.get('uniqueid'),e.payload.get('linkedid')) for e in events.values()):
+                elif row['attempts']>=3 and any(row['uid'] in (e.payload.get('uniqueid'),e.payload.get('linkedid')) for e in events.values()):
                     db.execute('DELETE FROM sql_cdr_pending WHERE pbx=? AND uid=?',(archive.pbx,row['uid']))
                 elif now-row['created']>=86400:
                     # Retain an explicit unresolved record instead of an
@@ -181,7 +205,7 @@ class SQLSource:
                     delay=min(3600,5*2**min(10,row['attempts']))
                     db.execute('UPDATE sql_cdr_pending SET attempts=attempts+1,due=? WHERE pbx=? AND uid=?',(now+delay,archive.pbx,row['uid']))
         inserted=archive.append(events.values(),update_state=finish)
-        return dict(cdr_lookups=len(pending),cdr_lookup_inserted=inserted)
+        return dict(cdr_lookups=len(pending),cdr_lookup_inserted=inserted,cdr_lookup_quarantined=len(quarantined))
 
     def _cdr_overlap(self,cursor,archive,limit,now):
         """Reconcile late CDR commits in a bounded 24-hour indexed window."""

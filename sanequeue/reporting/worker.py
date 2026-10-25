@@ -19,6 +19,10 @@ from .activity_source import ActivitySource
 from .sql_source import SQLSource
 
 LOG = logging.getLogger('sanequeue.reporting.worker')
+SAFE_REASONS=frozenset(('reporting_source_index_required','reporting_cdr_identity_index_required',
+    'reporting_source_schema_missing_fields','reporting_cel_integer_id_required',
+    'cel_source_reset_requires_new_generation','cdr_pending_capacity','cdr_identity_fanout_limit',
+    'cdr_timestamp_density_exceeds_batch','reporting_disk_pressure','sql_identity_limit'))
 
 
 class SourceRunner:
@@ -37,11 +41,13 @@ class SourceRunner:
             self.failures[name]=count
             self.due[name]=now+min(300,2**min(count,8))
             status=dict(ok=False,checked=now,error=type(error).__name__,retry_after=self.due[name])
+            reason=str(error)
+            status['reason']=reason if reason in SAFE_REASONS else 'source_unavailable'
         else:
             self.failures.pop(name,None)
             self.due[name]=now+interval
             status=dict(ok=True,checked=now,progress={key:value for key,value in result.items()
-                        if key in ('cel_caught_up','cdr_caught_up','cdr_overlap_caught_up','caught_up')})
+                        if key in ('cel_caught_up','cdr_caught_up','cdr_overlap_caught_up','caught_up','coverage_gap')})
         archive.append([],checkpoint_source='health:'+name,checkpoint=status)
         return result if status['ok'] else status
 

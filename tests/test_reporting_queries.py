@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import time
 
 from flask import Flask
 from flask_login import LoginManager, UserMixin
@@ -20,6 +21,9 @@ class ReportTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.archive = Archive(self.root / 'history.db', min_free_bytes=0)
         self.archive.initialize()
+        for name,progress in (('sql',dict(cel_caught_up=True,cdr_caught_up=True)),('queue_log',dict(caught_up=True))):
+            self.archive.append([],checkpoint_source='health:'+name,
+                                checkpoint=dict(ok=True,checked=time.time(),progress=progress))
         self.stamp = 1792886400
         self.counter = 0
 
@@ -177,9 +181,9 @@ class ReportTests(unittest.TestCase):
         audio.mkdir()
         (audio / 'test.wav').write_bytes(b'RIFF0123456789')
         self.archive.append([Event('cdr', 'audio-id', self.stamp, 'CDR',
-                                   dict(uniqueid='a', linkedid='a', recordingfile='test.wav')),
+                                   dict(uniqueid='a', linkedid='a', duration=40,recordingfile='test.wav')),
                              Event('cdr', 'audio-second-leg', self.stamp, 'CDR',
-                                   dict(uniqueid='second-leg', linkedid='a', recordingfile='test.wav'))])
+                                   dict(uniqueid='second-leg', linkedid='a',duration=40, recordingfile='test.wav'))])
         project_batch(self.archive)
         ident = visits(self.archive, self.scope, self.stamp, self.stamp + 100)['rows'][0]['id']
         url = '/api/history/visits/' + ident + '/recordings/audio-id' + self.dates
@@ -201,6 +205,29 @@ class ReportTests(unittest.TestCase):
         for path in ('../secret', '/etc/passwd', 'x\\secret', '\x00'):
             with self.assertRaises(ValueError):
                 open_recording(audio, path)
+
+    def test_audio_cannot_escape_queue_scope_through_linkedid_or_shared_filename(self):
+        self.seed()
+        self.archive.append([
+            self.event('a','8002','ENTERQUEUE',22,['','200']),
+            self.event('a','8002','CONNECT',23,['1'],'PJSIP/300'),
+            self.event('a','8002','COMPLETECALLER',35,['1','12'],'PJSIP/300'),
+            Event('cdr','private-leg',self.stamp+23,'CDR',dict(uniqueid='leg-b',linkedid='a',recordingfile='secret.wav'))])
+        project_batch(self.archive)
+        ident=visits(self.archive,self.scope,self.stamp,self.stamp+100)['rows'][0]['id']
+        url='/api/history/visits/'+ident+self.dates
+        self.assertEqual(self.client().get(url).json['recordings'],[])
+        sound='/api/history/visits/'+ident+'/recordings/private-leg'+self.dates
+        self.assertEqual(self.client().get(sound).status_code,403)
+        # Same basename on another chain is ambiguous too; dated aliases must
+        # not bypass permission by choosing the first visible reference.
+        self.archive.append([Event('cdr','visible-leg',self.stamp,'CDR',dict(uniqueid='a',linkedid='a',recordingfile='2026/10/25/secret.wav'))])
+        project_batch(self.archive)
+        self.assertEqual(self.client().get(url).json['recordings'],[])
+
+    def test_audio_rejects_symlinks_and_supports_suffix_ranges(self):
+        audio=self.root/'audio'
+        audio.mkdir()
         outside = self.root / 'secret.wav'
         outside.write_bytes(b'private')
         try:
@@ -212,6 +239,25 @@ class ReportTests(unittest.TestCase):
                 open_recording(audio, 'link.wav')
         self.assertEqual(byte_range('bytes=-4', 10), (6, 9, True))
         self.assertEqual(byte_range('bytes=4-', 10), (4, 9, True))
+
+    def test_audio_waits_for_complete_fresh_projection_and_refuses_downstream_tail(self):
+        from sanequeue.reporting.recording_scope import permitted
+        self.seed()
+        self.archive.append([Event('cdr','audio',self.stamp,'CDR',dict(uniqueid='a',linkedid='a',duration=40,recordingfile='voice.wav'))])
+        allow=lambda q,cap:q=='8001'
+        self.assertFalse(permitted(self.archive,'audio','recording_play',allow))
+        project_batch(self.archive)
+        self.assertTrue(permitted(self.archive,'audio','recording_play',allow))
+        self.archive.append([],checkpoint_source='health:sql',checkpoint=dict(ok=True,checked=time.time()-100,
+            progress=dict(cel_caught_up=True,cdr_caught_up=True)))
+        self.assertFalse(permitted(self.archive,'audio','recording_play',allow))
+        self.archive.append([],checkpoint_source='health:sql',checkpoint=dict(ok=True,checked=time.time(),
+            progress=dict(cel_caught_up=True,cdr_caught_up=True)))
+        # A CDR extending past the known queue end cannot be authorized while
+        # a transfer event is still missing, even when health looks current.
+        self.archive.append([Event('cdr','audio',self.stamp,'CDR',dict(uniqueid='a',linkedid='a',duration=80,recordingfile='voice.wav'))])
+        project_batch(self.archive)
+        self.assertFalse(permitted(self.archive,'audio','recording_play',allow))
 
     def test_export_neutralizes_formulas_and_reports_missing_archive(self):
         self.archive.append([self.event('a','8001','ENTERQUEUE',0,agent='=formula'),

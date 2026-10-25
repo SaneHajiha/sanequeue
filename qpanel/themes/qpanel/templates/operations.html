@@ -7,37 +7,13 @@
 <link rel="stylesheet" href="{{ theme_static('css/operations.css') }}?v={{ current_version() }}">
 <link rel="stylesheet" href="{{ theme_static('css/accessibility.css') }}?v={{ current_version() }}">
 <link rel="stylesheet" href="{{ theme_static('css/overview.css') }}?v={{ current_version() }}">
-<link rel="stylesheet" href="{{ theme_static('css/reports.css') }}?v={{ current_version() }}"></head>
+<link rel="stylesheet" href="{{ theme_static('css/reports.css') }}?v={{ current_version() }}"><link rel="stylesheet" href="{{ theme_static('css/navigation.css') }}?v={{ current_version() }}"></head>
 <body data-view="live">
 <a class="skip" href="#main">{{ t('رفتن به محتوا','Skip to content') }}</a>
 <aside class="sidebar">
  <a class="brand" href="/operations"><img class="organization-logo" data-organization-logo {% if organization.logo_url %}src="{{ organization.logo_url }}"{% else %}hidden{% endif %} alt="{{ organization.name }}"><span class="mark" data-organization-mark {% if organization.logo_url %}hidden{% endif %}>S</span><span><b data-organization-name>{{ organization.name }}</b><small data-organization-subtitle>{{ organization.subtitle }}</small></span></a>
  <label class="mobile-view-jump">{{ t('رفتن به بخش','Go to section') }}<select id="view-jump" aria-label="{{ t('رفتن به بخش','Go to section') }}"></select></label>
- <p class="nav-caption">{{ t('فضای کاری','WORKSPACE') }}</p>
- <nav aria-label="{{ t('ناوبری اصلی','Main navigation') }}" class="sq-full-nav">
-  {% if can_view_section('live') %}<button type="button" class="nav-item active" data-view="live" aria-current="page"><span>◈</span>{{ t('مرکز عملیات','Overview') }}</button>{% endif %}
-  {% if can_view_section('queues') %}<button type="button" class="nav-item" data-view="queues"><span>▦</span>{{ t('صف‌ها','Queues') }}</button>{% endif %}
-  {% if can_view_section('calls') %}<button type="button" class="nav-item" data-view="calls"><span>◔</span>{{ t('تماس‌های جاری','Active calls') }}<b id="calls-count">—</b></button>{% endif %}
-  {% if can_view_section('waiting') %}<button type="button" class="nav-item" data-view="waiting"><span>◷</span>{{ t('تماس‌های منتظر','Waiting calls') }}<b id="waiting-nav-count">—</b></button>{% endif %}
-  {% if can_view_section('agents') %}<button type="button" class="nav-item" data-view="agents"><span>♙</span>{{ t('کارشناسان','Agents') }}<b id="agent-count">—</b></button>{% endif %}
-  {% if can_view_section('presence') %}<button type="button" class="nav-item" data-view="presence"><span>☎</span>{{ t('داخلی‌ها و حضور','Extensions & presence') }}</button>{% endif %}
-  {% if history_available and can_view_section('reports') %}<button type="button" class="nav-item" data-view="reports"><span>▥</span>{{ t('گزارش‌ها و مکالمات','Reports & recordings') }}</button>{% endif %}
-  {% if can_view_section('pbx') %}<button type="button" class="nav-item" data-view="pbx"><span>◫</span>{{ t('سلامت و داخلی‌های PBX','PBX health') }}</button>{% endif %}
-  {% if can_view_section('features') %}<button type="button" class="nav-item" data-view="features"><span>✦</span>{{ t('امکانات و توسعه','Capabilities') }}</button>{% endif %}
-  {% if can_view_section('control') %}<button type="button" class="nav-item" data-view="control"><span>⌁</span>{{ t('کنترل تماس','Call controls') }}</button>{% endif %}
-  {% if can_view_section('wallboard') %}<button type="button" class="nav-item" data-view="wallboard"><span>▣</span>{{ t('دیوار نمایش','Wallboard') }}</button>{% endif %}
-  {% if can_view_section('alerts') %}<button type="button" class="nav-item" data-view="alerts"><span>♢</span>{{ t('هشدارها','Alerts') }}<b id="alerts-nav-count">—</b></button>{% endif %}
-  {% if user_role in ('admin','supervisor') %}{% if can_view_section('audit') %}<button type="button" class="nav-item" data-view="audit"><span>≡</span>{{ t('ثبت عملیات','Audit trail') }}</button>{% endif %}{% endif %}
-  {% if user_role == 'admin' %}
-  <p class="nav-caption">{{ t('مدیریت','ADMIN') }}</p>
-  {% if can_view_section('policies') %}<button type="button" class="nav-item" data-view="policies"><span>⚖</span>{{ t('قوانین صف و دسترسی','Queue policies & access') }}</button>{% endif %}
-  {% if can_view_section('users') %}<button type="button" class="nav-item" data-view="users"><span>♧</span>{{ t('کاربران و دسترسی‌ها','Users & permissions') }}</button>{% endif %}
-  {% if can_view_section('telephony') %}<button type="button" class="nav-item" data-view="telephony"><span>☎</span>{{ t('ماژول‌های تلفنی','Telephone modules') }}</button>{% endif %}
-  {% if can_view_section('settings') %}<button type="button" class="nav-item" data-view="settings"><span>⚙</span>{{ t('تنظیمات سازمان و سرویس','Organization & service') }}</button>{% endif %}
-  {% endif %}
- {% if can_view_section('shifts') %}<button type="button" class="nav-item" data-view="shifts"><span>◷</span>{{ t('برنامه شیفت','Shift planning') }}</button>{% endif %}
- {% if can_view_section('directory') %}<button type="button" class="nav-item" data-view="directory"><span>▤</span>{{ t('دفترچه تلفن','Directory') }}</button>{% endif %}
- </nav>
+ {% include theme('module_navigation.html') %}
  <div class="sidebar-note"><span class="pulse"></span> {{ t('همراه تیم پاسخ‌گویی شما','Your team, in focus') }}<p>{{ t('همه امکانات مانیتورینگ و مدیریتی در دسترس است.','All monitoring and management views remain accessible.') }}</p></div>
  <div class="sidebar-foot">SaneQueue <span>{{ current_version() }}</span><small>Contact center monitoring</small></div>
 </aside>
@@ -429,7 +405,7 @@
 <section id="telephony-view" class="view" hidden>
 <section class="panel"><div class="panel-heading"><div><h2>{{ t('انتظار داخلی و تماس برگشتی','Extension waiting & callback') }}</h2><p>{{ t('فقط بین داخلی‌های شناسایی‌شده؛ شماره‌گیری بیرونی مجاز نیست.','Discovered internal extensions only; no external callback dialing.') }}</p></div><button id="telephony-refresh" type="button">↻ {{ t('بازخوانی','Refresh') }}</button></div>
 <form id="telephony-form" class="pbx-feature-form">
-<div class="pbx-feature-grid"><fieldset><legend>{{ t('انتظار و کال‌بک','Waiting & callback') }}</legend>
+<div class="pbx-feature-grid"><fieldset id="telephony-waiting"><legend>{{ t('انتظار و کال‌بک','Waiting & callback') }}</legend>
 <label class="feature-switch"><input type="checkbox" name="callback_enabled">{{ t('فعال‌سازی منوی داخلی مشغول','Enable busy-extension menu') }}</label>
 <label class="feature-switch"><input type="checkbox" name="waiting_enabled">{{ t('کلید ۱: منتظر آزاد شدن داخلی بماند','Key 1: wait until the extension is available') }}</label>
 <label class="feature-switch"><input type="checkbox" name="return_enabled">{{ t('کلید ۲: درخواست تماس برگشتی','Key 2: request callback') }}</label>
@@ -437,7 +413,7 @@
 <label>{{ t('اعتبار درخواست کال‌بک (ثانیه)','Callback expiry (seconds)') }}<input name="expiry_seconds" type="number" min="30" max="1800" required></label>
 <label>{{ t('فاصله بررسی آزاد بودن (ثانیه)','Availability check interval (seconds)') }}<input name="retry_seconds" type="number" min="5" max="60" required></label>
 <p class="report-note">{{ t('پس از آزاد شدن هر دو داخلی، ابتدا درخواست‌کننده زنگ می‌خورد و با پاسخ او، مقصد شماره‌گیری می‌شود. درخواست با نتیجه نامشخص خودکار تکرار نمی‌شود.','When both phones are idle, the requester rings first; answering dials the target. An uncertain dispatch is not retried automatically.') }}</p>
-</fieldset><fieldset><legend>{{ t('اصلاح شماره تماس‌گیرنده','Caller ID number formatting') }}</legend>
+</fieldset><fieldset id="telephony-callerid"><legend>{{ t('اصلاح شماره تماس‌گیرنده','Caller ID number formatting') }}</legend>
 <label class="feature-switch"><input type="checkbox" name="cid_enabled">{{ t('فعال‌سازی اصلاح شماره ورودی','Enable inbound number formatting') }}</label>
 <label class="feature-switch"><input type="checkbox" name="provider_prefixes">{{ t('قواعد پیشوندهای غیرعادی اپراتورهای ایران','Iranian provider prefix anomalies') }}</label>
 <label class="feature-switch"><input type="checkbox" name="expand_local">{{ t('افزودن کد شهر به شماره محلی','Expand local numbers with area code') }}</label>
@@ -468,4 +444,4 @@
 <script src="{{ theme_static('js/organization.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/telephony.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/reports.js') }}?v={{ current_version() }}" defer></script>
-</body></html>
+<script src="{{ theme_static('js/navigation.js') }}?v={{ current_version() }}" defer></script></body></html>

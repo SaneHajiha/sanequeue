@@ -70,6 +70,15 @@ class SQLTests(unittest.TestCase):
         self.assertEqual(result['projection']['processed'],1)
         self.assertTrue(cycle(self.archive,activity_cache='missing',runner=runner)['activity']['deferred'])
 
+    def test_source_health_uses_allowlisted_reasons_without_exception_details(self):
+        def missing_index():raise ValueError('reporting_source_index_required')
+        status=SourceRunner().run(self.archive,'sql',missing_index)
+        self.assertEqual(status['reason'],'reporting_source_index_required')
+        def private_error():raise RuntimeError('secret-password=/private/config.ini')
+        status=SourceRunner().run(self.archive,'sql',private_error)
+        self.assertEqual(status['reason'],'source_unavailable')
+        self.assertNotIn('secret-password',str(self.archive.checkpoint('health:sql')))
+
     def test_old_activity_schema_migrates_without_losing_history(self):
         with self.archive.writer() as db:
             db.execute('CREATE TABLE report_activity(pbx TEXT,source_key TEXT,event_id INTEGER,queue TEXT,agent TEXT,state TEXT,reason TEXT,starts REAL,ends REAL,on_duty INTEGER,coverage TEXT,PRIMARY KEY(pbx,source_key))')
@@ -96,3 +105,75 @@ class SQLTests(unittest.TestCase):
         with self.archive.reader() as db:
             self.assertEqual(db.execute('SELECT COUNT(*) FROM sql_cdr_pending').fetchone()[0],0)
             self.assertEqual(db.execute('SELECT reason FROM sql_cdr_unresolved').fetchone()[0],'no_cdr_after_24h')
+
+    def test_full_pending_queue_drains_before_new_cel_identity_is_enqueued(self):
+        with self.archive.writer() as db:
+            db.executemany('INSERT INTO sql_cdr_pending VALUES(?,?,?,?,?)',
+                           [('primary','old-'+str(i),0,3,i+1) for i in range(20000)])
+        cursor=Mock();cursor.__enter__=Mock(return_value=cursor);cursor.__exit__=Mock(return_value=False)
+        connection=Mock();connection.cursor.return_value=cursor
+        source=SQLSource({},connect=lambda:connection)
+        source.schema={name:set(fields) for name,fields in FIELDS.items()}
+        cursor.fetchone.return_value=dict(version='10.3.39-MariaDB')
+        def rows():
+            sql,parameters=cursor.execute.call_args.args
+            if ' IN (' in sql:
+                return [dict(calldate=datetime(2026,10,25),uniqueid='old-19999',linkedid='old-19999')]
+            if 'WHERE `id`>%s' in sql:
+                return [dict(id=1,eventtime=datetime(2026,10,25),eventtype='CHAN_END',uniqueid='new',linkedid='new')]
+            return []
+        cursor.fetchall.side_effect=rows
+        result=source.ingest(self.archive,now=90000)
+        self.assertEqual(result['cel_rows'],1)
+        self.assertEqual(result['cdr_lookup_inserted'],1)
+        self.assertEqual(self.archive.checkpoint('sql:cel:')['after_id'],1)
+        with self.archive.reader() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM sql_cdr_pending').fetchone()[0],20000)
+            self.assertIsNone(db.execute("SELECT 1 FROM sql_cdr_pending WHERE uid='old-19999'").fetchone())
+            self.assertIsNotNone(db.execute("SELECT 1 FROM sql_cdr_pending WHERE uid='new'").fetchone())
+        calls=[call.args[0] for call in cursor.execute.call_args_list]
+        self.assertLess(next(i for i,q in enumerate(calls) if ' IN (' in q),
+                        next(i for i,q in enumerate(calls) if 'WHERE `id`>%s' in q))
+
+    def test_dense_identity_is_quarantined_without_blocking_healthy_work(self):
+        with self.archive.writer() as db:
+            db.executemany('INSERT INTO sql_cdr_pending VALUES(?,?,?,?,?)',
+                           [('primary','dense',0,3,2),('primary','healthy',0,3,1)])
+        source=SQLSource({});source.schema['cdr']=set(FIELDS['cdr'])
+        cursor=Mock()
+        def rows():
+            parameters=cursor.execute.call_args.args[1]
+            if 'dense' in parameters:
+                return [dict(calldate=datetime(2026,10,25),uniqueid='dense',linkedid='dense',sequence=i) for i in range(501)]
+            return [dict(calldate=datetime(2026,10,25),uniqueid='healthy',linkedid='healthy')]
+        cursor.fetchall.side_effect=rows
+        result=source._cdr_pending(cursor,self.archive,10)
+        self.assertEqual(result['cdr_lookup_quarantined'],1)
+        self.assertLessEqual(cursor.execute.call_count,4)
+        with self.archive.reader() as db:
+            self.assertEqual(db.execute('SELECT uid,reason FROM sql_cdr_unresolved').fetchone()[:],('dense','identity_fanout_limit'))
+            self.assertEqual(db.execute('SELECT uid FROM sql_cdr_pending').fetchone()[0],'healthy')
+        cursor.reset_mock()
+        result=source._cdr_pending(cursor,self.archive,11)
+        self.assertEqual(result['cdr_lookup_inserted'],1)
+        with self.archive.reader() as db:self.assertEqual(db.execute('SELECT COUNT(*) FROM sql_cdr_pending').fetchone()[0],0)
+        self.assertEqual(len(self.archive.page(source='cdr')),1)
+
+    def test_aggregate_density_retries_a_healthy_identity_instead_of_quarantining_it(self):
+        with self.archive.writer() as db:
+            db.executemany('INSERT INTO sql_cdr_pending VALUES(?,?,?,?,?)',
+                           [('primary','first',0,3,2),('primary','later',0,3,1)])
+        source=SQLSource({});source.schema['cdr']=set(FIELDS['cdr'])
+        cursor=Mock()
+        def rows():
+            parameters=cursor.execute.call_args.args[1]
+            return [dict(calldate=datetime(2026,10,25),uniqueid='first',linkedid='first',sequence=i)
+                    for i in range(501 if len(parameters)>1 else 1)]
+        cursor.fetchall.side_effect=rows
+        result=source._cdr_pending(cursor,self.archive,10)
+        self.assertEqual(result['cdr_lookup_quarantined'],0)
+        self.assertEqual(result['cdr_lookup_inserted'],1)
+        self.assertLessEqual(cursor.execute.call_count,4)
+        with self.archive.reader() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM sql_cdr_unresolved').fetchone()[0],0)
+            self.assertEqual(db.execute('SELECT uid FROM sql_cdr_pending').fetchone()[0],'later')

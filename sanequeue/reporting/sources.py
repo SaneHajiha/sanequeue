@@ -115,9 +115,13 @@ class QueueLog:
                 checkpoint['last_rotation_detected'] = time.time()
             elif previous.get('last_rotation_detected'):
                 checkpoint['last_rotation_detected'] = previous['last_rotation_detected']
+            if reset or previous.get('coverage_gap'):
+                # The prior inode's unread tail cannot be proven complete.
+                # Preserve this uncertainty across subsequent healthy cycles.
+                checkpoint['coverage_gap']=True
             inserted = archive.append(events, checkpoint_source=self.source, checkpoint=checkpoint, rejected=rejected)
             return dict(inserted=inserted, offset=offset, caught_up=offset >= meta.st_size,
-                        rotation_detected=bool(reset), rejected=rejected)
+                        rotation_detected=bool(reset), coverage_gap=bool(checkpoint.get('coverage_gap')), rejected=rejected)
 
 
 def import_json_lines(archive, path, source, *, timezone='Asia/Tehran', max_events=500):

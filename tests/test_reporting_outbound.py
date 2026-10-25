@@ -72,3 +72,26 @@ class OutboundTests(unittest.TestCase):
             self.archive.append([self.cdr('second')])
             self.assertEqual(db.execute('SELECT COUNT(*) FROM events').fetchone()[0],1)
         self.assertEqual(len(self.archive.page()),2)
+
+    def test_rebuild_preserves_identity_evidence_when_inventory_changes(self):
+        self.seed()
+        with self.archive.reader() as db:
+            before=[tuple(row) for row in db.execute('SELECT * FROM report_cdr_parties ORDER BY source_key')]
+            activity=[tuple(row) for row in db.execute('SELECT source_key,canonical_agent FROM report_activity ORDER BY source_key')]
+        with self.archive.writer() as db:
+            db.execute('DELETE FROM report_projection_version')
+        # The same endpoint number is now a trunk; historical facts must not
+        # become inbound or disappear from the agent report on replay.
+        changed=dict(observed_at=999,endpoints=[dict(technology='PJSIP',endpoint='100',category='trunk')])
+        while project_batch(self.archive,inventory=changed)['processed']:pass
+        with self.archive.reader() as db:
+            self.assertEqual([tuple(row) for row in db.execute('SELECT * FROM report_cdr_parties ORDER BY source_key')],before)
+            self.assertEqual([tuple(row) for row in db.execute('SELECT source_key,canonical_agent FROM report_activity ORDER BY source_key')],activity)
+            self.assertEqual(db.execute("SELECT DISTINCT provenance FROM report_identity_evidence").fetchone()[0],'first_projection_inventory')
+        event=self.cdr('call-a')
+        self.archive.append([Event(event.source,event.key,event.timestamp,event.kind,{**event.payload,'billsec':35,'recordingfile':'late.wav'})])
+        while project_batch(self.archive,inventory=changed)['processed']:pass
+        with self.archive.reader() as db:
+            row=db.execute("SELECT agent,direction,inventory_observed FROM report_cdr_parties WHERE source_key='call-a'").fetchone()
+            self.assertEqual(tuple(row),('PJSIP/100','outbound',100))
+            self.assertEqual(db.execute("SELECT billsec,recording FROM report_cdr WHERE source_key='call-a'").fetchone()[0],35)

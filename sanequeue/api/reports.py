@@ -16,6 +16,7 @@ from sanequeue.reporting import queries
 from sanequeue.reporting import exports
 from sanequeue.reporting import activity_queries
 from sanequeue.reporting import outbound
+from sanequeue.reporting.recording_scope import permitted as recording_permitted
 from sanequeue.reporting.audio import byte_range, open_recording
 from sanequeue.reporting.privacy import display_number
 from sanequeue.reporting.store import Archive, QueryDeadline
@@ -144,7 +145,9 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             row['destination']=protect_number(dict(queue=queue,caller=row['destination']))['caller']
             for item in memberships:item['reason_label']=reason_label(item['queue'],item['reason'])
             for key,action in (('can_play','recording_play'),('can_download','recording_download')):
-                row[key]=bool(row['has_recording'] and role() in ('admin','supervisor') and any(can_queue(item['queue'],action) for item in memberships))
+                row[key]=bool(row['has_recording'] and role() in ('admin','supervisor') and
+                    recording_permitted(archive,row['id'],action,can_queue,
+                                        fallback_queues=[item['queue'] for item in memberships]))
         return jsonify(result)
 
     @app.get('/api/history/outbound-pauses/<recording_id>/recording')
@@ -160,6 +163,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         with archive.reader() as db:
             row=db.execute('SELECT recording,ts FROM report_cdr WHERE pbx=? AND source_key=?',(pbx,recording_id)).fetchone()
         if not row or not row['recording']:abort(404)
+        if not recording_permitted(archive,recording_id,capability,can_queue,
+                                   fallback_queues=[item['queue'] for item in result['rows'][0]['memberships']]):abort(403)
         return serve_recording(row,recording_id,download)
 
     def authorized_detail(visit_id):
@@ -180,6 +185,15 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         result['can_download'] = role() in ('admin','supervisor') and can_queue(queue, 'recording_download')
         if not result['can_play'] and not result['can_download']:
             result['recordings'] = []
+        else:
+            permitted_refs=[]
+            for recording in result['recordings']:
+                recording.pop('uid',None)
+                recording.pop('linkedid',None)
+                recording['can_play']=result['can_play'] and recording_permitted(archive,recording['id'],'recording_play',can_queue)
+                recording['can_download']=result['can_download'] and recording_permitted(archive,recording['id'],'recording_download',can_queue)
+                if recording['can_play'] or recording['can_download']:permitted_refs.append(recording)
+            result['recordings']=permitted_refs
         return jsonify(result)
 
     @app.get('/api/history/visits/<visit_id>/recordings/<recording_id>')
@@ -194,6 +208,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             abort(403)
         if recording_id not in {r['id'] for r in result['recordings']}:
             abort(404)
+        if not recording_permitted(archive,recording_id,capability,can_queue):
+            abort(403)
         with archive.reader() as db:
             row = db.execute('SELECT recording,ts FROM report_cdr WHERE pbx=? AND source_key=?', (pbx, recording_id)).fetchone()
         if row is None:

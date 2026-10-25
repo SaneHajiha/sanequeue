@@ -34,6 +34,12 @@ CREATE TABLE IF NOT EXISTS report_cdr(
 CREATE INDEX IF NOT EXISTS rc_time ON report_cdr(pbx,ts,source_key);
 CREATE INDEX IF NOT EXISTS rc_uid ON report_cdr(pbx,uid);
 CREATE INDEX IF NOT EXISTS rc_linked ON report_cdr(pbx,linkedid);
+CREATE TABLE IF NOT EXISTS report_recording_refs(pbx TEXT,source_key TEXT,basename TEXT,
+ PRIMARY KEY(pbx,source_key));
+CREATE INDEX IF NOT EXISTS rrf_name ON report_recording_refs(pbx,basename);
+CREATE TABLE IF NOT EXISTS report_identity_evidence(
+ pbx TEXT,event_id INTEGER,agent TEXT,direction TEXT,inventory_observed REAL,
+ provenance TEXT NOT NULL,PRIMARY KEY(pbx,event_id));
 CREATE TABLE IF NOT EXISTS report_cel_transfers(
  pbx TEXT,source_key TEXT,uid TEXT,linkedid TEXT,channel TEXT,ts REAL,kind TEXT,
  PRIMARY KEY(pbx,source_key));
@@ -48,7 +54,7 @@ CREATE TABLE IF NOT EXISTS report_cdr_parties(
  pbx TEXT,source_key TEXT,agent TEXT,direction TEXT,inventory_observed REAL,
  PRIMARY KEY(pbx,source_key));
 '''
-PROJECTION_VERSION = 4
+PROJECTION_VERSION = 5
 
 
 def number(value):
@@ -179,6 +185,31 @@ def project_batch(archive, *, limit=500, inventory=None):
         dirty = set()
         for event_id, source, key, ts, kind, payload in events:
             row = json.loads(payload)
+            if source in ('activity','cdr'):
+                evidence=db.execute('SELECT agent,direction,inventory_observed FROM report_identity_evidence WHERE pbx=? AND event_id=?',
+                                    (archive.pbx,event_id)).fetchone()
+                if evidence is None:
+                    prior=db.execute('''SELECT e.payload,i.agent,i.direction,i.inventory_observed
+                      FROM events e JOIN report_identity_evidence i ON i.pbx=e.pbx AND i.event_id=e.id
+                      WHERE e.pbx=? AND e.source=? AND e.source_key=? AND e.id<? ORDER BY e.id DESC LIMIT 1''',
+                      (archive.pbx,source,key,event_id)).fetchone()
+                    identity_fields=('channel','dstchannel') if source=='cdr' else ('agent','canonical_agent')
+                    unchanged=prior is not None and all(json.loads(prior[0]).get(field)==row.get(field) for field in identity_fields)
+                    if source=='cdr':
+                        identity=parties(str(row.get('channel') or ''),str(row.get('dstchannel') or ''),inventory)
+                    else:
+                        identity=dict(agent=row.get('canonical_agent') or canonical(row['agent'],inventory),
+                                      direction='',inventory_observed=(inventory or {}).get('observed_at'))
+                    # Legacy imports have no historical inventory. Freeze the
+                    # first projection's evidence explicitly, never silently
+                    # reinterpret it on rebuild with today's inventory.
+                    provenance='source_canonical' if source=='activity' and row.get('canonical_agent') else 'first_projection_inventory'
+                    evidence=(identity['agent'],identity['direction'],identity['inventory_observed'])
+                    if unchanged:
+                        evidence=tuple(prior[1:])
+                        provenance='prior_identity_evidence'
+                    db.execute('INSERT INTO report_identity_evidence VALUES(?,?,?,?,?,?)',
+                               (archive.pbx,event_id,*evidence,provenance))
             if source == 'activity':
                 db.execute('''INSERT INTO report_activity VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
                   ON CONFLICT(pbx,source_key) DO UPDATE SET event_id=excluded.event_id,
@@ -186,7 +217,7 @@ def project_batch(archive, *, limit=500, inventory=None):
                   starts=excluded.starts,ends=excluded.ends,on_duty=excluded.on_duty,coverage=excluded.coverage,
                   canonical_agent=excluded.canonical_agent''',
                            (archive.pbx,key,event_id,row['queue'],row['agent'],row['state'],row['reason'],
-                            row['starts'],row['ends'],int(row['on_duty']),row.get('coverage','observed'),canonical(row.get('canonical_agent',row['agent']),inventory)))
+                            row['starts'],row['ends'],int(row['on_duty']),row.get('coverage','observed'),evidence[0]))
             elif source == 'cdr':
                 values = (archive.pbx, key, event_id, ts, *(str(row.get(k) or '') for k in (
                     'uniqueid', 'linkedid', 'src', 'dst', 'channel', 'dstchannel')),
@@ -198,9 +229,11 @@ def project_batch(archive, *, limit=500, inventory=None):
                   dst=excluded.dst,channel=excluded.channel,dstchannel=excluded.dstchannel,
                   duration=excluded.duration,billsec=excluded.billsec,
                   disposition=excluded.disposition,recording=excluded.recording''', values)
-                identity=parties(str(row.get('channel') or ''),str(row.get('dstchannel') or ''),inventory)
                 db.execute('INSERT OR REPLACE INTO report_cdr_parties VALUES(?,?,?,?,?)',
-                           (archive.pbx,key,identity['agent'],identity['direction'],identity['inventory_observed']))
+                           (archive.pbx,key,*evidence))
+                from pathlib import PurePosixPath
+                db.execute('INSERT OR REPLACE INTO report_recording_refs VALUES(?,?,?)',
+                           (archive.pbx,key,PurePosixPath(values[-1]).name if values[-1] else ''))
             elif source == 'cel' and kind.upper() in ('ATTENDEDTRANSFER', 'BLINDTRANSFER'):
                 uid, linkedid = str(row.get('uniqueid') or ''), str(row.get('linkedid') or '')
                 previous_transfer = db.execute('SELECT uid,linkedid FROM report_cel_transfers WHERE pbx=? AND source_key=?',
