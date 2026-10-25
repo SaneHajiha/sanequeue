@@ -60,7 +60,15 @@ python -m sanequeue.reporting.worker \
 
 **این مرحله تکمیل کل نقشهٔ گزارش‌گیری یا تأیید آمادگی تولید نیست.** پیش‌نمایش از snapshot واقعیِ آزمایشی استفاده می‌کند. آداپتور دائمی SQL، نصب خودکار آن و ورود خودکار تاریخچهٔ حضور هنوز به این مرحله متصل نشده‌اند. worker فایل صف را دنبال می‌کند؛ گزینه‌های JSONL معادل اتصال زندهٔ SQL نیستند.
 
-خروجی حجیم پس‌زمینه، XLSX/PDF، زمان‌بندی، امتیازدهی QA، گزارش آماده‌به‌کار/شیفت و تماس خروجی هنگام توقف، موج صوتی و هم‌ترازی ضبط، تحلیل VIP/Blacklist و پردازش AI هنوز تکمیل نشده‌اند. پردازش AI یا ارسال صوت به سرویس بیرونی در این نسخه فعال نشده است.
+خروجی حجیم پس‌زمینه، PDF، زمان‌بندی، امتیازدهی QA، گزارش آماده‌به‌کار/شیفت و تماس خروجی هنگام توقف، موج صوتی و هم‌ترازی ضبط، تحلیل VIP/Blacklist و پردازش AI هنوز تکمیل نشده‌اند. پردازش AI یا ارسال صوت به سرویس بیرونی در این نسخه فعال نشده است.
+
+### خروجی قابل استفاده در Excel
+
+برای Excel از دکمهٔ **Excel ↓** استفاده کنید: فایل XLSX با سرستون زبان پنل، راست‌به‌چپ در فارسی، ردیف ثابت، فیلتر و عرض ستون مناسب ساخته می‌شود. شماره‌ها و شناسه‌ها متن هستند تا صفر ابتدایی یا ارقام طولانی تغییر نکنند. تاریخ فارسی شمسی برای سال‌های میلادی ۱۹۰۰ تا ۲۰۹۹ و تاریخ انگلیسی میلادی است؛ بیرون این محدوده، تاریخ میلادی با برچسب صریح نمایش داده می‌شود. زمان نامعلوم خالی می‌ماند. تاریخ‌ها متن خوانا هستند و سلول تاریخ عددی Excel محسوب نمی‌شوند.
+
+CSV نیز تاریخ و عنوان خوانا دارد، اما تشخیص خودکار نوع شماره در Excel به تنظیمات همان برنامه وابسته است؛ برای حفظ نوع داده، XLSX را انتخاب کنید. خروجی فنی قبلی با `export.csv?layout=raw` قابل دریافت است. هر دو خروجی همان محدودیت ۲۰۰ مراجعه و همان مجوز مستقل خروجی را دارند. کتابخانهٔ پردازشی سنگین یا موتور Office روی سرور نصب نمی‌شود.
+
+در انتقال با مشورت، CEL فقط وقتی برای تصحیح نتیجهٔ مراجعه استفاده می‌شود که شناسهٔ زنجیره، مبدأ کارشناس و بازهٔ فعال همان مراجعه تطبیق کنند. انتقال روی شاخهٔ دیگری از تماس به کارشناس صف نسبت داده نمی‌شود. تغییر نسخهٔ الگوریتم، بازسازی افزایشیِ دادهٔ مشتق‌شده را خودکار از ابتدا انجام می‌دهد؛ شواهد خام و موقعیت واردسازی حذف نمی‌شوند.
 
 آرشیوِ واردشده حذف خودکار ندارد. کش قدیمیِ حضور/تماس همچنان محدودیت ۹۰ روزه دارد؛ تا اتصال واردساز آن، این محدودیت نباید به کاربر «تاریخچهٔ کامل حضور» معرفی شود. فایل صوتی اصلی توسط این ماژول حذف نمی‌شود؛ سیاست حذف خود مرکز تلفن مستقل است.
 
@@ -80,4 +88,8 @@ Counts represent **queue visits**, not unique conversations or CDR rows. SL uses
 
 The separate worker follows queue_log and imports immutable CDR/CEL JSONL snapshots in bounded batches. It does **not** yet provide continuous SQL replication or automatic production provisioning. Imported archive history has no automatic deletion; existing live activity/call caches still have their documented 90-day bounds until the historical activity adapter is connected. Original recording retention remains controlled by the PBX independently.
 
-Pending work includes continuous SQL ingestion, activity/shift/outbound reporting, asynchronous large exports/XLSX/PDF/schedules, QA, waveform/alignment, VIP/blacklist analytics and optional AI processing. No audio has been sent to an external AI provider. This increment must not be represented as the complete reporting roadmap or a universal production-readiness certification.
+Bounded XLSX export provides localized headers, readable Tehran dates (Persian calendar for 1900–2099 in Persian, explicitly labeled Gregorian fallback outside that range), text phone/ID cells, right-to-left layout, frozen headers and filters. Dates are readable text rather than Excel date serials. CSV now has readable localized columns; `layout=raw` retains machine-oriented CSV. Both formats enforce the same 200-visit limit and export permission, without an Office runtime or heavy spreadsheet dependency on the PBX.
+
+CEL attended/blind transfer evidence corrects a visit only when conversation identity, source endpoint and active interval match. Consultation duration and final hangup remain unknown without supporting evidence. Projection algorithm upgrades automatically replay derived facts in bounded batches; raw evidence and source checkpoints remain intact.
+
+Pending work includes continuous SQL ingestion, activity/shift/outbound reporting, asynchronous large exports/PDF/schedules, QA, waveform/alignment, VIP/blacklist analytics and optional AI processing. No audio has been sent to an external AI provider. This increment must not be represented as the complete reporting roadmap or a universal production-readiness certification.

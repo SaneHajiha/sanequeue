@@ -13,6 +13,7 @@ from flask_login import login_required, current_user
 from werkzeug.exceptions import HTTPException
 
 from sanequeue.reporting import queries
+from sanequeue.reporting import exports
 from sanequeue.reporting.audio import byte_range, open_recording
 from sanequeue.reporting.privacy import display_number
 from sanequeue.reporting.store import Archive, QueryDeadline
@@ -189,6 +190,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         return response
 
     @app.get('/api/history/export.csv')
+    @app.get('/api/history/export.xlsx')
     @login_required
     @safe
     def history_export():
@@ -200,6 +202,20 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         result = queries.visits(archive, scope, start, end, limit=200, queue=request.args.get('queue'), outcome=request.args.get('outcome'))
         if result['next'] is not None:
             return jsonify(error='export_too_large_narrow_filters', maximum_rows=200), 422
+        language = request.args.get('lang', 'en')
+        if language not in ('fa', 'en'):
+            raise ValueError('invalid_export_language')
+        rows = [protect_number(row) for row in result['rows']]
+        if request.path.endswith('.xlsx'):
+            period = datetime.fromtimestamp(start, ZoneInfo('Asia/Tehran')).date().isoformat()+' .. '+datetime.fromtimestamp(end-1, ZoneInfo('Asia/Tehran')).date().isoformat()
+            content = exports.xlsx_bytes(rows, language, period=period)
+            app.logger.info('report export user=%r rows=%d format=xlsx', current_user.get_id(), len(rows))
+            return Response(content, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            headers={'Content-Disposition': 'attachment; filename="sanequeue-visits.xlsx"'})
+        if request.args.get('layout') != 'raw':
+            app.logger.info('report export user=%r rows=%d format=csv', current_user.get_id(), len(rows))
+            return Response(exports.csv_bytes(rows, language), mimetype='text/csv; charset=utf-8',
+                            headers={'Content-Disposition': 'attachment; filename="sanequeue-visits.csv"'})
         output = io.StringIO(newline='')
         fields = ('id', 'queue', 'entered', 'answered', 'ended', 'caller', 'agent', 'outcome', 'wait_seconds', 'talk_seconds', 'segment_ended_by', 'coverage')
         writer = csv.DictWriter(output, fieldnames=fields, extrasaction='ignore')

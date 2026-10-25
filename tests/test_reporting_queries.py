@@ -125,6 +125,10 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(client.get('/api/history/overview?from=bad').status_code, 400)
         self.assertEqual(client.get('/api/history/overview' + self.dates + '&queue=8002').status_code, 403)
         self.assertEqual(self.client(denied=('report_export',)).get('/api/history/export.csv'+self.dates).status_code, 403)
+        excel=client.get('/api/history/export.xlsx'+self.dates+'&lang=fa')
+        self.assertEqual(excel.status_code,200)
+        self.assertTrue(excel.data.startswith(b'PK'))
+        self.assertEqual(self.client(denied=('report_export',)).get('/api/history/export.xlsx'+self.dates).status_code,403)
 
     def test_audio_authorizes_before_open_supports_ranges_and_no_paths(self):
         self.seed()
@@ -215,6 +219,50 @@ class ReportTests(unittest.TestCase):
         ])
         project_batch(self.archive)
         self.assertEqual(len(visits(self.archive, Scope(('8001',)), self.stamp, self.stamp + 400)['rows']), 2)
+
+    def test_late_cel_attended_transfer_corrects_queue_completion(self):
+        # Issabel may write numeric membername rather than Local/interface.
+        self.archive.append([
+            self.event('a', '8001', 'ENTERQUEUE', 0),
+            self.event('a', '8001', 'CONNECT', 10, ['10'], agent='100'),
+            self.event('a', '8001', 'COMPLETEAGENT', 40, ['10', '30'], agent='100'),
+        ])
+        project_batch(self.archive)
+        self.scope = Scope(('8001',))
+        transfer = dict(uniqueid='consult-leg', linkedid='a', channame='PJSIP/100-00000abc')
+        # Another endpoint in the same conversation is not evidence that
+        # this queue agent transferred the caller.
+        self.archive.append([Event('cel', 'unrelated-transfer', self.stamp+20, 'ATTENDEDTRANSFER',
+                                   {**transfer, 'channame': 'PJSIP/300-00000abc'})])
+        project_batch(self.archive)
+        self.assertEqual(visits(self.archive, self.scope, self.stamp, self.stamp+100)['rows'][0]['outcome'], 'answered')
+        self.archive.append([Event('cel', 'transfer', self.stamp+25, 'ATTENDEDTRANSFER', transfer)])
+        project_batch(self.archive)
+        row = visits(self.archive, self.scope, self.stamp, self.stamp+100)['rows'][0]
+        self.assertEqual((row['outcome'], row['ended']), ('transferred', self.stamp+25))
+        self.assertIsNone(row['talk_seconds'])
+        self.assertIsNone(row['segment_ended_by'])
+        evidence = detail(self.archive, self.scope, self.stamp, self.stamp+100, row['id'])
+        self.assertEqual(evidence['timeline'][-1]['kind'], 'ATTENDEDTRANSFER')
+        self.assertEqual(evidence['timeline'][-1]['source'], 'cel')
+        self.assertEqual(overview(self.archive, self.scope, self.stamp, self.stamp+100)['queues'][0]['answered'], 1)
+        # Replaying the derived projection must produce the same result.
+        with self.archive.writer() as db:db.execute('UPDATE report_projection SET after_id=0')
+        while project_batch(self.archive, limit=2)['processed']:pass
+        self.assertEqual(visits(self.archive, self.scope, self.stamp, self.stamp+100)['rows'][0], row)
+
+    def test_projection_upgrade_replays_derived_facts_without_losing_evidence(self):
+        self.seed()
+        before = self.archive.status()['counters']['events']
+        with self.archive.writer() as db:
+            db.execute('UPDATE report_visits SET talk_seconds=999')
+            db.execute('DELETE FROM report_projection_version')
+        first = project_batch(self.archive, limit=1)
+        self.assertEqual(first['processed'], 1)
+        while project_batch(self.archive, limit=2)['processed']:pass
+        row = visits(self.archive, self.scope, self.stamp, self.stamp+100)['rows'][0]
+        self.assertEqual(row['talk_seconds'], 30)
+        self.assertEqual(self.archive.status()['counters']['events'], before)
 
 
 if __name__ == '__main__':

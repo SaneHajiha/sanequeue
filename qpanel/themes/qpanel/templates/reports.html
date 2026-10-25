@@ -5,7 +5,7 @@
   <label>{{ t('تا تاریخ، شامل این روز','Through date, inclusive') }}<input name="to" type="date" required><small data-report-date="to"></small></label>
   <label>{{ t('صف','Queue') }}<select name="queue"><option value="">{{ t('همهٔ صف‌های مجاز','All authorized queues') }}</option></select></label>
   <label>{{ t('نتیجه','Outcome') }}<select name="outcome"><option value="">{{ t('همه','All') }}</option><option value="answered">{{ t('پاسخ‌داده','Answered') }}</option><option value="abandoned">{{ t('رهاشده','Abandoned') }}</option><option value="transferred">{{ t('منتقل‌شده','Transferred') }}</option></select></label>
-  <div class="history-filter-actions"><button type="submit" class="primary">{{ t('نمایش گزارش','Run report') }}</button>{% if user_role in ('admin','supervisor') %}<button id="history-export" type="button">CSV ↓</button>{% endif %}</div>
+  <div class="history-filter-actions"><button type="submit" class="primary">{{ t('نمایش گزارش','Run report') }}</button>{% if user_role in ('admin','supervisor') %}<button id="history-excel" type="button">Excel ↓</button><button id="history-export" type="button">CSV ↓</button>{% endif %}</div>
  </form>
  <p id="history-feedback" role="status" aria-live="polite"></p>
  <div id="history-kpis" class="history-kpis"></div>

@@ -1,6 +1,7 @@
 """Read-only, scoped queries over local facts. No source imports or AMI here."""
 from dataclasses import dataclass
 import math
+from .facts import _endpoint
 
 
 @dataclass(frozen=True)
@@ -101,6 +102,14 @@ def detail(archive, scope, start, end, visit_id):
           WHERE pbx=? AND queue=? AND callid=? AND ts>=? AND (? IS NULL OR ts<=?)
           ORDER BY ts,event_id LIMIT 1000''', (archive.pbx, row['queue'], row['callid'],
                                              row['entered'], row['ended'], row['ended']))]
+        if row['outcome'] == 'transferred':
+            proofs = db.execute('''SELECT ts,kind,channel FROM report_cel_transfers
+              WHERE pbx=? AND (uid=? OR linkedid=?) AND ts=? LIMIT 1001''',
+                                (archive.pbx, row['callid'], row['callid'], row['ended'])).fetchall()
+            for proof in proofs:
+                if _endpoint(row['agent']) and _endpoint(proof['channel']) == _endpoint(row['agent']):
+                    events.append(dict(ts=proof['ts'], kind=proof['kind'], agent=row['agent'], source='cel'))
+            events.sort(key=lambda event: event['ts'])
         recording_rows = [dict(r) for r in db.execute('''SELECT source_key id,ts,uid,linkedid,billsec,
           disposition,recording FROM report_cdr WHERE pbx=? AND (uid=? OR linkedid=?) AND recording<>''
           ORDER BY ts,source_key LIMIT 100''', (archive.pbx, row['callid'], row['callid']))]

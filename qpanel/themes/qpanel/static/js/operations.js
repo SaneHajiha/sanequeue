@@ -456,6 +456,7 @@
  }
  function renderAdvancedFields(){
   const action=$('advanced-action').value,target=$('advanced-target'),ext=$('advanced-extension');
+  $('advanced-target-label').textContent=action==='park'?t('مبدأ پارک؛ طرف مقابل نگه داشته می‌شود','Parking initiator; the other party is parked'):action==='retrieve'?t('محل پارک تماس','Parking slot'):['transfer','attended_transfer'].includes(action)?t('مبدأ انتقال','Transferring party'):t('تماس هدف','Target call');
   const options=action==='retrieve'?advancedState.parked.map(p=>[p.key,p.lot+' · '+p.space]):advancedState.targets.map(p=>[p.channel,p.label]);
   target.innerHTML=options.length?options.map(([value,label])=>`<option value="${esc(value)}">${esc(label)}</option>`).join(''):`<option value="">${action==='retrieve'?t('تماس پارک‌شده‌ای موجود نیست','No parked calls available'):t('تماس فعالی برای این صف موجود نیست','No active calls in this queue')}</option>`;target.disabled=action==='dial'||!options.length;target.required=action!=='dial';
   ext.innerHTML=advancedState.extensions.map(e=>`<option value="${esc(e)}">${esc(e)}</option>`).join('');ext.disabled=!['dial','transfer','attended_transfer'].includes(action);ext.required=!ext.disabled;
@@ -483,9 +484,18 @@
   $('advanced-target').onchange=updateAdvancedSubmit;$('advanced-extension').onchange=updateAdvancedSubmit;
   $('advanced-form').onsubmit=async event=>{event.preventDefault();const action=$('advanced-action').value,queue=$('advanced-queue').value;
    if(advancedLoadedQueue!==queue||!cfg.test_controls_enabled||(cfg.control_mode!=='rbac'&&armedQueue!=='*'&&armedQueue!==queue)){$('advanced-help').textContent=t('گیت کنترل همین صف را در تنظیمات فعال کنید.','Arm this queue in settings first.');return;}
-   if(!confirm((actionNames[action]||action)+' · '+queue+'؟'))return;
+   const dialog=$('advanced-confirm');if(dialog.open)return;
+   const payload={action,queue,channel:$('advanced-target').disabled?'':$('advanced-target').value,extension:$('advanced-extension').disabled?'':$('advanced-extension').value};
+   const label=$('advanced-target').selectedOptions[0]?.textContent||'';
+   let explanation=(actionNames[action]||action)+' · '+t('صف ','Queue ')+queue+(action==='dial'?'':' · '+label);
+   if(action==='park')explanation+=t(' — طرف مقابل این مبدأ پارک می‌شود؛ پس از پایان مهلت، به همین مبدأ برمی‌گردد.',' — The other party is parked. After the parking timeout, it returns to this initiator.');
+   else if(['transfer','attended_transfer','dial'].includes(action))explanation+=t(' → مقصد داخلی ',' → Destination extension ')+payload.extension;
+   else if(action==='retrieve')explanation+=t(' → تلفن حساب شما: ',' → Your assigned phone: ')+(cfg.assigned_phone||'—');
+   else if(action==='hangup_active')explanation+=t(' — همین سمت تماس قطع می‌شود.',' — This selected call leg will be disconnected.');
+   $('advanced-confirm-summary').textContent=explanation;
    const button=event.target.querySelector('[type=submit]');button.disabled=true;
-   try{const result=await fetchJSON(cfg.control_url,{method:'POST',headers:{'X-CSRF-Token':cfg.csrf,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action,queue,channel:$('advanced-target').disabled?'':$('advanced-target').value,extension:$('advanced-extension').disabled?'':$('advanced-extension').value})});trackCommand(result);$('advanced-help').textContent=t('درخواست ثبت شد؛ نتیجه را در بخش وضعیت فرمان دنبال کنید.','Request recorded; follow its observed outcome below.');await refresh();}
+   try{dialog.returnValue='';const confirmed=new Promise(resolve=>dialog.addEventListener('close',()=>resolve(dialog.returnValue==='apply'),{once:true}));dialog.showModal();if(!await confirmed)return;
+    const result=await fetchJSON(cfg.control_url,{method:'POST',headers:{'X-CSRF-Token':cfg.csrf,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(payload)});trackCommand(result);$('advanced-help').textContent=t('درخواست ثبت شد؛ نتیجه را در بخش وضعیت فرمان دنبال کنید.','Request recorded; follow its observed outcome below.');await refresh();}
    catch(error){$('advanced-help').textContent=t('عملیات انجام نشد یا نتیجه نامعلوم است: ','Action rejected or outcome unknown: ')+error.message;}
    finally{updateAdvancedSubmit();}
   };
