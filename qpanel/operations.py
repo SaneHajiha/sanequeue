@@ -63,7 +63,8 @@ def install(app, cfg, backend, get_data, render):
 
     @app.context_processor
     def security_context():
-        return dict(csrf_token=csrf, user_role=role(), can_view_section=lambda key:key in sections())
+        return dict(csrf_token=csrf, user_role=role(), can_view_section=lambda key:key in sections(),
+                    history_available=bool(app.config.get('SANEQUEUE_HISTORY_INSTALLED')))
 
     @app.before_request
     def protect_sections():
@@ -80,6 +81,7 @@ def install(app, cfg, backend, get_data, render):
             if path=='/api/control' and request.form.get('action')=='dial':required.add('directory')
         elif path=='/api/members/pause':required={'agents','queues','control'}
         elif path=='/api/activity/daily':required={'agents'}
+        elif path.startswith('/api/history/'):required={'reports'}
         elif path=='/api/operations':required={'live','queues','calls','waiting','agents','presence','wallboard','alerts','control'}
         elif path.startswith('/api/audit'):required={'audit'}
         elif path.startswith('/api/planning/'):required={path.rsplit('/',1)[-1]}

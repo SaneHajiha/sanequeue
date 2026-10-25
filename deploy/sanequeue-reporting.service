@@ -1,0 +1,29 @@
+[Unit]
+Description=SaneQueue bounded historical queue-log importer
+After=local-fs.target
+
+[Service]
+Type=simple
+User=sanequeue
+Group=sanequeue
+SupplementaryGroups=asterisk
+WorkingDirectory=/opt/sanequeue
+ExecStart=/opt/sanequeue/.venv/bin/python -m sanequeue.reporting.worker --database /var/lib/sanequeue/history.sqlite3 --queue-log /var/log/asterisk/queue_log --disabled-file /var/lib/sanequeue/module.disabled
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=10
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=25%
+MemoryMax=256M
+TasksMax=32
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sanequeue
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

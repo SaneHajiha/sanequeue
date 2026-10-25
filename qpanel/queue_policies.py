@@ -17,6 +17,7 @@ QUEUE_ID = re.compile(r'^[A-Za-z0-9_-]{1,32}$')
 USER_ID = re.compile(r'^[A-Za-z0-9_.@-]{1,70}$')
 REASON_ID = re.compile(r'^[a-z][a-z0-9_-]{0,31}$')
 ALLOWED_GRANTS = frozenset({'view', 'pause', 'membership', 'monitor', 'hangup', 'priority', 'caller_details','transfer','park','pickup','dial'})
+ALLOWED_GRANTS = ALLOWED_GRANTS | {'report_export','recording_play','recording_download'}
 DEFAULT_REASONS = [
     {'id':'break', 'label':'استراحت'},
     {'id':'lunch', 'label':'ناهار'},

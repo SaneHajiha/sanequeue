@@ -6,7 +6,8 @@
 <title>{{ organization.name }} | {{ t('مرکز عملیات تماس', 'Contact center') }}</title>
 <link rel="stylesheet" href="{{ theme_static('css/operations.css') }}?v={{ current_version() }}">
 <link rel="stylesheet" href="{{ theme_static('css/accessibility.css') }}?v={{ current_version() }}">
-<link rel="stylesheet" href="{{ theme_static('css/overview.css') }}?v={{ current_version() }}"></head>
+<link rel="stylesheet" href="{{ theme_static('css/overview.css') }}?v={{ current_version() }}">
+<link rel="stylesheet" href="{{ theme_static('css/reports.css') }}?v={{ current_version() }}"></head>
 <body data-view="live">
 <a class="skip" href="#main">{{ t('رفتن به محتوا','Skip to content') }}</a>
 <aside class="sidebar">
@@ -20,6 +21,7 @@
   {% if can_view_section('waiting') %}<button type="button" class="nav-item" data-view="waiting"><span>◷</span>{{ t('تماس‌های منتظر','Waiting calls') }}<b id="waiting-nav-count">—</b></button>{% endif %}
   {% if can_view_section('agents') %}<button type="button" class="nav-item" data-view="agents"><span>♙</span>{{ t('کارشناسان','Agents') }}<b id="agent-count">—</b></button>{% endif %}
   {% if can_view_section('presence') %}<button type="button" class="nav-item" data-view="presence"><span>☎</span>{{ t('داخلی‌ها و حضور','Extensions & presence') }}</button>{% endif %}
+  {% if history_available and can_view_section('reports') %}<button type="button" class="nav-item" data-view="reports"><span>▥</span>{{ t('گزارش‌ها و مکالمات','Reports & recordings') }}</button>{% endif %}
   {% if can_view_section('pbx') %}<button type="button" class="nav-item" data-view="pbx"><span>◫</span>{{ t('سلامت و داخلی‌های PBX','PBX health') }}</button>{% endif %}
   {% if can_view_section('features') %}<button type="button" class="nav-item" data-view="features"><span>✦</span>{{ t('امکانات و توسعه','Capabilities') }}</button>{% endif %}
   {% if can_view_section('control') %}<button type="button" class="nav-item" data-view="control"><span>⌁</span>{{ t('کنترل تماس','Call controls') }}</button>{% endif %}
@@ -284,6 +286,9 @@
        <label><input type="checkbox" value="park"> {{ t('پارک و بازیابی','Park & retrieve') }}</label>
        <label><input type="checkbox" value="pickup"> {{ t('پاسخ به زنگ دیگران','Pickup') }}</label>
        <label><input type="checkbox" value="dial"> {{ t('تماس داخلی','Internal call') }}</label>
+       <label><input type="checkbox" value="report_export"> {{ t('خروجی گزارش','Export reports') }}</label>
+       <label><input type="checkbox" value="recording_play"> {{ t('پخش ضبط مکالمه','Play recordings') }}</label>
+       <label><input type="checkbox" value="recording_download"> {{ t('دانلود ضبط مکالمه','Download recordings') }}</label>
       </fieldset>
 
       <fieldset class="user-permission-checks user-full-row"><legend>{{ t('بخش‌های مجاز پنل','Allowed panel sections') }}</legend><div id="user-menu-select" class="user-permission-checks"></div><button type="button" id="user-menu-defaults">{{ t('انتخاب همهٔ بخش‌های مجاز نقش','Select all sections allowed by role') }}</button><p class="muted">{{ t('نقش سقف اختیار را تعیین می‌کند؛ منوها فقط در همان سقف قابل انتخاب‌اند. مجوز صف و عملیات نیز جداگانه بررسی می‌شود.','Role sets the permission ceiling. Sections stay within it; queue and action grants are checked separately.') }}</p></fieldset>
@@ -451,6 +456,7 @@
 
  <section id="shifts-view" class="view" hidden><section class="panel"><div class="panel-heading"><div><h2>{{ t('برنامه شیفت کارشناسان','Agent shift planning') }}</h2><p>{{ t('برنامه زمانی مستقل؛ وضعیت واقعی کارشناس را به‌صورت خودکار تغییر نمی‌دهد.','Scheduling only; never automatically changes an agent’s PBX state.') }}</p></div><button data-planning-load="shifts">{{ t('به‌روزرسانی','Refresh') }}</button></div><div id="shifts-content"></div></section></section>
  <section id="directory-view" class="view" hidden><section class="panel"><div class="panel-heading"><div><h2>{{ t('دفترچه تلفن صف','Queue directory') }}</h2><p>{{ t('مخاطبان دارای محدوده دسترسی صف؛ این صفحه خودکار شماره‌گیری نمی‌کند.','Queue-scoped contacts; this page does not place calls.') }}</p></div><button data-planning-load="directory">{{ t('به‌روزرسانی','Refresh') }}</button></div><div id="directory-content"></div></section></section>
+ {% if history_available and can_view_section('reports') %}{% include theme('reports.html') %}{% endif %}
  <footer><span>صانع · SaneQueue <strong>{{ current_version() }}</strong></span><span>{{ t('اطلاعات مجوز در فایل NOTICE','License information in NOTICE') }}</span></footer>
  </main></div>
 <script id="ops-config" type="application/json">{{ ops_config|tojson }}</script>
@@ -460,4 +466,5 @@
 <script src="{{ theme_static('js/planning.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/organization.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/telephony.js') }}?v={{ current_version() }}" defer></script>
+<script src="{{ theme_static('js/reports.js') }}?v={{ current_version() }}" defer></script>
 </body></html>
