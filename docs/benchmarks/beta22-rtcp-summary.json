@@ -1,0 +1,12 @@
+{
+  "provenance": "Summary of six authenticated /api/quality observations captured during the user-held PJSIP test call; no channel/caller identifiers retained.",
+  "queue": "8001",
+  "received_streams": 2,
+  "observed_rtt_ms_min": 30.6,
+  "observed_rtt_ms_max": 40.4,
+  "observed_loss_pct": 0.0,
+  "loss_scope": "Only samples containing a report block; missing report fields remained null.",
+  "jitter_unit": "rtp_timestamp_ticks",
+  "mos": null,
+  "audio_direction_isolation_certified": false
+}

@@ -202,6 +202,28 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ConnectionError):
             await task
 
+    async def test_expired_snapshot_packets_cannot_become_live_events(self):
+        events = []
+        self.drop_pings = True
+        self.client = await AsyncAMI.connect('127.0.0.1', self.port, events.append)
+        request = asyncio.create_task(self.client.request('Ping', timeout=.05))
+        for _ in range(100):
+            if self.client.pending:
+                break
+            await asyncio.sleep(.001)
+        ident = next(iter(self.client.pending))
+        with self.assertRaises(asyncio.TimeoutError):
+            await request
+        writer = next(iter(self.writers))
+        writer.write(packet(Event='QueueEntry', Queue='sales', Uniqueid='expired', ActionID=ident))
+        writer.write(packet(Event='QueueMemberPause', Queue='sales', Interface='SIP/101', ActionID='control-other-session'))
+        writer.write(packet(Event='Hangup', Uniqueid='live'))
+        await writer.drain()
+        self.drop_pings = False
+        await self.client.request('Ping')
+        self.assertEqual([event['event'] for event in events], ['QueueMemberPause', 'Hangup'])
+        self.assertFalse(self.client.pending)
+
     async def test_collector_sync_and_many_store_readers_do_not_poll_ami(self):
         store = MemoryStore()
         settings = Settings('127.0.0.1', self.port, 'readonly', 'secret', 'unused', publish_seconds=.02)

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec /opt/sanequeue/.venv/bin/python /opt/sanequeue/scripts/module_control.py "$@"

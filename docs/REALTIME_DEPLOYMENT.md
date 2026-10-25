@@ -1,3 +1,9 @@
+# Managed installation · beta.22
+
+The standard installer now provisions this architecture automatically. Start with [installation](INSTALL.md). The following manual configuration is retained for advanced/legacy deployments; its temporary control gate and opt-in wording do not describe the new managed RBAC mode.
+
+---
+
 # Redis and WebSocket deployment · beta.21
 
 [فارسی](REALTIME_DEPLOYMENT.fa.md)

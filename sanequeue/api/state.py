@@ -23,6 +23,8 @@ class StateReader:
         self.reads = 0
 
     def read(self, *, fresh=False):
+        from sanequeue.security.organization import disabled
+        if disabled():raise StateUnavailable('module_disabled')
         with self.lock:
             if fresh or self.clock() >= self.until or self.cached is None:
                 try:

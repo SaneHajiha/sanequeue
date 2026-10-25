@@ -1,3 +1,9 @@
+# Current validation · beta.22
+
+[Current acceptance, defects, resource measurements and target-environment checks](AUDIT_BETA22.md). Final runtime CI at eefed9d: 317 passed on Python 3.10, 3.11 and 3.12. Windows engine/lifecycle follow-up: 311 passed / 4 skips / 79 subtests; subsequent focused inventory suite: 5 passed. Earlier Linux and browser results below are historical and remain scoped to their recorded versions.
+
+---
+
 # Current validation · beta.21 · 2026-10-25
 
 Windows Python 3.11: 276 passed, 2 real-Redis skips, 79 subtests passed. Linux Python 3.11 with actual Redis: 278 passed, 79 subtests passed. No failures. JavaScript syntax checks passed. The current suite excludes retained historical release snapshots through pytest.ini; they are not deleted.
