@@ -250,9 +250,9 @@
    ready+=counts.ready;busy+=counts.busy;const count=Object.keys(q.members||{}).length;total+=count;
    const entries=Object.values(q.entries||{});let longest=0;
    for(const c of entries){longest=Math.max(longest,n(c.Wait));calls.push({name,c});}
-   if(!(policyState?.queues?.[name]&&currentDataSource==='ami-live')&&n(q.Calls)>=n($('waiting-threshold').value))alerts.push({title:t('تراکم تماس در صف','Queue congestion'),text:name+' · '+fmt(q.Calls)+' '+t('تماس منتظر','waiting calls')});
-   if(!(policyState?.queues?.[name]&&currentDataSource==='ami-live')&&longest>=threshold)alerts.push({title:t('انتظار بیش از حد','Long wait'),text:`${name} · ${duration(longest)} ${t('دقیقه:ثانیه','min:sec')}`});
-   if(!(policyState?.queues?.[name]&&currentDataSource==='ami-live')&&counts.ready===0&&(count>0||n(q.Calls)>0))alerts.push({title:t('کارشناس آماده ندارد','No ready agents'),text:name+(n(q.Calls)>0?` · ${fmt(q.Calls)} ${t('تماس منتظر','waiting calls')}`:'')});
+   if(!cfg.realtime_push&&!(policyState?.queues?.[name]&&currentDataSource==='ami-live')&&n(q.Calls)>=n($('waiting-threshold').value))alerts.push({title:t('تراکم تماس در صف','Queue congestion'),text:name+' · '+fmt(q.Calls)+' '+t('تماس منتظر','waiting calls')});
+   if(!cfg.realtime_push&&!(policyState?.queues?.[name]&&currentDataSource==='ami-live')&&longest>=threshold)alerts.push({title:t('انتظار بیش از حد','Long wait'),text:`${name} · ${duration(longest)} ${t('دقیقه:ثانیه','min:sec')}`});
+   if(!cfg.realtime_push&&!(policyState?.queues?.[name]&&currentDataSource==='ami-live')&&counts.ready===0&&(count>0||n(q.Calls)>0))alerts.push({title:t('کارشناس آماده ندارد','No ready agents'),text:name+(n(q.Calls)>0?` · ${fmt(q.Calls)} ${t('تماس منتظر','waiting calls')}`:'')});
    const pct=count?Math.round(100*counts.ready/count):null;
    const percentValue=pct===null?'—':fmt(pct)+'%';
    const queueColor=(cards.length%4);
@@ -270,8 +270,8 @@
     metric(t('سطح خدمت (SL)','Service level'),serviceLevel,t('بر اساس شاخص ارسالی Asterisk','From Asterisk queue counters'),'◎','sla');
 
   $('queue-count').textContent=fmt(data.length)+' '+t('صف','queues');$('queue-cards').innerHTML=cards.join('')||`<div class="empty">${t('صفی با این فیلتر پیدا نشد.','No matching queues.')}</div>`;
-  if(alerts.length&&sound&&Date.now()-lastSound>60000&&audioContext){const oscillator=audioContext.createOscillator(),gain=audioContext.createGain();oscillator.connect(gain);gain.connect(audioContext.destination);gain.gain.value=.08;oscillator.frequency.value=650;oscillator.start();oscillator.stop(audioContext.currentTime+.18);lastSound=Date.now();}
   for(const a of livePolicyAlerts){if(data.some(([name])=>name===a.queue))alerts.push({title:a.type==='waiting_count'?t('تعداد منتظر از آستانه گذشت','Queue backlog threshold'):a.type==='waiting_time'?t('مدت انتظار از آستانه گذشت','Wait-time threshold'):t('کمبود کارشناس آماده','Low ready staff'),text:a.label+' · '+a.value+' / '+a.threshold});}
+  if(currentDataSource==='ami-live'&&alerts.length&&sound&&Date.now()-lastSound>60000&&audioContext){const oscillator=audioContext.createOscillator(),gain=audioContext.createGain();oscillator.connect(gain);gain.connect(audioContext.destination);gain.gain.value=.08;oscillator.frequency.value=650;oscillator.start();oscillator.stop(audioContext.currentTime+.18);lastSound=Date.now();}
   $('alerts').innerHTML=alerts.length?alerts.map(a=>`<div class="alert-row"><b>${esc(a.title)}</b><p>${esc(a.text)}</p></div>`).join(''):`<div class="empty"><strong>✓</strong>${t('هشداری برای صف‌های انتخابی وجود ندارد.','No alerts for the selected queues.')}</div>`;
   $('agent-count').textContent=fmt(total);$('waiting-count').textContent=fmt(calls.length)+' '+t('تماس','calls');
   $('waiting-nav-count').textContent=fmt(calls.length);
@@ -652,7 +652,7 @@ $('test-controls-disable').onclick=async()=>{
  }
  function renderAccountList(){const list=$('account-list');if(!list)return;const grants=policyState?.supervisors||{};
   const entries=Object.entries(accountsCache);
-  list.innerHTML=entries.map(([id,u])=>{const g=grants[id]||{};return `<div class="user-row-v14"><div class="user-identity"><span class="user-avatar">${esc(id[0]?.toUpperCase()||'?')}</span><div><strong>${esc(id)}</strong><small>${esc(u.role||'viewer')} · <bdi dir="ltr">${esc(u.phone||t('بدون داخلی','No phone'))}</bdi></small></div></div><div><small>${t('صف‌های مجاز','Queues')}</small><strong>${u.role==='admin'?t('تمام صف‌ها','All queues'):esc((g.queues||[]).join('، ')||'—')}</strong></div><div><small>${t('عملیات','Permissions')}</small><span class="user-grant-tags">${u.role==='admin'?t('دسترسی مدیر','Administrator'):esc((g.actions||[]).join(' · ')||'—')}</span></div><div class="user-row-actions"><button type="button" data-edit-user="${esc(id)}">${t('ویرایش','Edit')}</button><button type="button" data-delete-user="${esc(id)}" ${id===cfg.logged_in_user?'disabled':''}>${t('حذف','Delete')}</button></div></div>`;}).join('')||`<p class="empty">${t('حسابی ثبت نشده','No accounts')}</p>`;
+  list.innerHTML=entries.map(([id,u])=>{const g=grants[id]||{};return `<div class="user-row-v14"><div class="user-identity"><span class="user-avatar">${esc(id[0]?.toUpperCase()||'?')}</span><div><strong>${esc(u.display_name||id)}</strong><small>${esc(id)} · ${esc(u.role||'viewer')} · <bdi dir="ltr">${esc(u.phone||t('بدون داخلی','No phone'))}</bdi></small></div></div><div><small>${t('صف‌های مجاز','Queues')}</small><strong>${u.role==='admin'?t('تمام صف‌ها','All queues'):esc((g.queues||[]).join('، ')||'—')}</strong></div><div><small>${t('عملیات','Permissions')}</small><span class="user-grant-tags">${u.role==='admin'?t('دسترسی مدیر','Administrator'):esc((g.actions||[]).join(' · ')||'—')}</span></div><div class="user-row-actions"><button type="button" data-edit-user="${esc(id)}">${t('ویرایش','Edit')}</button><button type="button" data-delete-user="${esc(id)}" ${id===cfg.logged_in_user?'disabled':''}>${t('حذف','Delete')}</button></div></div>`;}).join('')||`<p class="empty">${t('حسابی ثبت نشده','No accounts')}</p>`;
   const count=$('user-account-count');if(count)count.textContent=fmt(entries.length);
  }
  function clearUserEditor(){ $('account-create-form').reset();$('account-user').readOnly=false;$('account-feedback').textContent='';renderQueueChoices([]);renderPhoneOptions([...phoneInventory,...knownPhones()],'');$('user-permission-select').querySelectorAll('input').forEach(x=>x.checked=x.value==='view');paintUserMenus();clampRolePermissions(); }
@@ -660,7 +660,7 @@ $('test-controls-disable').onclick=async()=>{
   try{if(!policyState)await loadPolicyEditor();const result=await fetchJSON('/api/accounts');accountsCache=result.accounts||{};renderAccountList();renderQueueChoices();await refreshUserCatalog();}catch(error){$('account-feedback').textContent=t('دریافت کاربران انجام نشد: ','Could not load users: ')+error.message;}}
  if($('users-view')){
  paintUserMenus();clampRolePermissions();
- $('account-role').onchange=()=>{paintUserMenus();clampRolePermissions();};
+ $('account-role').onchange=()=>{paintUserMenus();clampRolePermissions();};if($('user-menu-defaults'))$('user-menu-defaults').onclick=()=>paintUserMenus();
  $('user-clear').onclick=clearUserEditor;
  $('refresh-user-catalog').onclick=()=>refreshUserCatalog();
  $('account-list').onclick=async e=>{const edit=e.target.closest('[data-edit-user]'),del=e.target.closest('[data-delete-user]');if(edit){const id=edit.dataset.editUser,u=accountsCache[id];if(!u)return;$('account-user').value=id;$('account-user').readOnly=true;$('account-role').value=u.role||'viewer';$('account-phone').value=u.phone||'';$('account-password').value='';const g=policyState?.supervisors?.[id]||{};renderQueueChoices(g.queues||[]);renderPhoneOptions([...phoneInventory,...knownPhones(),u.phone||''],u.phone||'');$('user-permission-select').querySelectorAll('input').forEach(x=>x.checked=(g.actions||['view']).includes(x.value));paintUserMenus(u.menus);clampRolePermissions();$('account-feedback').textContent=t('در حال ویرایش حساب ','Editing account ')+id;window.scrollTo({top:0,behavior:'smooth'});return;}
@@ -680,14 +680,14 @@ $('test-controls-disable').onclick=async()=>{
  async function loadProfile(open=false){
   try{
    const profile=await fetchJSON('/api/profile');
-   if(profile.avatar_url)$('profile-open').innerHTML=`<img src="${esc(profile.avatar_url)}?v=${Date.now()}" alt="">`;
+   if(profile.avatar_url)$('profile-open').innerHTML=`<img src="${esc(profile.avatar_url)}?v=${Date.now()}" alt="">`;else $('profile-open').textContent=(profile.display_name||profile.username||'S').slice(0,1).toUpperCase();
    if(!open)return;
    $('profile-form').reset();$('profile-name').value=profile.display_name||'';
    const phones=[...new Set([...(profile.available_phones||[]),profile.phone].filter(Boolean))];
    $('profile-phone').innerHTML=(['admin','viewer'].includes(profile.role)?`<option value="">${t('بدون داخلی','No phone')}</option>`:'')+phones.map(phone=>`<option value="${esc(phone)}">${esc(phone)}</option>`).join('');
    $('profile-phone').value=profile.phone||'';
    $('profile-feedback').textContent=profile.inventory_available?'':t('فهرست داخلی‌ها فعلاً قابل بررسی نیست؛ تغییر داخلی غیرفعال است.','Extension inventory unavailable; phone changes are unavailable.');
-   $('profile-phone').disabled=!profile.inventory_available;
+   $('profile-phone').disabled=!profile.inventory_available&&!['admin','viewer'].includes(profile.role);if(!profile.inventory_available&&['admin','viewer'].includes(profile.role))$('profile-feedback').textContent=t('فهرست داخلی‌ها در دسترس نیست؛ فقط حفظ یا حذف داخلی فعلی ممکن است.','Inventory unavailable; you can retain or clear the current phone.');
    $('profile-dialog').showModal();
   }catch(error){if(open)alert(t('دریافت پروفایل ناموفق: ','Could not load profile: ')+error.message);}
  }

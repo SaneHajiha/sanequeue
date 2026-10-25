@@ -15,7 +15,7 @@ from qpanel.ami_targets import validate_target
 from qpanel.queue_visibility import filter_queue_data, normalize_visible_queues, is_queue_visible, parse_visible_queues
 from qpanel.queue_policies import QueuePolicyStore, DEFAULT_QUEUE
 from qpanel.ami_connection_qa import classify_error, safe_stage
-from qpanel.local_accounts import bootstrap, read_accounts, set_account, public_accounts
+from qpanel.local_accounts import bootstrap, read_accounts, set_account, public_accounts,LOCK as ACCOUNT_LOCK,account_config
 import threading
 
 ROOT = Path(__file__).resolve().parent
@@ -67,24 +67,11 @@ if first_password:
     print('This password is shown only once and is stored HASHED.',flush=True)
     print('='*62+'\n',flush=True)
 def sync_accounts():
-    for section in ('users','roles','supervisor_extensions','agent_interfaces'):
-        if cfg.config.has_section(section): cfg.config.remove_section(section)
-        cfg.config.add_section(section)
-    for username, account in read_accounts(ACCOUNTS_PATH).items():
-        cfg.config.set('users',username,account['password_hash'])
-        cfg.config.set('roles',username,account['role'])
-        if account.get('phone'):
-            cfg.config.set('supervisor_extensions',username,account['phone'])
-            if not cfg.config.has_section('agent_interfaces'):
-                cfg.config.add_section('agent_interfaces')
-            cfg.config.set('agent_interfaces',username,account['phone']+(',Local/'+account['phone'].split('/',1)[1]+'@from-queue/n' if account['phone'].startswith(('PJSIP/','SIP/')) else ''))
-        else:
-            cfg.config.remove_option('supervisor_extensions',username)
-            if cfg.config.has_section('agent_interfaces'):
-                cfg.config.remove_option('agent_interfaces',username)
+    with ACCOUNT_LOCK:
+        cfg.config=account_config(cfg.config,read_accounts(ACCOUNTS_PATH))
 sync_accounts()
 from sanequeue.security.permissions import sections_for
-from qpanel.local_accounts import canonical_username,delete_account,LOCK as ACCOUNT_LOCK
+from qpanel.local_accounts import canonical_username,delete_account
 module.app.config['SANEQUEUE_ACCOUNT_CANONICALIZER']=lambda username:canonical_username(ACCOUNTS_PATH,username)
 def account_sections(username,role):
     account=read_accounts(ACCOUNTS_PATH).get(username)

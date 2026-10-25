@@ -63,10 +63,11 @@ def install(app,accounts_path,state_dir,sync_accounts):
             return jsonify(error='current_password_required'),403
         if password and not 12<=len(password)<=200:return jsonify(error='password_length_must_be_12_to_200'),400
         if phone!=account.get('phone',''):
-            available=phones(username)
-            if available is None:return jsonify(error='extension_inventory_unavailable'),503
-            if phone and phone not in available:return jsonify(error='extension_unavailable_or_assigned'),409
             if not phone and account['role'] in ('agent','supervisor'):return jsonify(error='assigned_phone_required'),400
+            if phone:
+                available=phones(username)
+                if available is None:return jsonify(error='extension_inventory_unavailable'),503
+                if phone not in available:return jsonify(error='extension_unavailable_or_assigned'),409
         avatar=None
         if request.files.get('avatar'):
             try:avatar=clean_avatar(request.files['avatar'].read(512*1024+1))
@@ -89,6 +90,7 @@ def install(app,accounts_path,state_dir,sync_accounts):
                     os.replace(temporary,target)
                 finally:
                     if temporary.exists():temporary.unlink()
+            elif request.form.get('remove_avatar')=='true':avatar_path(username).unlink(missing_ok=True)
             accounts[username]=value;write_accounts(accounts_path,accounts);sync_accounts()
         if sensitive:
             registry=app.config.get('SANEQUEUE_AUTH_SESSIONS')

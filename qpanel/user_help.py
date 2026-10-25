@@ -76,3 +76,6 @@ GUIDES['settings']['en']['steps'].extend([
  'Disable monitoring to stop this module’s AMI reception and call controls while PBX calls continue.',
  'Panel unavailable: sudo sanequeuectl disable. Restore: sudo sanequeuectl enable. Remove services while retaining data: sudo sanequeuectl uninstall --yes.'
 ])
+
+GUIDES['alerts']['fa']['steps'].append('برجسته‌سازی انتظار در نوار بالا فقط نمایش شخصی است؛ در نصب پایدار، هشدار صف و صدای آن از قوانین همان صف پیروی می‌کنند.')
+GUIDES['alerts']['en']['steps'].append('The toolbar wait highlight is a personal display setting. In persistent mode, queue alarms and their sound follow server-side queue rules.')

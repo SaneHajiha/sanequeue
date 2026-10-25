@@ -1,4 +1,5 @@
 import asyncio,io,json,tempfile,unittest
+import struct,zlib
 from pathlib import Path
 from unittest.mock import AsyncMock,patch
 from types import SimpleNamespace
@@ -48,6 +49,22 @@ class OrganizationTests(unittest.TestCase):
         self.app.config['SANEQUEUE_MENU_PROVIDER']=lambda user,role:{'queues'}
         self.assertEqual(self.client.get('/api/organization').status_code,403)
         self.assertEqual(self.client.post('/api/module',json={'enabled':False},headers=self.headers).status_code,403)
+
+    def test_corrupt_branding_structure_cannot_break_page_context(self):
+        for value in (None,[],42,'text',{'name':None,'subtitle':[],'updated_at':float('nan')}):
+            (self.root/'organization.json').write_text(json.dumps(value))
+            response=self.client.get('/api/organization')
+            self.assertEqual(response.status_code,200)
+            self.assertEqual(response.json['name'],'SaneQueue')
+            with self.app.test_request_context('/'):
+                context={};self.app.update_template_context(context)
+                self.assertEqual(context['organization']['name'],'SaneQueue')
+
+    def test_decompression_bomb_header_returns_validation_error(self):
+        buffer=io.BytesIO();Image.new('RGB',(1,1)).save(buffer,'PNG');data=bytearray(buffer.getvalue())
+        data[16:24]=struct.pack('>II',100000,100000);data[29:33]=struct.pack('>I',zlib.crc32(data[12:29]) & 0xffffffff)
+        response=self.client.post('/api/organization',data={'name':'Team','subtitle':'','logo':(io.BytesIO(data),'logo.png')},headers=self.headers)
+        self.assertEqual(response.status_code,400)
 
     def test_removal_only_targets_our_managed_block_and_services(self):
         original='[other_monitor]\nsecret=retained\n; BEGIN SANEQUEUE MANAGED ACCESS\n[sanequeue_collector_auto]\nsecret=removed\n; END SANEQUEUE MANAGED ACCESS\n[other_user]\nsecret=also_retained\n'

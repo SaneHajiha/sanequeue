@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 import threading
 import time
+import math
 
 from flask import abort,jsonify,request,session,send_file
 from flask_login import current_user,login_required
@@ -22,15 +23,23 @@ class Organization:
         self.logo=self.path.with_name('organization-logo.png')
 
     def public(self):
-        try:value=json.loads(self.path.read_text(encoding='utf-8'))
+        try:
+            value=json.loads(self.path.read_text(encoding='utf-8')) if self.path.stat().st_size<=16384 else {}
         except (OSError,ValueError):value={}
-        return dict(name=value.get('name','SaneQueue'),subtitle=value.get('subtitle','CONTACT CENTER'),
-                    updated_at=value.get('updated_at',0),logo_url='/organization/logo' if self.logo.is_file() else None)
+        if not isinstance(value,dict):value={}
+        name=value.get('name');subtitle=value.get('subtitle')
+        if not isinstance(name,str) or not 1<=len(name)<=65 or not name.isprintable():name='SaneQueue'
+        if not isinstance(subtitle,str) or len(subtitle)>90 or any(not c.isprintable() for c in subtitle):subtitle='CONTACT CENTER'
+        updated=value.get('updated_at',0)
+        if not isinstance(updated,(int,float)) or not math.isfinite(updated):updated=0
+        return dict(name=name,subtitle=subtitle,updated_at=updated,logo_url='/organization/logo' if self.logo.is_file() else None)
 
     def replace(self,name,subtitle,logo=None,remove=False):
         if not isinstance(name,str) or not 1<=len(name.strip())<=65 or any(not c.isprintable() for c in name):raise ValueError('invalid_organization_name')
         if not isinstance(subtitle,str) or len(subtitle)>90 or any(not c.isprintable() for c in subtitle):raise ValueError('invalid_organization_subtitle')
-        image=clean_avatar(logo) if logo is not None else None
+        try:image=clean_avatar(logo) if logo is not None else None
+        except ImportError:raise
+        except Exception:raise ValueError('invalid_logo') from None
         def atomic(path,content):
             path.parent.mkdir(parents=True,exist_ok=True)
             descriptor,temporary=tempfile.mkstemp(prefix='.organization-',dir=path.parent)
@@ -73,7 +82,9 @@ def install(app,state,role):
             try:
                 image=request.files.get('logo')
                 value=organization.replace(request.form.get('name',''),request.form.get('subtitle',''),image.read(512*1024+1) if image else None,request.form.get('remove_logo')=='true')
-            except (ValueError,OSError):return jsonify(error='invalid_organization_or_logo'),400
+            except ImportError:return jsonify(error='avatar_dependency_unavailable'),503
+            except ValueError:return jsonify(error='invalid_organization_or_logo'),400
+            except OSError:return jsonify(error='organization_storage_unavailable'),503
         else:value=organization.public()
         return jsonify(value)
 

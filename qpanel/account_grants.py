@@ -60,7 +60,7 @@ def save_account_with_grants(path, store, visible_queues, obj):
             new_policies['supervisors'][username] = {'queues': qids, 'actions': actions}
         validate_config(new_policies)  # Validate before any disk write.
         try:
-            set_account(path, username, role, phone, password, menus=menus)
+            set_account(path, username, role, phone, password, **({'menus':menus} if 'menus' in obj else {}))
             saved = store.replace(new_policies, visible_queues=visible)
         except Exception:
             write_accounts(path, previous_accounts)

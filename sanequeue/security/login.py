@@ -15,10 +15,15 @@ class LoginLimiter:
             for key,limit in keys:
                 count,since=self.attempts.get(key,(0,now))
                 if now-since>=300:count,since=0,now
-                if count>=limit:return None
+                if count>=limit:
+                    self.attempts.move_to_end(key)
+                    return None
                 ticket.append((key,since,count))
             for key,since,count in ticket:
                 self.attempts[key]=(count+1,since);self.attempts.move_to_end(key)
+            if len(self.attempts)>4096:
+                for key,(_,since) in tuple(self.attempts.items()):
+                    if now-since>=300:self.attempts.pop(key,None)
             while len(self.attempts)>4096:self.attempts.popitem(last=False)
             return ticket
 

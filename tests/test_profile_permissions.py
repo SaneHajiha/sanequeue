@@ -5,7 +5,7 @@ from flask import Flask
 from flask_login import LoginManager,UserMixin
 from PIL import Image,PngImagePlugin
 from werkzeug.security import check_password_hash
-from qpanel.local_accounts import set_account,read_accounts
+from qpanel.local_accounts import set_account,read_accounts,delete_account,public_accounts
 from sanequeue.security.permissions import sections_for,validate_sections
 from sanequeue.security.profile import install,clean_avatar
 from sanequeue.security.sessions import SessionRegistry
@@ -69,3 +69,23 @@ class ProfileTests(unittest.TestCase):
         self.client.post('/api/profile',data={'display_name':'Alice'},headers=self.headers)
         set_account(self.accounts,'alice','supervisor','PJSIP/100')
         self.assertEqual(read_accounts(self.accounts)['alice']['display_name'],'Alice')
+
+    def test_clear_phone_does_not_require_available_inventory(self):
+        self.inventory.unlink()
+        response=self.client.post('/api/profile',data={'phone':'','current_password':PASSWORD},headers=self.headers)
+        self.assertEqual(response.status_code,400)
+        with self.client.session_transaction() as session:session['_user_id']='other'
+        response=self.client.post('/api/profile',data={'phone':'','current_password':PASSWORD},headers=self.headers)
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(read_accounts(self.accounts)['other']['phone'],'')
+
+    def test_avatar_removal_and_account_reuse_do_not_expose_old_picture(self):
+        image=io.BytesIO();Image.new('RGB',(10,10),'red').save(image,'PNG')
+        self.client.post('/api/profile',data={'display_name':'Alice','avatar':(io.BytesIO(image.getvalue()),'avatar.png')},headers=self.headers)
+        self.assertEqual(public_accounts(self.accounts)['alice']['display_name'],'Alice')
+        self.assertEqual(self.client.post('/api/profile',data={'remove_avatar':'true'},headers=self.headers).status_code,200)
+        self.assertEqual(self.client.get('/api/profile/avatar').status_code,404)
+        self.client.post('/api/profile',data={'avatar':(io.BytesIO(image.getvalue()),'avatar.png')},headers=self.headers)
+        delete_account(self.accounts,'alice','other')
+        set_account(self.accounts,'alice','supervisor','PJSIP/100',PASSWORD)
+        self.assertIsNone(self.client.get('/api/profile').json['avatar_url'])

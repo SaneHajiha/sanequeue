@@ -1,20 +1,20 @@
 """Local lab account registry. Password hashes ONLY; never stores raw credentials."""
 from pathlib import Path
-import base64
 import hashlib
-import hmac
 import json
 import os
 import re
 import secrets
 import threading
 import tempfile
+from copy import deepcopy
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.@-]{2,64}$")
 PHONE_RE = re.compile(r"^(PJSIP|SIP)/[A-Za-z0-9_.-]{1,48}$")
 ROLES = frozenset(("admin", "supervisor", "agent", "viewer"))
 LOCK = threading.RLock()
 ITERATIONS = 350_000
+_UNSET=object()
 
 
 def hash_secret(secret):
@@ -64,6 +64,21 @@ def canonical_username(path,username):
     return next((name for name in read_accounts(path) if name.casefold()==username.casefold()),None)
 
 
+def account_config(original,accounts):
+    """Build a complete replacement; readers never see deleted INI sections."""
+    config=deepcopy(original)
+    for section in ('users','roles','supervisor_extensions','agent_interfaces'):
+        if config.has_section(section):config.remove_section(section)
+        config.add_section(section)
+    for username,account in accounts.items():
+        config.set('users',username,account['password_hash']);config.set('roles',username,account['role'])
+        phone=account.get('phone')
+        if phone:
+            config.set('supervisor_extensions',username,phone)
+            config.set('agent_interfaces',username,phone+',Local/'+phone.split('/',1)[1]+'@from-queue/n')
+    return config
+
+
 def delete_account(path,username,actor,before_delete=None):
     with LOCK:
         if username==actor:raise ValueError('cannot_delete_self')
@@ -71,10 +86,12 @@ def delete_account(path,username,actor,before_delete=None):
         if username not in users:raise ValueError('unknown_user')
         if users[username]['role']=='admin' and sum(a['role']=='admin' for a in users.values())<=1:raise ValueError('last_admin')
         if before_delete:before_delete()
+        avatar=Path(path).parent/'avatars'/(hashlib.sha256(username.encode()).hexdigest()+'.png')
+        avatar.unlink(missing_ok=True)
         del users[username];write_accounts(path,users)
 
 
-def set_account(path,username,role,phone,password=None,*,menus=None):
+def set_account(path,username,role,phone,password=None,*,menus=_UNSET):
     with LOCK:
         validate_identity(username,role,phone)
         registry=read_accounts(path)
@@ -89,9 +106,11 @@ def set_account(path,username,role,phone,password=None,*,menus=None):
         if not password and not old:raise ValueError('new_account_requires_password')
         hashed=hash_secret(password) if password else old['password_hash']
         from sanequeue.security.permissions import validate_sections
-        selected=validate_sections(role,menus)
+        selected=validate_sections(role,None if menus is _UNSET else menus)
         registry[username]=dict(old,role=role,phone=phone,password_hash=hashed)
-        if menus is not None:registry[username]['menus']=selected
+        if menus is not _UNSET:
+            if selected is None:registry[username].pop('menus',None)
+            else:registry[username]['menus']=selected
         elif old.get('menus') is not None:
             from sanequeue.security.permissions import sections_for
             registry[username]['menus']=sorted(sections_for(role,old))
@@ -108,4 +127,4 @@ def bootstrap(path):
 
 
 def public_accounts(path):
-    return {username:{'role':x['role'],'phone':x.get('phone',''),'menus':x.get('menus')} for username,x in read_accounts(path).items()}
+    return {username:{'role':x['role'],'phone':x.get('phone',''),'menus':x.get('menus'),'display_name':x.get('display_name','')} for username,x in read_accounts(path).items()}

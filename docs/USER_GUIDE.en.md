@@ -138,6 +138,7 @@ Review current threshold alerts and notification delivery status.
 1. Configure thresholds in queue policies.
 2. Browser audio needs a user gesture to enable sound.
 3. Delivery counts mean provider API acceptance; verify the destination conversation too.
+4. The toolbar wait highlight is a personal display setting. In persistent mode, queue alarms and their sound follow server-side queue rules.
 
 <a id="audit"></a>
 

@@ -75,3 +75,8 @@ All 17 menu sections were traversed with contextual English help present and no 
 ![English contextual help](images/help-en-dark-beta22.png)
 
 ![Fullscreen wallboard during Local queue load](images/wallboard-load-beta22.png)
+
+
+## Independent review follow-up
+
+[Coverage, verified fixes and the remaining external-review gate](INDEPENDENT_REVIEW_BETA22.md). The external reviewer did not extract the whole repository. Its confirmed session, branding, upload, phone and avatar findings were fixed with regression tests. In-house follow-up also added canonical identities, NAT-safe login budgets, serialized deletion, atomic runtime identity snapshots and policy-based alert audio. Windows follow-up passed 308 tests and 79 subtests before the additional legacy-session migration case; final CI identity is recorded in the pull request. The local registry currently supports at most 100 accounts and policies at most 100 queues; requests above the account limit are rejected before writing.

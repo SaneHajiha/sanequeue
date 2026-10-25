@@ -202,3 +202,5 @@ body[data-connection=stale] #wb-connection{background:#a61d36;color:#fff;border:
 body[data-connection=stale] .wallboard-v14-card{opacity:.6}
 
 .organization-settings input[type=checkbox]{width:18px!important;height:18px!important;min-height:18px!important;justify-self:start;align-self:center;accent-color:var(--accent,#1263df)}
+
+.profile-dialog input[type=checkbox]{width:18px;height:18px;min-height:18px;justify-self:start;accent-color:var(--accent,#1263df)}

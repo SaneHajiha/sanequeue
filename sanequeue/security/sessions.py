@@ -11,6 +11,16 @@ class SessionRegistry(ActionLedger):
         self.ttl=max(300,min(31*86400,int(ttl)))
         with self.db() as db:
             db.execute('CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY,user TEXT,version TEXT,expires REAL)')
+            db.execute('CREATE INDEX IF NOT EXISTS sessions_user_expiry ON sessions(user,expires DESC)')
+            db.execute('CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires DESC)')
+            db.execute('DELETE FROM sessions WHERE expires<?',(self.clock(),))
+            for (user,) in db.execute('SELECT DISTINCT user FROM sessions').fetchall():
+                self.trim_user(db,user)
+
+    @staticmethod
+    def trim_user(db,user):
+        # Insertion order stays correct even when the system clock moves backwards.
+        db.execute('DELETE FROM sessions WHERE hash IN (SELECT hash FROM sessions WHERE user=? ORDER BY rowid DESC LIMIT -1 OFFSET 10)',(user,))
 
     @staticmethod
     def key(token):
@@ -21,7 +31,8 @@ class SessionRegistry(ActionLedger):
         with self.db() as db:
             db.execute('DELETE FROM sessions WHERE expires<?',(self.clock(),))
             db.execute('INSERT INTO sessions VALUES (?,?,?,?)',(self.key(token),user,version,self.clock()+self.ttl))
-            db.execute('DELETE FROM sessions WHERE hash IN (SELECT hash FROM sessions ORDER BY expires DESC LIMIT -1 OFFSET 5000)')
+            self.trim_user(db,user)
+            db.execute('DELETE FROM sessions WHERE hash IN (SELECT hash FROM sessions ORDER BY rowid DESC LIMIT -1 OFFSET 5000)')
         return token
 
     def active(self,token,user,version):
