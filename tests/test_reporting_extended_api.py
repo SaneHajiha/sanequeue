@@ -55,6 +55,9 @@ class ExtendedAPITests(unittest.TestCase):
         self.assertNotIn('private',response.get_data(as_text=True))
         self.assertFalse(response.json['coverage']['complete_conversation'])
         self.assertFalse(response.json['audio_granted'])
+        self.assertEqual(response.json['termination']['queue_segment']['party'],'caller')
+        self.assertEqual(response.json['termination']['final']['status'],'unknown')
+        self.assertEqual(response.headers['Cache-Control'],'private, no-store')
 
     def test_ai_creation_requires_current_audio_number_and_audit_permissions(self):
         case=self.case

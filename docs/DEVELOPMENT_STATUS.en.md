@@ -68,3 +68,8 @@ Published-source verification: commit `1c5ad85b2b3072be1dfb3479e1e94668227bae24`
 ## Archive-only backup and restore development
 
 [Operator archive backup](ARCHIVE_BACKUP.en.md) now uses the SQLite online backup API with committed WAL preservation, bounded time/size/space, SHA-256 and core-schema checks, a final private completion marker, and restore into a new directory only. Thirteen local tests pass (one Linux symlink test skipped on Windows); full exact-commit CI is checked at publication. An independent review found and fixed premature completion-marker publication after fsync failure. This backs up only the reporting archive: other module databases, media and PBX configuration need a separate full-installation recovery plan. No live database switch, automatic retention or archive partitioning was added.
+
+
+## Indexed journey and termination correctness
+
+[Call journey guide](CALL_JOURNEY.en.md): root-only pre-queue IVR inside report/assignment cutoffs is implemented without widening CDR, relation or downstream windows. A version-9 current-source CEL identity projection is indexed by UID/time and rebuilt only in the existing bounded worker; HTTP waits for catch-up and performs no DDL. Final causality requires agreeing current causes from two proven peers, after their connection; conflicting/missing/complex evidence stays unknown. Queue-segment termination remains separate. Browser stale success/failure and private-data disposal are covered. Thirty-seven targeted backend tests and the real-script frontend harness passed locally. Exact-source CI is checked at publication; real PBX/phone, load and visual acceptance remain open.

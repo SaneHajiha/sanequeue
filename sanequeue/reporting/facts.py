@@ -55,6 +55,10 @@ CREATE TABLE IF NOT EXISTS report_cel_transfers(
  PRIMARY KEY(pbx,source_key));
 CREATE INDEX IF NOT EXISTS rct_link ON report_cel_transfers(pbx,linkedid,ts);
 CREATE INDEX IF NOT EXISTS rct_uid ON report_cel_transfers(pbx,uid,ts);
+CREATE TABLE IF NOT EXISTS report_cel_events(
+ pbx TEXT,source_key TEXT,event_id INTEGER,uid TEXT,ts REAL,
+ PRIMARY KEY(pbx,source_key));
+CREATE INDEX IF NOT EXISTS rce_uid_time ON report_cel_events(pbx,uid,ts,event_id);
 CREATE TABLE IF NOT EXISTS report_activity(
  pbx TEXT,source_key TEXT,event_id INTEGER,queue TEXT,agent TEXT,state TEXT,reason TEXT,
  starts REAL,ends REAL,on_duty INTEGER,coverage TEXT,canonical_agent TEXT,PRIMARY KEY(pbx,source_key));
@@ -66,7 +70,7 @@ CREATE TABLE IF NOT EXISTS report_cdr_parties(
  pbx TEXT,source_key TEXT,agent TEXT,direction TEXT,inventory_observed REAL,
  PRIMARY KEY(pbx,source_key));
 '''
-PROJECTION_VERSION = 8
+PROJECTION_VERSION = 9
 
 
 def number(value):
@@ -238,6 +242,12 @@ def project_batch(archive, *, limit=500, inventory=None):
         dirty = set()
         for event_id, source, key, ts, kind, payload in events:
             row = json.loads(payload)
+            if source=='cel':
+                uid=row.get('uniqueid')
+                if not isinstance(uid,str) or not 0<len(uid)<=512 or not uid.isprintable():uid=''
+                db.execute('''INSERT INTO report_cel_events VALUES(?,?,?,?,?)
+                  ON CONFLICT(pbx,source_key) DO UPDATE SET event_id=excluded.event_id,
+                  uid=excluded.uid,ts=excluded.ts''',(archive.pbx,key,event_id,uid,ts))
             if source in ('activity','cdr'):
                 evidence=db.execute('SELECT agent,direction,inventory_observed FROM report_identity_evidence WHERE pbx=? AND event_id=?',
                                     (archive.pbx,event_id)).fetchone()

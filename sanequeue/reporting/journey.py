@@ -85,13 +85,16 @@ def explain(archive,scope,start,end,visit_id):
     budget-=len(events)
     if budget<=0:limited=True
     first=max(float(start),float(scope.not_before),float(visit['entered']))
+    # Only the owned root's explicit IVR events gain a pre-queue window.
+    # Graph expansion, downstream legs and CDR keep their original boundary.
+    prequeue_first=max(float(start),float(scope.not_before))
     last=float(end)
     with bounded().reader() as db:
-        authorized={};direct_cache={};raw_hangups={};peer_pairs=set()
+        authorized={};direct_cache={};raw_hangups={};peer_pairs={}
         projection=db.execute('SELECT after_id FROM report_projection WHERE pbx=?',(archive.pbx,)).fetchone()
         latest=db.execute('SELECT MAX(id) FROM events WHERE pbx=?',(archive.pbx,)).fetchone()[0]
         version=db.execute('SELECT version FROM report_projection_version WHERE pbx=?',(archive.pbx,)).fetchone()
-        caught_up=bool(version and version[0]>=8 and projection and projection[0]>=(latest or 0))
+        caught_up=bool(version and version[0]>=9 and projection and projection[0]>=(latest or 0))
         if not caught_up:omitted=True
         def direct(uid):
             if uid in direct_cache:return direct_cache[uid]
@@ -106,6 +109,8 @@ def explain(archive,scope,start,end,visit_id):
         def owned(uid):
             nonlocal omitted,limited,budget
             if uid in authorized:return authorized[uid]
+            if budget<=0:
+                limited=True;omitted=True;authorized[uid]=False;return False
             ok,visits=direct(uid)
             if (ok or not visits) and budget>0:
                 # edge_to finds an actual agent UID without scanning raw CEL or
@@ -157,21 +162,25 @@ def explain(archive,scope,start,end,visit_id):
             seen.add(uid)
             if not owned(uid):continue
             leg_node=node(uid)
+            cel_first=prequeue_first if uid==root else first
             # Fetch only exact uniqueid, never linkedid expansion. SQL CDR/CEL
             # imports are append-only; source_items selects the current version.
             rows=db.execute('''SELECT e.id,e.ts,e.kind,
                 CASE WHEN length(CAST(e.payload AS BLOB))<=4096 THEN e.payload ELSE NULL END payload
-                FROM events e JOIN source_items s
-                ON s.pbx=e.pbx AND s.event_id=e.id AND s.source=e.source AND s.source_key=e.source_key
-                JOIN legs l ON l.pbx=e.pbx AND l.uid=?
-                WHERE e.pbx=? AND e.source='cel' AND e.ts>=? AND e.ts<?
-                AND json_extract(e.payload,'$.uniqueid')=? ORDER BY e.ts,e.id LIMIT ?''',
-                (uid,archive.pbx,first,last,uid,budget+1)).fetchall()
+                FROM report_cel_events c INDEXED BY rce_uid_time
+                CROSS JOIN events e ON e.pbx=c.pbx AND e.id=c.event_id
+                CROSS JOIN source_items s ON s.pbx=e.pbx AND s.event_id=e.id
+                  AND s.source=e.source AND s.source_key=e.source_key
+                WHERE c.pbx=? AND c.uid=? AND c.ts>=? AND c.ts<? AND e.source='cel'
+                ORDER BY c.ts,c.event_id LIMIT ?''',
+                (archive.pbx,uid,cel_first,last,budget+1)).fetchall()
             if len(rows)>budget:rows=rows[:budget];limited=True
             for item in rows:
                 check();budget-=1
                 kind=item['kind'].upper()
                 if kind not in _KINDS:continue
+                prequeue=item['ts']<first
+                if prequeue and kind not in ('APP_START','APP_END','USER_DEFINED'):continue
                 parsed=evidence(item['payload'],4096)
                 if parsed is None:continue
                 payload={str(key).lower():value for key,value in parsed.items()}
@@ -181,19 +190,26 @@ def explain(archive,scope,start,end,visit_id):
                 if kind in ('APP_START','APP_END'):
                     app=str(payload.get('appname') or '').lower();context=str(payload.get('context') or '')
                     origin=None
-                    if app in ('read','background','waitexten') and re.fullmatch(r'ivr-[0-9]+',context):origin='ivr'
+                    if app in ('read','background','waitexten') and re.fullmatch(r'ivr-[0-9]{1,10}',context):origin='ivr'
                     if app=='dial' and context=='ext-group':origin='ring_group'
                     if app in ('followme','dial') and context in ('ext-findme','followme-check'):origin='follow_me'
                     if origin is None:continue
+                    if prequeue and origin!='ivr':continue
                     event['origin']=origin
+                    if origin=='ivr':event['ivr_id']=context[4:]
                 if kind=='USER_DEFINED':
                     if payload.get('userdeftype') not in ('IVRSelection','SaneQueueIVR'):continue
                     digit=str(extra.get('digit',''))
                     if not re.fullmatch(r'[0-9*#]',digit):continue
                     event.update(kind='IVR_SELECTION',digit=digit,origin='ivr')
+                    ivr=extra.get('ivr_id')
+                    if isinstance(ivr,str) and re.fullmatch(r'[0-9]{1,10}',ivr):event['ivr_id']=ivr
                 if kind=='HANGUP':
                     cause=extra.get('hangupsource_uniqueid')
-                    if isinstance(cause,str) and cause:raw_hangups[uid]=(cause,item['ts'])
+                    if not isinstance(cause,str) or not 0<len(cause)<=512 or not cause.isprintable():cause=None
+                    # Different current source records for one UID can disagree.
+                    # Sorting by timestamp is not evidence that the last cause won.
+                    raw_hangups.setdefault(uid,[]).append((cause,item['ts']))
                 events.append(event)
             relation_rows=db.execute('''SELECT r.relation,r.to_kind,r.to_id,r.ts,
                 CASE WHEN length(CAST(r.details AS BLOB))<=2048 THEN r.details ELSE NULL END details
@@ -232,7 +248,8 @@ def explain(archive,scope,start,end,visit_id):
                     target=node(target_uid);pending.append(target_uid)
                     if new_node and kind=='queue_connect_peer':nodes[-1].update(source='queue_log',role='queue_agent')
                     if kind=='direct_peer' or kind=='queue_connect_peer' and uid==root:
-                        peer_pairs.add(frozenset((uid,target_uid)))
+                        pair=frozenset((uid,target_uid))
+                        peer_pairs[pair]=max(peer_pairs.get(pair,relation['ts']),relation['ts'])
                 if target is None:
                     omitted=True;continue
                 edge=dict(source_node=leg_node,target_node=target,relation=kind,ts=relation['ts'],
@@ -261,15 +278,32 @@ def explain(archive,scope,start,end,visit_id):
                 events.append(dict(id='event'+str(len(events)+1),node=leg_node,ts=cdr['ts'],kind='CDR_SEGMENT',
                     caller=number(cdr['src']),destination=number(cdr['dst']),duration=cdr['duration'],
                     billsec=cdr['billsec'],disposition=disposition,status='observed',inferred=False,source='cdr'))
-        final=None
+        final=None;reason='insufficient_peer_evidence'
         # More than two evidenced legs or more than one direct pair is a
         # conference/transfer ambiguity, not a single final hangup attribution.
-        if len(node_ids)==2 and len(peer_pairs)==1 and len(raw_hangups)==2 and not omitted and not limited:
-            pair=next(iter(peer_pairs));causes={value[0] for value in raw_hangups.values()}
-            if len(pair)==2 and len(causes)==1 and next(iter(causes)) in pair:
-                final=dict(node=node_ids[next(iter(causes))],status='observed',inferred=False,source='cel_direct_peer_causality')
+        if limited:reason='evidence_limit'
+        elif omitted:reason='restricted_or_unproven'
+        elif len(node_ids)>2 or len(peer_pairs)>1:reason='complex_call'
+        elif any(len({value[0] for value in values if value[0] is not None})>1 for values in raw_hangups.values()):reason='conflicting_causality'
+        elif len(node_ids)==2 and len(peer_pairs)==1 and len(raw_hangups)==2:
+            pair=next(iter(peer_pairs));causes={value[0] for values in raw_hangups.values() for value in values}
+            if any(value[1]<peer_pairs[pair] for values in raw_hangups.values() for value in values):reason='causality_before_peer'
+            elif None in causes:reason='missing_causality'
+            elif len(causes)>1:reason='conflicting_causality'
+            elif len(pair)==2 and len(causes)==1 and next(iter(causes)) in pair:
+                source_uid=next(iter(causes));ident=node_ids[source_uid]
+                role=next((item.get('role') for item in nodes if item['id']==ident),None)
+                party='caller' if role=='queue_caller' else 'agent' if role=='queue_agent' else 'identified_leg'
+                final=dict(node=ident,party=party,status='observed',inferred=False,source='cel_direct_peer_causality')
+                reason='consistent_direct_peer_causality'
+            else:reason='unproven_cause_identity'
     events.sort(key=lambda item:(item['ts'],item['id']))
+    segment=visit.get('segment_ended_by')
+    if segment not in ('caller','agent'):segment=None
     return dict(visit_id=visit_id,nodes=nodes,edges=edges,events=events,numbers=numbers,final_hangup=final,
+                termination=dict(queue_segment=dict(party=segment,status='observed' if segment else 'unknown',
+                    source='queue_log' if segment else None),final=dict(party=final['party'] if final else None,
+                    status='observed' if final else 'unknown',reason=reason)),
                 coverage=dict(status='partial',complete_conversation=False,restricted_or_unproven=omitted,
                               limit_reached=limited,linkedid_merge=False),
                 limits=dict(uids=MAX_UIDS,events=MAX_EVENTS,seconds=min(5,archive.read_seconds),

@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from pathlib import Path
 import tempfile
 import unittest
@@ -144,6 +145,136 @@ class JourneyTests(unittest.TestCase):
         self.assertIsNotNone(result['final_hangup'])
         self.assertNotIn('actual-agent-uid',json.dumps(result))
 
+    def test_conflicting_current_hangups_never_use_last_record_as_causality(self):
+        self.seed(*self.visit('private-root-uid',peer='actual-agent-uid'),
+            self.cel('private-root-uid','CHAN_START',100),self.cel('actual-agent-uid','CHAN_START',100),
+            self.cel('private-root-uid','HANGUP',120,eventextra='{"hangupsource_uniqueid":"actual-agent-uid"}'),
+            self.cel('private-root-uid','HANGUP',121,eventextra='{"hangupsource_uniqueid":"private-root-uid"}'),
+            self.cel('private-root-uid','HANGUP',122,eventextra='{"hangupsource_uniqueid":"actual-agent-uid"}'),
+            self.cel('actual-agent-uid','HANGUP',122,eventextra='{"hangupsource_uniqueid":"actual-agent-uid"}'))
+        result=self.report()
+        self.assertIsNone(result['final_hangup'])
+        self.assertEqual(result['termination']['final']['reason'],'conflicting_causality')
+        self.assertEqual(result['termination']['queue_segment']['party'],'caller')
+        self.assertNotIn('actual-agent-uid',json.dumps(result))
+
+    def test_identical_duplicate_causes_are_consistent_and_agent_role_is_explicit(self):
+        self.seed(*self.visit('private-root-uid',peer='actual-agent-uid'),
+            self.cel('private-root-uid','CHAN_START',100),self.cel('actual-agent-uid','CHAN_START',100),
+            self.cel('private-root-uid','HANGUP',120,eventextra='{"hangupsource_uniqueid":"actual-agent-uid"}'),
+            self.cel('private-root-uid','HANGUP',121,eventextra='{"hangupsource_uniqueid":"actual-agent-uid"}'),
+            self.cel('actual-agent-uid','HANGUP',121,eventextra='{"hangupsource_uniqueid":"actual-agent-uid"}'))
+        result=self.report()
+        self.assertEqual(result['final_hangup']['party'],'agent')
+        self.assertEqual(result['termination']['final']['reason'],'consistent_direct_peer_causality')
+        # Queue termination is a different evidence unit; never rewrite it.
+        self.assertEqual(result['termination']['queue_segment']['party'],'caller')
+
+    def test_missing_cause_is_explicit_and_does_not_inherit_a_previous_cause(self):
+        self.seed(*self.visit('private-root-uid',peer='actual-agent-uid'),
+            self.cel('private-root-uid','CHAN_START',100),self.cel('actual-agent-uid','CHAN_START',100),
+            self.cel('private-root-uid','HANGUP',120,eventextra='{}'),
+            self.cel('private-root-uid','HANGUP',121,eventextra='{"hangupsource_uniqueid":"actual-agent-uid"}'),
+            self.cel('actual-agent-uid','HANGUP',120,eventextra='{"hangupsource_uniqueid":"actual-agent-uid"}'))
+        result=self.report()
+        self.assertIsNone(result['final_hangup'])
+        self.assertEqual(result['termination']['final']['reason'],'missing_causality')
+
+    def test_prequeue_ivr_is_visible_only_inside_selected_authorized_window(self):
+        self.seed(*self.visit('private-root-uid'),self.cel('private-root-uid','CHAN_START',91),
+            self.cel('private-root-uid','APP_START',94,appname='Background',context='ivr-3'),
+            self.cel('private-root-uid','USER_DEFINED',96,userdeftype='IVRSelection',eventextra='{"digit":"2","ivr_id":"3"}'),
+            self.cel('private-root-uid','APP_START',89,appname='Background',context='ivr-7'))
+        result=self.report()
+        ivr=[item for item in result['events'] if item.get('origin')=='ivr']
+        self.assertEqual([item['ts'] for item in ivr],[94,96])
+        self.assertEqual([item['ivr_id'] for item in ivr],['3','3'])
+        self.assertEqual(ivr[1]['digit'],'2')
+        restricted=explain(self.archive,Scope(('8001',),not_before=95),90,300,self.ident())
+        self.assertEqual([item['ts'] for item in restricted['events'] if item.get('origin')=='ivr'],[96])
+        selected=explain(self.archive,self.scope,95,300,self.ident())
+        self.assertEqual([item['ts'] for item in selected['events'] if item.get('origin')=='ivr'],[96])
+
+    def test_foreign_queue_veto_also_hides_prequeue_ivr(self):
+        self.seed(*self.visit('private-root-uid'),*self.visit('private-root-uid','8002',130),
+            self.cel('private-root-uid','CHAN_START',91),
+            self.cel('private-root-uid','USER_DEFINED',96,userdeftype='IVRSelection',eventextra='{"digit":"9","ivr_id":"3"}'))
+        result=self.report()
+        self.assertFalse(any(item.get('origin')=='ivr' for item in result['events']))
+        self.assertEqual(result['termination']['final']['reason'],'restricted_or_unproven')
+
+    def test_hangup_before_connect_is_not_final_causality(self):
+        self.seed(*self.visit('private-root-uid',peer='actual-agent-uid'),
+            self.cel('private-root-uid','CHAN_START',100),self.cel('actual-agent-uid','CHAN_START',100),
+            self.cel('private-root-uid','HANGUP',100.5,eventextra='{"hangupsource_uniqueid":"actual-agent-uid"}'),
+            self.cel('actual-agent-uid','HANGUP',120,eventextra='{"hangupsource_uniqueid":"actual-agent-uid"}'))
+        result=self.report()
+        self.assertIsNone(result['final_hangup'])
+        self.assertEqual(result['termination']['final']['reason'],'causality_before_peer')
+
+    def test_exhausted_budget_cannot_skip_foreign_incoming_ownership_veto(self):
+        self.seed(*self.visit('private-root-uid',peer='peer'),*self.visit('peer',stamp=102),
+            *self.visit('foreign','8002',stamp=130,peer='peer'))
+        with patch('sanequeue.reporting.journey.MAX_EVENTS',4):result=self.report()
+        self.assertEqual(len([item for item in result['nodes'] if item['type']=='call_leg']),1)
+        self.assertFalse(any(edge['relation']=='queue_connect_peer' for edge in result['edges']))
+        self.assertTrue(result['coverage']['limit_reached'])
+        self.assertTrue(result['coverage']['restricted_or_unproven'])
+        self.assertIsNone(result['final_hangup']);self.assertFalse(result['audio_granted'])
+        self.assertEqual(len([item for item in self.report()['nodes'] if item['type']=='call_leg']),1)
+
+    def test_prequeue_window_does_not_expand_cdr_graph_or_downstream_apps(self):
+        self.seed(*self.visit('private-root-uid',peer='actual-agent-uid'),
+            self.cel('private-root-uid','CHAN_START',91),self.cel('actual-agent-uid','CHAN_START',91),
+            self.cel('actual-agent-uid','APP_START',94,appname='Background',context='ivr-9'),
+            self.cel('private-root-uid','APP_START',95,appname='Dial',context='ext-group'),
+            self.event('cdr','private-root-uid','CDR',92,src='09999999999',dst='100'),
+            self.cel('private-root-uid','BRIDGE_ENTER',96,eventextra='{"bridge_id":"pre-queue"}'))
+        result=self.report()
+        self.assertNotIn('09999999999',result['numbers'].values())
+        self.assertFalse(any(item.get('ivr_id')=='9' for item in result['events']))
+        self.assertFalse(any(item.get('origin')=='ring_group' for item in result['events']))
+        self.assertFalse(any(item['type']=='bridge' for item in result['nodes']))
+
+    def test_cel_uid_projection_replays_in_worker_and_http_waits_without_ddl(self):
+        self.seed(*self.visit('private-root-uid'),self.cel('private-root-uid','ANSWER',105))
+        with self.archive.writer() as db:
+            db.execute('DROP TABLE report_cel_events')
+            db.execute('UPDATE report_projection_version SET version=8')
+        self.assertFalse(any(item['source']=='cel' for item in self.report()['events']))
+        with self.archive.reader() as db:
+            self.assertIsNone(db.execute("SELECT name FROM sqlite_master WHERE name='report_cel_events'").fetchone())
+        while project_batch(self.archive,limit=1)['processed']:pass
+        self.assertTrue(any(item['kind']=='ANSWER' for item in self.report()['events']))
+        with self.archive.reader() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM report_cel_events').fetchone()[0],1)
+
+    def test_actual_journey_cel_query_seeks_uid_index_not_unrelated_event_payloads(self):
+        self.seed(*self.visit('private-root-uid'),self.cel('private-root-uid','ANSWER',105),
+            *(self.cel('unrelated-'+str(i),'ANSWER',95+i/1000) for i in range(200)))
+        plans=[];connect=sqlite3.connect
+        class Traced(sqlite3.Connection):
+            def execute(self,sql,parameters=()):
+                if 'FROM report_cel_events c INDEXED BY' in sql:
+                    plans.extend(super().execute('EXPLAIN QUERY PLAN '+sql,parameters).fetchall())
+                return super().execute(sql,parameters)
+        with patch('sanequeue.reporting.store.sqlite3.connect',side_effect=lambda *a,**kw:connect(*a,**kw,factory=Traced)):
+            result=self.report()
+        text=' '.join(row[3] for row in plans)
+        self.assertIn('rce_uid_time',text)
+        self.assertIn('uid=?',text)
+        self.assertNotIn('SCAN e',text)
+        self.assertEqual(sum(item['kind']=='ANSWER' for item in result['events']),1)
+
+    def test_corrected_cel_identity_does_not_retain_stale_uid_access(self):
+        answer=self.cel('private-root-uid','ANSWER',105)
+        self.seed(*self.visit('private-root-uid'),answer)
+        self.assertTrue(any(item['kind']=='ANSWER' for item in self.report()['events']))
+        self.seed(Event(answer.source,answer.key,answer.timestamp,answer.kind,dict(answer.payload,uniqueid='other-uid')))
+        self.assertFalse(any(item['kind']=='ANSWER' for item in self.report()['events']))
+        with self.archive.reader() as db:
+            self.assertEqual(db.execute('SELECT uid FROM report_cel_events WHERE source_key=?',(answer.key,)).fetchone()[0],'other-uid')
+
     def test_connect_peer_foreign_visits_or_multiple_callers_are_not_grants(self):
         self.seed(*self.visit('private-root-uid',peer='actual-agent-uid'),
                   *self.visit('actual-agent-uid','8002',102),
@@ -216,7 +347,7 @@ class JourneyTests(unittest.TestCase):
             self.assertEqual(tuple(target),('',None))
             edges=db.execute('SELECT relation FROM evidence_edges WHERE event_id=?',(event_id,)).fetchall()
             self.assertEqual([row[0] for row in edges],['transfer_second_channel'])
-            self.assertEqual(db.execute('SELECT version FROM report_projection_version').fetchone()[0],8)
+            self.assertEqual(db.execute('SELECT version FROM report_projection_version').fetchone()[0],9)
 
     def test_second_initiator_graph_is_not_transfer_target_or_audio_permission(self):
         self.seed(*self.visit('private-root-uid'),*self.visit('private-peer-uid',stamp=102),

@@ -9,7 +9,7 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
 function setup(file){
  const nodes=new Map(),events=new Map(),observers=[],pending=[];
  function element(id){
-  if(!nodes.has(id))nodes.set(id,{id,value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,open:false,options:[],attrs:{},listeners:{},children:[],dataset:{},
+  if(!nodes.has(id))nodes.set(id,{id,value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,open:false,isConnected:true,options:[],attrs:{},listeners:{},children:[],dataset:{},
    replaceChildren(){this.innerHTML='';this.textContent='';this.children=[];},append(...items){this.children.push(...items);},setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},
    addEventListener(k,v){this.listeners[k]=v;},querySelector(){return element('date-caption');},querySelectorAll(){return [];},
    close(){this.open=false;this.listeners.close?.();},showModal(){this.open=true;}});
@@ -23,10 +23,10 @@ function setup(file){
   addEventListener(k,v){events.set(k,v);},dispatchEvent(event){events.get(event.type)?.(event);}};
  const context={document,window:{},URLSearchParams,Intl,Date,Number,String,Math,AbortController,
   MutationObserver:class{constructor(callback){observers.push(callback);}observe(){}},CustomEvent:class{constructor(type){this.type=type;}},
-  fetch(url){return new Promise((resolve,reject)=>pending.push({url,resolve:data=>resolve({ok:true,redirected:false,headers:{get:()=> 'application/json'},json:async()=>data}),reject}));},
+  fetch(url,options={}){return new Promise((resolve,reject)=>pending.push({url,signal:options.signal,resolve:data=>resolve({ok:true,redirected:false,headers:{get:()=> 'application/json'},json:async()=>data}),reject}));},
   console,setTimeout,URL,crypto:require('node:crypto').webcrypto};
  vm.runInNewContext(fs.readFileSync(path.join(root,'qpanel/themes/qpanel/static/js',file),'utf8'),context,{filename:file});
- return {element,fields,document,pending,observers};
+ return {element,fields,document,pending,observers,events};
 }
 function data(url){
  if(url.includes('/overview?'))return {queues:[],allowed_queues:['8001'],sources:{}};
@@ -95,4 +95,34 @@ async function exportRecovery(){
  element('history-jobs-refresh').onclick();await settle();assert.equal(host.hidden,true);assert.equal(host.children.length,0,'new refresh clears old recovery data');pending[1].reject(Error('revoked'));await settle();assert.equal(host.children.length,0);
  element('history-jobs-refresh').onclick();await settle();document.body.dataset.view='live';observers[0]();pending[2].resolve({jobs:[],recovery:[{job_id:'PRIVATE',state:'quarantined',size:10}]});await settle();assert.equal(host.children.length,0,'late export metadata does not reappear after leaving');assert.equal(element('history-jobs-feedback').textContent,'');
 }
-(async()=>{await reporting();await plans();await transcripts();await exportRecovery();console.log('Reporting frontend: failure, stale-response, detail race, plan-loading and transcript security and export recovery checks passed');})().catch(error=>{console.error(error);process.exitCode=1;});
+async function journey(){
+ const {element,pending,document,observers,events}=setup('journey-reports.js');
+ document.body.dataset.view='reports';const dialog=element('history-detail');dialog.open=true;
+ const host=element('journey-result');
+ const button={dataset:{historyJourney:'opaque',journeyQuery:'from=2026-10-26'},isConnected:true,disabled:false,nextElementSibling:host};
+ const click=()=>events.get('click')({target:{closest:()=>button}});
+ const payload={events:[{ts:100,kind:'IVR_SELECTION',source:'cel',node:'leg1',ivr_id:'3',digit:'2',caller:'n1'}],edges:[],numbers:{n1:'<img src=x onerror=alert(1)>'},final_hangup:null,
+  termination:{queue_segment:{party:'caller'},final:{party:null,reason:'conflicting_causality'}}};
+ const obsolete=click();element('history-filters').listeners.submit();
+ assert.equal(pending[0].signal.aborted,true);pending[0].resolve(payload);await obsolete;
+ assert.equal(host.innerHTML,'','late journey must not reappear after changed filters');
+ const loaded=click();pending[1].resolve(payload);await loaded;
+ assert.match(host.innerHTML,/Queue segment ended by: Caller/);
+ assert.match(host.innerHTML,/Conflicting hangup evidence/);assert.match(host.innerHTML,/IVR 3/);assert.match(host.innerHTML,/Key: 2/);
+ assert.match(host.innerHTML,/&lt;img/);assert.doesNotMatch(host.innerHTML,/<img/);
+ assert.equal(host.attrs['aria-busy'],undefined);assert.equal(button.disabled,false);
+ const old=click(),fresh=click();pending[3].resolve({...payload,final_hangup:{node:'leg2',party:'agent'}});await fresh;
+ const current=host.innerHTML;assert.match(current,/Consistent direct hangup evidence: Agent/);
+ pending[2].reject(Error('late failure'));await old;assert.equal(host.innerHTML,current,'old failure cannot overwrite fresh causality');
+ const closing=click();dialog.close();pending[4].resolve(payload);await closing;
+ assert.equal(host.innerHTML,'','closing private detail clears and invalidates pending data');
+ dialog.showModal();const leaving=click();document.body.dataset.view='live';observers[0]();
+ pending[5].resolve(payload);await leaving;assert.equal(host.innerHTML,'');
+ document.body.dataset.view='reports';const detached=click();host.isConnected=false;observers[1]();
+ pending[6].reject(Error('detached'));await detached;assert.equal(host.innerHTML,'');
+ host.isConnected=true;const reentry=click();assert.equal(pending.length,8,'reentry must make a fresh authorized request');
+ pending[7].reject(Error('revoked'));await reentry;assert.match(host.textContent,/Unable to load/);assert.equal(host.innerHTML,'');
+ const last=click();pending[8].resolve(payload);await last;document.dispatchEvent({type:'sanequeue:reports-loaded'});
+ assert.equal(host.innerHTML,'','a new applied report discards completed private journey data too');
+}
+(async()=>{await reporting();await plans();await transcripts();await exportRecovery();await journey();console.log('Reporting frontend: failure, stale-response, plan-loading, transcript, export recovery and journey lifecycle checks passed');})().catch(error=>{console.error(error);process.exitCode=1;});
