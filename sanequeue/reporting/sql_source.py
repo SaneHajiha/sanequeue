@@ -17,7 +17,7 @@ from .sources import sql_event
 
 FIELDS={
  'cdr':('calldate','clid','src','dst','dcontext','channel','dstchannel','lastapp','lastdata',
-        'duration','billsec','disposition','uniqueid','linkedid','sequence','did','recordingfile'),
+        'duration','billsec','disposition','uniqueid','linkedid','sequence','did','recordingfile','outbound_cnum','outbound_cid'),
  'cel':('id','eventtype','eventtime','channame','uniqueid','linkedid','peer','eventextra','context','appname','appdata')}
 
 

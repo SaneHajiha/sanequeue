@@ -10,6 +10,7 @@ from sanequeue.realtime.local_inventory import snapshot
 
 BEGIN='; BEGIN SANEQUEUE MANAGED ACCESS'
 END='; END SANEQUEUE MANAGED ACCESS'
+REPORTING_UNITS=('sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-reporting-ai.service')
 
 
 def manager_block(original,collector_secret,control_secret):
@@ -100,14 +101,14 @@ def main():
     stamp=time.strftime('%Y%m%d-%H%M%S')
     backup=Path('/var/backups/sanequeue')/(stamp+'-installer');backup.mkdir(parents=True,mode=0o700)
     os.chmod(backup,0o700)
-    units=('sanequeue.service','sanequeue-collector.service','sanequeue-redis.service','sanequeue-inventory.service','sanequeue-inventory.timer','sanequeue-fastagi.service','sanequeue-pbx-apply.service','sanequeue-pbx-apply.timer')
+    units=('sanequeue.service','sanequeue-collector.service','sanequeue-redis.service','sanequeue-inventory.service','sanequeue-inventory.timer','sanequeue-fastagi.service','sanequeue-pbx-apply.service','sanequeue-pbx-apply.timer')+REPORTING_UNITS
     active={unit:subprocess.run(['systemctl','is-active','--quiet',unit]).returncode==0 for unit in units}
     old_link=str(link.resolve()) if link.exists() else None
     old_physical=None
     created_control_link=False
     changed=[]
     try:
-        for unit in ('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer','sanequeue-fastagi.service','sanequeue-pbx-apply.timer','sanequeue-pbx-apply.service'):
+        for unit in ('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer','sanequeue-fastagi.service','sanequeue-pbx-apply.timer','sanequeue-pbx-apply.service')+REPORTING_UNITS:
             if active[unit] or (Path('/etc/systemd/system')/unit).exists():
                 run(['systemctl','stop',unit])
         if etc.exists():shutil.copytree(etc,backup/'etc')
@@ -175,6 +176,32 @@ def main():
             text=(release/'deploy'/source).read_text()
             if destination=='sanequeue.service':text=text.replace('--host 127.0.0.1 --port 5000','--host '+bind+' --port '+str(web_port))
             (Path('/etc/systemd/system')/destination).write_text(text)
+        for unit in REPORTING_UNITS:
+            (Path('/etc/systemd/system')/unit).write_text((release/'deploy'/unit).read_text())
+        if not (etc/'reporting.env').exists():
+            # Reuse only an explicitly provisioned read-only SQL configuration.
+            # Do not copy privileged PBX database credentials into the web app.
+            sql_args='--mysql-config /etc/sanequeue/reporting-sql.ini' if (etc/'reporting-sql.ini').is_file() else ''
+            private(etc/'reporting.env','REPORTING_SQL_ARGS='+sql_args+'\n')
+        private(etc/'reporting-web.env','SANEQUEUE_REPORT_AI_ENABLED='+str(int((etc/'reporting-ai.enabled').is_file() and (etc/'reporting-ai.env').is_file()))+'\n')
+        initialization='''from pathlib import Path
+from sanequeue.reporting.store import Archive
+from sanequeue.reporting.export_jobs import JobStore
+from sanequeue.reporting.access_audit import AuditStore
+from sanequeue.reporting.work_sessions import WorkSessions
+from sanequeue.reporting.quality import QualityStore
+from sanequeue.reporting.ai_jobs import AIJobs
+from sanequeue.reporting.report_plans import SavedReports
+s=Path('/var/lib/sanequeue')
+Archive(s/'history.sqlite3').initialize()
+JobStore(s/'export-jobs.sqlite3',s/'private-exports').initialize()
+AuditStore(s/'recording-access.sqlite3').initialize()
+WorkSessions(s/'work-sessions.sqlite3').initialize()
+QualityStore(s/'quality.sqlite3').initialize()
+AIJobs(s/'ai-jobs.sqlite3').initialize()
+SavedReports(s/'report-plans.sqlite3').initialize()
+'''
+        run(['runuser','-u','sanequeue','--',str(release/'.venv/bin/python'),'-c',initialization],cwd=release)
         redis_unit=f'[Unit]\nDescription=SaneQueue private Redis cache\nAfter=network.target\n[Service]\nUser=sanequeue\nGroup=sanequeue\nExecStart={redis} /etc/sanequeue/redis.conf\nRestart=on-failure\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=strict\nProtectHome=true\n[Install]\nWantedBy=multi-user.target\n'
         Path('/etc/systemd/system/sanequeue-redis.service').write_text(redis_unit)
         run(['systemctl','daemon-reload']);run(['systemctl','restart','sanequeue-redis'])
@@ -182,6 +209,9 @@ def main():
         (Path('/var/lib/asterisk/sounds/custom')).mkdir(parents=True,exist_ok=True)
         run(['systemctl','start','sanequeue-pbx-apply.service'])
         run(['systemctl','enable','--now','sanequeue-inventory.timer','sanequeue-collector.service','sanequeue.service','sanequeue-redis.service','sanequeue-pbx-apply.timer','sanequeue-fastagi.service'])
+        run(['systemctl','enable','--now','sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service'])
+        if (etc/'reporting-ai.enabled').is_file() and (etc/'reporting-ai.env').is_file():
+            run(['systemctl','enable','--now','sanequeue-reporting-ai.service'])
         from redis import Redis
         cache=Redis(host='127.0.0.1',port=16379,password=redis_secret,socket_timeout=3)
         maintenance=(state/'module.disabled').exists()

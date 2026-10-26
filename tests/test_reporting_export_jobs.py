@@ -176,7 +176,7 @@ class ExportJobTests(unittest.TestCase):
         with self.assertRaisesRegex(ExportFailure,'quota'):self.create()
         for i in range(7):self.create(owner='owner-'+str(i))
         with self.assertRaisesRegex(ExportFailure,'quota'):self.create(owner='global')
-        with self.assertRaises(ValueError):self.create(format='xlsx')
+        with self.assertRaises(ValueError):self.create(format='pdf')
         with self.assertRaisesRegex(ValueError,'database_is_archive'):
             JobStore(self.archive.path,self.root/'another-output').initialize()
         key=self.root/'key';key.write_bytes(b'x'*32);os.chmod(key,0o600)
@@ -229,6 +229,25 @@ class ExportJobTests(unittest.TestCase):
         self.assertTrue(result['recovered'])
         self.assertEqual(final.read_bytes(),before)
         self.assertEqual(len(self.read(ident)),2)
+
+    def test_deferred_recovery_preserves_manifest_and_can_finish_later(self):
+        from sanequeue.reporting.export_jobs import _Deferred
+        self.seed();ident=self.create();link=os.link
+        def crash(source,destination):
+            link(source,destination);raise SystemExit('simulated process death')
+        with patch('sanequeue.reporting.export_jobs.os.link',side_effect=crash):
+            with self.assertRaises(SystemExit):self.worker().run_once()
+        with self.store._db(write=True) as db:db.execute('UPDATE export_jobs SET lease_until=0 WHERE id=?',(ident,))
+        worker=self.worker();gate=worker._gate;calls=[]
+        def pause(deadline=None):
+            calls.append(1)
+            if len(calls)==2:raise _Deferred('export_system_busy')
+            return gate(deadline)
+        worker._gate=pause
+        self.assertEqual(worker.run_once()['state'],'queued')
+        self.assertIsNotNone(self.store.get(ident,'alice')['checksum'])
+        with self.store._db(write=True) as db:db.execute('UPDATE export_jobs SET available_at=0 WHERE id=?',(ident,))
+        self.assertTrue(self.worker().run_once()['recovered'])
 
     def test_authenticated_crash_artifact_is_removed_when_recovery_is_stale(self):
         self.seed();ident=self.create();link=os.link

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import sqlite3
 import time
+import wave
 from zoneinfo import ZoneInfo
 
 from flask import abort, jsonify, request, Response, g, session
@@ -19,9 +20,18 @@ from sanequeue.reporting import exports
 from sanequeue.reporting import activity_queries
 from sanequeue.reporting import outbound
 from sanequeue.reporting import analytics
+from sanequeue.reporting import followup
+from sanequeue.reporting import agent_metrics
 from sanequeue.reporting.export_jobs import JobStore, ExportFailure, projection_watermark
 from sanequeue.reporting.access_audit import AuditStore, AuditUnavailable
 from sanequeue.reporting import work_sessions
+from sanequeue.reporting import visit_snapshots
+from sanequeue.reporting import adherence, adherence_source
+from sanequeue.reporting import cdr_queries
+from sanequeue.reporting import journey
+from sanequeue.reporting.quality import QualityStore, QualityConflict, QualityUnavailable
+from sanequeue.reporting.ai_jobs import AIJobs, AIConflict, AIUnavailable
+from sanequeue.reporting.report_plans import SavedReports,PlanConflict,PlanUnavailable,period_bounds
 from sanequeue.reporting.recording_scope import ownership as recording_ownership
 from sanequeue.reporting.audio import byte_range, open_recording
 from sanequeue.reporting.privacy import display_number
@@ -30,11 +40,26 @@ from sanequeue.reporting.store import Archive, QueryDeadline
 
 def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), own_since=lambda: 0,
             recording_root='/var/spool/asterisk/monitor', pbx='primary',reason_label=lambda queue,reason:reason,
-            known_agents=lambda: ()):
+            known_agents=lambda: (), planning_path=None, shift_identity=None):
     archive = Archive(path, pbx=pbx)
     export_store = JobStore(archive.path.parent/'export-jobs.sqlite3', archive.path.parent/'private-exports')
     audit_store = AuditStore(archive.path.parent/'recording-access.sqlite3')
     work_store = work_sessions.WorkSessions(archive.path.parent/'work-sessions.sqlite3', pbx=pbx)
+    quality_store=QualityStore(archive.path.parent/'quality.sqlite3',pbx=pbx)
+    ai_store=AIJobs(archive.path.parent/'ai-jobs.sqlite3',pbx=pbx)
+    plans_store=SavedReports(archive.path.parent/'report-plans.sqlite3',pbx=pbx)
+    try:
+        plans_store.initialize();plans_ready=True
+    except (OSError,sqlite3.Error,ValueError,PlanUnavailable):
+        plans_ready=False;app.logger.warning('Saved report storage unavailable')
+    try:
+        ai_store.initialize();ai_ready=True
+    except (OSError,sqlite3.Error,ValueError,AIUnavailable):
+        ai_ready=False;app.logger.warning('AI job storage unavailable')
+    try:
+        quality_store.initialize();quality_ready=True
+    except (OSError,sqlite3.Error,ValueError,QualityUnavailable):
+        quality_ready=False;app.logger.warning('Quality review storage unavailable')
     try:
         work_store.initialize()
         work_ready = True
@@ -109,10 +134,24 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                 response = app.make_response((jsonify(error='invalid_report_request'), 400))
             except QueryDeadline:
                 response = app.make_response((jsonify(error='report_query_deadline'), 422))
+            except visit_snapshots.SnapshotUnavailable as error:
+                response = app.make_response((jsonify(error=str(error)), 503))
             except ExportFailure as error:
                 response = app.make_response((jsonify(error=str(error)), 422))
             except AuditUnavailable:
                 response = app.make_response((jsonify(error='recording_audit_unavailable'), 503))
+            except QualityUnavailable:
+                response = app.make_response((jsonify(error='quality_storage_unavailable'), 503))
+            except QualityConflict:
+                response = app.make_response((jsonify(error='quality_request_conflict'), 409))
+            except AIUnavailable:
+                response = app.make_response((jsonify(error='ai_storage_unavailable'), 503))
+            except AIConflict:
+                response = app.make_response((jsonify(error='ai_request_conflict_or_quota'), 409))
+            except PlanUnavailable:
+                response = app.make_response((jsonify(error='report_plans_unavailable'), 503))
+            except PlanConflict:
+                response = app.make_response((jsonify(error='report_plan_conflict_or_quota'), 409))
             except work_sessions.SessionUnavailable:
                 response = app.make_response((jsonify(error='work_sessions_unavailable'), 503))
             except work_sessions.SessionAccessDenied:
@@ -161,7 +200,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
 
     def export_public(job):
         return {key: job[key] for key in ('id', 'state', 'created', 'updated', 'rows', 'bytes', 'error_code')} | {
-            'format': 'csv', 'start': job['spec']['start'], 'end': job['spec']['end']}
+            'format': job['spec']['format'], 'start': job['spec']['start'], 'end': job['spec']['end']}
 
     @app.route('/api/history/export-jobs', methods=['GET', 'POST'])
     @login_required
@@ -177,7 +216,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         modes = {queue: 'full' if can_queue(queue, 'caller_details') else 'masked' for queue in scope.queues}
         ident = export_store.create(owner, scope, start, end, watermark=projection_watermark(archive), pbx=pbx,
                                     number_modes=modes, language=request.args.get('lang', 'en'),
-                                    outcome=request.args.get('outcome'), format=request.args.get('format', 'csv'))
+                                    outcome=request.args.get('outcome'), format=request.args.get('format', 'csv'),
+                                    snapshot=visit_snapshots.capture(archive))
         app.logger.info('report export queued user=%r job=%s', owner, ident)
         return jsonify(export_public(export_store.get(ident, owner))), 202
 
@@ -219,11 +259,79 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                     yield chunk
             finally:
                 stream.close()
-        result = Response(chunks(), mimetype='text/csv; charset=utf-8', headers={
-            'Content-Length': str(size), 'Content-Disposition': f'attachment; filename="sanequeue-{ident}.csv"'})
+        extension=job['spec']['format']
+        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if extension=='xlsx' else 'text/csv; charset=utf-8'
+        result = Response(chunks(), mimetype=mime, headers={
+            'Content-Length': str(size), 'Content-Disposition': f'attachment; filename="sanequeue-{ident}.{extension}"'})
         result.call_on_close(stream.close)
         app.logger.info('report export downloaded user=%r job=%s rows=%s', owner, ident, job['rows'])
         return result
+
+    def plan_permitted(plan):
+        return plan is not None and all(can_queue(queue,cap) for queue in plan['queues'] for cap in ('view','report_export'))
+
+    def plan_context(ident=None):
+        owner=export_context();scope,start,end=context()
+        if not plans_ready:raise PlanUnavailable('report_plans_unavailable')
+        plan=plans_store.get(ident,owner) if ident else None
+        if ident and plan is None:abort(404)
+        if plan and not plan_permitted(plan):abort(403)
+        return owner,scope,plan
+
+    @app.route('/api/history/plans',methods=['GET','POST'])
+    @login_required
+    @safe
+    def history_plans():
+        owner,scope,_=plan_context()
+        if request.method=='GET':return jsonify(plans=[plan for plan in plans_store.list(owner) if plan_permitted(plan)])
+        export_csrf();body=request.get_json(silent=True)
+        if not isinstance(body,dict):raise ValueError('invalid_report_plan')
+        queues=body.get('queues')
+        if not isinstance(queues,list) or not queues or not set(queues).issubset(scope.queues):abort(403)
+        if not all(can_queue(queue,'report_export') for queue in queues):abort(403)
+        if body.get('id'):
+            previous=plans_store.get(body['id'],owner)
+            if previous is None:abort(404)
+            if not plan_permitted(previous):abort(403)
+        plan=plans_store.save(owner,body.get('name'),queues,outcome=body.get('outcome'),format=body.get('format','xlsx'),
+            language=body.get('language','fa'),period=body.get('period','yesterday'),at=body.get('at','08:00'),
+            weekdays=body.get('weekdays'),enabled=body.get('enabled',False),ident=body.get('id'))
+        return jsonify(plan=plan),201
+
+    @app.post('/api/history/plans/<ident>/archive')
+    @login_required
+    @safe
+    def history_plan_archive(ident):
+        owner,_,_=plan_context(ident);export_csrf()
+        return jsonify(archived=plans_store.delete(ident,owner))
+
+    @app.post('/api/history/plans/<ident>/run')
+    @login_required
+    @safe
+    def history_plan_run(ident):
+        owner,_,plan=plan_context(ident);export_csrf()
+        if plan['archived']:abort(403)
+        body=request.get_json(silent=True)
+        if not isinstance(body,dict) or not isinstance(body.get('request_key'),str):raise ValueError('invalid_report_plan_run')
+        period=period_bounds(time.time(),plan['period'])
+        modes={queue:'full' if can_queue(queue,'caller_details') else 'masked' for queue in plan['queues']}
+        job_id=export_store.create(owner,queries.Scope(tuple(plan['queues'])),period['start'],period['end'],
+            watermark=projection_watermark(archive),pbx=pbx,number_modes=modes,format=plan['format'],language=plan['language'],
+            outcome=plan['outcome'],snapshot=visit_snapshots.capture(archive),request_key='manual:'+body['request_key'])
+        return jsonify(job=export_public(export_store.get(job_id,owner))),202
+
+    @app.get('/api/history/plans/<ident>/runs')
+    @login_required
+    @safe
+    def history_plan_runs(ident):
+        owner,_,_=plan_context(ident)
+        runs=[]
+        for run in plans_store.occurrences(ident,owner):
+            if not all(can_queue(queue,cap) for queue in run['spec']['queues'] for cap in ('view','report_export')):continue
+            job=export_store.get(run['export_job_id'],owner) if run['export_job_id'] else None
+            run['export_state']=job['state'] if job and export_permitted(job) else None
+            runs.append(run)
+        return jsonify(runs=runs)
 
     @app.get('/api/history/overview')
     @login_required
@@ -262,6 +370,78 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             sla_basis=request.args.get('sla_basis', 'answered_known_wait'),
             short_abandon_seconds=request.args.get('short_abandon', 0),
             compare=request.args.get('compare') == '1'))
+
+    @app.get('/api/history/adherence')
+    @login_required
+    @safe
+    def history_adherence():
+        scope, start, end = context()
+        if 'shifts' not in sections():
+            abort(403)
+        source=adherence_source.read(planning_path,scope.queues,max(start,scope.not_before),end)
+        result=adherence.report(archive,scope,start,end,source['shifts'],agent_aliases=shift_identity)
+        result['schedule_configured']=source['configured']
+        # Free-form planning notes and account records never reach the API.
+        return jsonify(result)
+
+    @app.get('/api/history/followup')
+    @login_required
+    @safe
+    def history_followup():
+        scope,start,end=context()
+        if role() not in ('admin','supervisor'):abort(403)
+        before=(request.args['before_time'],request.args.get('before_id')) if request.args.get('before_time') else None
+        result=followup.report(archive,scope,start,end,window_days=int(request.args.get('window_days',7)),before=before)
+        result['rows']=[protect_number(row) for row in result['rows']]
+        return jsonify(result)
+
+    def cdr_context():
+        scope,start,end=context()
+        # Global CDR is deliberately separate from queue-scoped reporting.
+        # A supervisor's queue grant can never expose unrelated PBX traffic.
+        if role()!='admin' or 'users' not in sections() or request.args.get('queue'):
+            abort(403)
+        all_queues=queries.queues(archive)
+        if not all(can_queue(queue,'view') for queue in all_queues):abort(403)
+        numbers=bool(all_queues) and all(can_queue(queue,'caller_details') for queue in all_queues)
+        keys=('src','dst','party','origin','outbound_cid','did','match','src_length','dst_length',
+              'direction','disposition','trunk','hour_from','hour_to','duration_min','duration_max',
+              'billsec_min','billsec_max')
+        filters={key:request.args[key] for key in keys if request.args.get(key) not in (None,'')}
+        if request.args.get('weekdays'):
+            filters['weekdays']=request.args['weekdays'].split(',')
+        if not numbers and any(key in filters for key in ('src','dst','party','origin','outbound_cid','did','src_length','dst_length')):
+            abort(403)
+        return start,end,filters,numbers
+
+    @app.get('/api/history/cdr')
+    @login_required
+    @safe
+    def history_cdr():
+        start,end,filters,numbers=cdr_context()
+        before=None
+        if request.args.get('before_time') is not None:
+            before=(request.args['before_time'],request.args.get('before_id'))
+        data=cdr_queries.page(archive,start,end,filters,before=before)
+        secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+        for row in data['rows']:
+            for key in ('src','dst','internal_caller_ext','outbound_cid','did'):
+                if row.get(key) is not None:
+                    row[key]=display_number(row[key],mode='full' if numbers else 'masked',secret=secret,tenant='default',pbx=pbx,version='1')
+        data['can_search_numbers']=numbers
+        data['filters']={} if not numbers else data['filters']
+        return jsonify(data)
+
+    @app.get('/api/history/cdr/summary')
+    @login_required
+    @safe
+    def history_cdr_summary():
+        start,end,filters,numbers=cdr_context()
+        data=cdr_queries.summary(archive,start,end,filters)
+        # Trunk labels identify configured routes, not telephone numbers.
+        data['can_search_numbers']=numbers
+        data['filters']={} if not numbers else data['filters']
+        return jsonify(data)
 
     def work_context():
         scope, start, end = context(restrict_queue=False)
@@ -402,6 +582,13 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         scope, start, end = context()
         return jsonify(queries.agents(archive, scope, start, end))
 
+    @app.get('/api/history/agent-metrics')
+    @login_required
+    @safe
+    def history_agent_metrics():
+        scope,start,end=context()
+        return jsonify(agent_metrics.report(archive,scope,start,end))
+
     @app.get('/api/history/activity')
     @login_required
     @safe
@@ -464,6 +651,132 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             abort(404)
         return result
 
+    def quality_context():
+        scope,start,end=context()
+        if role() not in ('admin','supervisor') or 'audit' not in sections():abort(403)
+        if not quality_ready:raise QualityUnavailable('quality_storage_unavailable')
+        return scope,start,end
+
+    def ai_authorized(visit_id,recording_id):
+        result=authorized_detail(visit_id);queue=result['visit']['queue']
+        if not ai_ready:raise AIUnavailable('ai_storage_unavailable')
+        if role() not in ('admin','supervisor') or 'audit' not in sections():abort(403)
+        if not can_queue(queue,'caller_details') or not can_queue(queue,'recording_play'):abort(403)
+        if recording_id not in {item['id'] for item in result['recordings']}:abort(404)
+        if not recording_permitted(archive,recording_id,'recording_play',can_queue):abort(403)
+        proof=g.get('report_recording_proofs',{}).get((recording_id,()))
+        if not proof or not all(can_queue(item,'caller_details') for item in proof):abort(403)
+        return queue,tuple(sorted(proof))
+
+    @app.route('/api/history/visits/<visit_id>/recordings/<recording_id>/ai',methods=['GET','POST'])
+    @login_required
+    @safe
+    def history_ai_recording(visit_id,recording_id):
+        queue,proof=ai_authorized(visit_id,recording_id)
+        enabled=os.getenv('SANEQUEUE_REPORT_AI_ENABLED')=='1'
+        if request.method=='GET':
+            rows=[job for job in ai_store.list(current_user.get_id()) if
+                  job['spec']['visit_id']==visit_id and job['spec']['recording_id']==recording_id and
+                  all(can_queue(item,cap) for item in job['spec'].get('queues',[job['spec']['queue']])
+                      for cap in ('view','recording_play','caller_details'))]
+            return jsonify(enabled=enabled,jobs=rows)
+        export_csrf()
+        if not enabled:raise AIUnavailable('ai_disabled')
+        body=request.get_json(silent=True)
+        if not isinstance(body,dict) or body.get('language','fa')!='fa':raise ValueError('local_ai_persian_only')
+        job=ai_store.create(current_user.get_id(),visit_id,recording_id,queue,'fa',body.get('request_key'),queues=proof)
+        return jsonify(job=job),202
+
+    @app.route('/api/history/ai-jobs/<ident>',methods=['GET','POST'])
+    @login_required
+    @safe
+    def history_ai_job(ident):
+        if not ai_ready:raise AIUnavailable('ai_storage_unavailable')
+        job=ai_store.get(ident,current_user.get_id())
+        if job is None:abort(404)
+        if job['spec']['pbx']!=pbx:abort(404)
+        ai_authorized(job['spec']['visit_id'],job['spec']['recording_id'])
+        if not all(can_queue(queue,capability) for queue in job['spec'].get('queues',[job['spec']['queue']])
+                   for capability in ('view','recording_play','caller_details')):abort(403)
+        if request.method=='POST':
+            export_csrf()
+            return jsonify(cancelled=ai_store.cancel(ident,current_user.get_id()))
+        return jsonify(job=job)
+
+    @app.route('/api/history/quality/forms',methods=['GET','POST'])
+    @login_required
+    @safe
+    def history_quality_forms():
+        quality_context()
+        if request.method=='GET':return jsonify(forms=quality_store.forms(),can_edit=role()=='admin')
+        if role()!='admin':abort(403)
+        export_csrf();body=request.get_json(silent=True)
+        if not isinstance(body,dict):raise ValueError('invalid_quality_body')
+        if body.get('id'):
+            form=quality_store.revise_form(body['id'],body.get('criteria'),current_user.get_id(),name=body.get('name'))
+        else:form=quality_store.save_form(body.get('name'),body.get('criteria'),current_user.get_id())
+        if form is None:abort(404)
+        return jsonify(form=form),201
+
+    @app.get('/api/history/quality/summary')
+    @login_required
+    @safe
+    def history_quality_summary():
+        scope,start,end=quality_context()
+        return jsonify(quality_store.aggregate(scope.queues,start,end,reviewers=True))
+
+    @app.route('/api/history/visits/<visit_id>/reviews',methods=['GET','POST'])
+    @login_required
+    @safe
+    def history_quality_reviews(visit_id):
+        quality_context();detail=authorized_detail(visit_id);queue=detail['visit']['queue']
+        if request.method=='GET':
+            page=quality_store.page([queue],visit_id,before=request.args.get('before'))
+            for review in page['rows']:
+                allowed=can_queue(queue,'caller_details')
+                if review['recording_id']:
+                    allowed=allowed and recording_permitted(archive,review['recording_id'],'recording_play',can_queue)
+                    proof=g.get('report_recording_proofs',{}).get((review['recording_id'],())) or ()
+                    frozen=review.get('recording_queues',[])
+                    allowed=allowed and bool(frozen) and bool(proof) and set(proof).issubset(frozen) and all(
+                        can_queue(item,cap) for item in set(frozen)|set(proof) for cap in ('view','caller_details','recording_play'))
+                if not allowed:
+                    review.update(comment='',notes=[],recording_id=None,recording_queues=[],content_redacted=True)
+                else:review['content_redacted']=False
+            return jsonify(page)
+        export_csrf();body=request.get_json(silent=True)
+        if not isinstance(body,dict):raise ValueError('invalid_quality_body')
+        if not can_queue(queue,'caller_details'):abort(403)
+        recording_id=body.get('recording_id');notes=body.get('notes') or []
+        recording_queues=[]
+        if recording_id or notes:
+            if not recording_id or recording_id not in {item['id'] for item in detail['recordings']}:abort(403)
+            if not can_queue(queue,'recording_play') or not recording_permitted(archive,recording_id,'recording_play',can_queue):abort(403)
+            proof=g.get('report_recording_proofs',{}).get((recording_id,()))
+            if not proof or not all(can_queue(item,'caller_details') for item in proof):abort(403)
+            recording_queues=sorted(proof)
+            with archive.reader() as db:
+                recording=db.execute('SELECT recording,ts FROM report_cdr WHERE pbx=? AND source_key=?',(pbx,recording_id)).fetchone()
+            if not recording:abort(404)
+            try:fd,_=open_recording(recording_root,recording['recording'])
+            except FileNotFoundError:
+                if '/' in recording['recording']:abort(404)
+                folder=datetime.fromtimestamp(recording['ts'],ZoneInfo('Asia/Tehran')).strftime('%Y/%m/%d/')
+                fd,_=open_recording(recording_root,folder+recording['recording'])
+            with os.fdopen(fd,'rb') as stream:
+                try:
+                    with wave.open(stream) as audio:duration=audio.getnframes()/audio.getframerate()
+                except (wave.Error,EOFError):abort(415)
+            if not isinstance(notes,list) or len(notes)>100:raise ValueError('quality_note_limit')
+            for note in notes:
+                if not isinstance(note,dict) or isinstance(note.get('offset_seconds'),bool):raise ValueError('invalid_quality_note')
+                offset=float(note.get('offset_seconds',-1))
+                if not 0<=offset<=min(duration,14400):raise ValueError('quality_note_outside_recording')
+        review=quality_store.create_review(visit_id,queue,current_user.get_id(),body.get('form_id'),
+            body.get('form_version'),body.get('scores'),body.get('comment',''),body.get('request_key'),
+            recording_id=recording_id,notes=notes,recording_queues=recording_queues)
+        return jsonify(review=review),201
+
     def require_audit():
         if role() not in ('admin', 'supervisor') or 'audit' not in sections():
             abort(403)
@@ -499,6 +812,21 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             abort(403)
         return jsonify(audit_store.page(recording_id, before=request.args.get('before')))
 
+    @app.get('/api/history/visits/<visit_id>/journey')
+    @login_required
+    @safe
+    def history_journey(visit_id):
+        scope,start,end=context()
+        data=journey.explain(archive,scope,start,end,visit_id)
+        if data is None:abort(404)
+        # Expanded legs must never gain stronger number visibility than any
+        # queue authorized for this request. Graph evidence grants no audio.
+        full=bool(scope.queues) and all(can_queue(queue,'caller_details') for queue in scope.queues)
+        secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+        data['numbers']={key:display_number(value,mode='full' if full else 'masked',secret=secret,
+                          tenant='default',pbx=pbx,version='1') for key,value in data['numbers'].items()}
+        return jsonify(data)
+
     @app.get('/api/history/visits/<visit_id>')
     @login_required
     @safe
@@ -508,6 +836,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         queue = result['visit']['queue']
         result['can_play'] = role() in ('admin','supervisor') and can_queue(queue, 'recording_play')
         result['can_download'] = role() in ('admin','supervisor') and can_queue(queue, 'recording_download')
+        result['can_review'] = quality_ready and role() in ('admin','supervisor') and 'audit' in sections() and can_queue(queue,'caller_details')
         if not result['can_play'] and not result['can_download']:
             result['recordings'] = []
         else:
@@ -518,6 +847,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                 recording['can_play']=result['can_play'] and recording_permitted(archive,recording['id'],'recording_play',can_queue)
                 recording['can_download']=result['can_download'] and recording_permitted(archive,recording['id'],'recording_download',can_queue)
                 recording['can_audit']='audit' in sections() and (recording['can_play'] or recording['can_download'])
+                recording['can_ai']=ai_ready and recording['can_play'] and 'audit' in sections() and can_queue(queue,'caller_details')
                 if recording['can_play'] or recording['can_download']:permitted_refs.append(recording)
             result['recordings']=permitted_refs
         return jsonify(result)

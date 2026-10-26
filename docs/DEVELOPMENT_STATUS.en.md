@@ -1,15 +1,14 @@
 # SaneQueue development handoff
 
-Updated 2026-10-26. Continue from **feature/reporting-phase2**, draft PR **#14**.
-This is a development branch, not a production certification; master does not yet contain the entire reporting change.
+Updated 2026-10-26. Continue from **feature/reporting-phase2**, draft PR **#14**. This is a development branch, not a production certification. Master does not contain the entire reporting change.
 
-## Implemented code
+## Implemented
 
-Persistent bounded local queue/CDR/CEL/activity ingestion; scoped queue visits, agent and duty reports; protected original recordings; bilingual help and module navigation; queue trends, previous-period comparisons, Tehran heatmaps, ASA and nearest-rank waiting percentiles; explicit configurable SL denominators; full-range pause-call aggregates; separate durable private CSV jobs; request-level recording access audit; explicit happy-call/survey work sessions independent of queue presence; browser-local SVG/PNG chart export.
+Bounded independent queue/CDR/CEL/activity ingestion; scoped queue visits and agent/duty reports; protected recordings and access-request audit; bilingual help and module navigation; trends, previous-period comparison, Tehran heatmaps, ASA, waiting percentiles and explicit SLA denominators; pause-call aggregates and explicit happy-call/survey periods independent of queue membership.
 
-Unique duty uses interval unions. Queue visits, CDR segments, memberships and unique conversations are distinct units. Session time is declared work, not observed presence. Leaving queues does not end a session. Sessions require access to every stored queue. Admins with user-management access can select known extensions, supervisors use scoped membership evidence, and agents use their assigned endpoint.
+New code adds immutable visit-version export snapshots, streaming private CSV/XLSX jobs, private versioned scheduled plans, evidence-limited shift adherence and conditional ACW/AHT/occupancy, later queue contact after abandonment, global administrator CDR/trunk/DID traffic, real-origin/CID/party/length/hour filters, explicit CONNECT and Local-optimisation journey evidence, versioned human QA with protected timed notes, durable CPU-only Persian speech jobs with VAD and conservative number normalisation. Keyword extracts are not generative analysis or sentiment decisions.
 
-The optional CPU ASR adapter is experimental code, not a completed AI processing pipeline.
+Unique duty uses interval unions. Queue visits, CDR segments, memberships and unique conversations are different units. Declared survey time is not observed presence. Leaving a queue does not end a session. Every stored queue remains part of the access scope.
 
 ## Continue locally
 
@@ -22,25 +21,18 @@ pip install -r requirements/modern.txt -r requirements/reporting.txt pytest
 python -m pytest tests --ignore=tests/historical
 ```
 
-Deployment units in `deploy/` require matching paths and private state permissions. The separate export worker has a 10% CPU and 128 MB memory ceiling. Jobs and private CSV files live beside the reporting archive; they must never be exposed as static files. The web process does not start the worker. Public installer provisioning and rollback acceptance remain incomplete.
+The installer creates private reporting stores and separate import/export/schedule units. Historical SQL needs an explicitly provisioned read-only configuration and verified indexes. AI models/runtime are optional operator configuration, not silent downloads. Emergency control includes installed reporting workers and never stops Asterisk/MariaDB. Multi-version upgrade/rollback acceptance remains open.
 
-## Evidence and limits
+## Actual evidence
 
-On the laboratory archive, 490 visits matched across overview, trends and heatmap; pause-call aggregates matched paginated details. A private 490-row CSV was generated/downloaded and cancellation was exercised. These small-archive results do not certify large-history or concurrent RTP capacity. Automated tests live in `tests/test_reporting_*`; CI checks JavaScript syntax.
+On the small laboratory archive, 490 visits matched across overview/trends/heatmap, and 1,199 CDR segments matched paginated details and grouped totals. A private 490-row XLSX passed ZIP/XML checks. Audio and internal survey calls were exercised in earlier panel/phone acceptance. There is no callable external trunk.
 
-Large CSV jobs currently fail if the global projection watermark changes during processing, rather than publishing inconsistent pages. Unrelated live changes can therefore interrupt an old-period export. Scoped revisions or a measured bounded snapshot remain necessary. Large XLSX/PDF are not implemented. Permissions are rechecked on download, including revocation of full-number access.
+An actual local speech request from the panel completed for an approximately 19-second recording: 4.38 seconds engine CPU, 215.8 MiB peak RSS and 22.1 seconds wall time under the service limit. No recognisable speech was detected in that sample; this does not establish Persian accuracy or concurrent call/RTP capacity.
 
-Recording audit records requests, not proof of human listening; duplicate requests are grouped into fixed 30-second buckets. Audio remains closed if audit persistence fails. Visual testing of the newly added interface encountered browser input/rendering failures; API acceptance is not visual acceptance.
+Tests live in tests/test_reporting_*; CI checks JS syntax. Consult Actions for the exact commit. Browser capture/input failures leave final visual light/dark/mobile acceptance open; API success is not visual acceptance.
 
 ## Remaining development
 
-- Complete conversation correlation, IVR choices, ring groups/follow-me, consultation/conference timing, final hangup and transferred-recording ownership.
-- Shift adherence/tardiness, evidence-backed ACW/AHT/occupancy and missed-call follow-up.
-- Real originating extension versus outbound CID, permission-safe party/length filters, trunk/DID reporting and daily-hour filters.
-- Live-ingestion-tolerant large exports, XLSX/PDF, saved report templates and scheduled delivery.
-- Versioned QA reviews, timed notes, multi-file audio and customer survey responses.
-- Durable AI jobs, preprocessing/VAD, Persian ITN, transcripts/search/analysis, accuracy and actual server CPU measurements.
-- Historical backfill, non-deleting archive partitions, backup restore and least-privilege automated installation.
-- Multi-version PBX/SIP/PJSIP acceptance, large datasets and actual concurrent call/RTP tests. No callable external trunk is available in the laboratory.
+See [phase five](REPORTING_PHASE5.md) for exact behaviour, ceilings, operator steps, privacy and remaining items. Direct Persian PDF, unrestricted report builders, fully proven multi-hop recording ownership, complete IVR without instrumentation, PBX instrumentation for currently unobserved ACW, outbound callback proof, customer survey response ingestion, VIP/blacklist sources, archive partitions/restore, transcript-wide search, generative AI and production SQL auto-provisioning are not completed merely because the architecture describes them.
 
-No credentials, SSH keys, private connection configuration, messaging tokens, customer audio or live databases belong in the repository. See the Persian handoff and reporting phase documents for detail.
+Source/snapshot history is retained indefinitely. Monitor disk/WAL/private output growth. Never commit credentials, SSH keys, connection secrets, tokens, customer audio/transcripts or live databases.

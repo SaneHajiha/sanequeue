@@ -37,3 +37,11 @@ jobs:
       - run: node --check qpanel/themes/qpanel/static/js/report-exports.js
       - run: node --check qpanel/themes/qpanel/static/js/recording-audit.js
       - run: node --check qpanel/themes/qpanel/static/js/work-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/report-plans.js
+      - run: node --check qpanel/themes/qpanel/static/js/shift-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/cdr-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/journey-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/quality-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/ai-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/followup-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/agent-metrics-reports.js

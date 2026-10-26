@@ -11,6 +11,20 @@ from sanequeue.reporting.facts import project_batch
 
 
 class SQLTests(unittest.TestCase):
+    def test_optional_caller_id_columns_are_schema_aware(self):
+        source=SQLSource({});cursor=Mock()
+        for name in ('did','outbound_cnum','outbound_cid'):
+            self.assertIn(name,FIELDS['cdr'])
+        source.schema['cdr']=set(FIELDS['cdr'])-{'did','outbound_cnum','outbound_cid'}
+        absent=source._columns(cursor,'cdr')
+        for name in ('did','outbound_cnum','outbound_cid'):
+            self.assertIn('NULL AS `'+name+'`',absent)
+        source.schema['cdr']=set(FIELDS['cdr'])
+        present=source._columns(cursor,'cdr')
+        for name in ('did','outbound_cnum','outbound_cid'):
+            self.assertNotIn('NULL AS `'+name+'`',present)
+            self.assertIn('`'+name+'`',present)
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.archive=Archive(Path(self.temp.name)/'archive.db',min_free_bytes=0)

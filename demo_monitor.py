@@ -30,7 +30,7 @@ if not SERVER_MODE:
 import qpanel.backend as qbackend
 with patch.object(qbackend.Backend, '_connect'):
     from qpanel import app as module
-from flask import session, request, jsonify, abort
+from flask import session, request, jsonify, abort, g
 from flask_login import login_required, current_user
 from qpanel.backend import Backend
 
@@ -87,7 +87,11 @@ install_organization(module.app,STATE,lambda:cfg.get_value_set_default('roles',c
 
 @module.app.before_request
 def maintenance_controls():
-    report_job_request=(request.path in ('/api/history/export-jobs','/api/history/work-sessions') or
+    report_job_request=(request.path in ('/api/history/export-jobs','/api/history/work-sessions','/api/history/quality/forms','/api/history/plans') or
+        re.fullmatch(r'/api/history/plans/[0-9a-f]{32}/(?:archive|run)',request.path) is not None or
+        re.fullmatch(r'/api/history/visits/[0-9a-f]{64}/reviews',request.path) is not None or
+        re.fullmatch(r'/api/history/visits/[0-9a-f]{64}/recordings/[^/]+/ai',request.path) is not None or
+        re.fullmatch(r'/api/history/ai-jobs/[0-9a-f]{32}',request.path) is not None or
         re.fullmatch(r'/api/history/export-jobs/[0-9a-f]{32}/cancel',request.path) is not None or
         re.fullmatch(r'/api/history/work-sessions/[0-9a-f]{32}/close',request.path) is not None)
     if os.getenv('SANEQUEUE_REPORTING_PREVIEW') == '1' and request.method not in ('GET','HEAD','OPTIONS') and request.path != '/login' and not report_job_request:
@@ -1166,12 +1170,31 @@ def report_known_agents():
     return tuple(sorted({item['technology']+'/'+item['endpoint'] for item in (data or {}).get('endpoints',[])
                          if item.get('category')=='extension'}))
 
+def report_shift_identity(agent,starts,ends):
+    # Explicit endpoints name devices, not the current person owning a phone.
+    if re.fullmatch(r'(?:SIP|PJSIP)/[^/\s]+|Local/[^@/\s]+@[^/\s]+(?:/n)?',agent):
+        return dict(agent=agent,aliases=[agent],valid_from=0,valid_until=None)
+    if 'report_shift_accounts' not in g:
+        g.report_shift_accounts=read_accounts(ACCOUNTS_PATH)
+    account=g.report_shift_accounts.get(agent)
+    if not account or not account.get('phone') or not account.get('phone_assigned_at'):
+        return None
+    from sanequeue.reporting.identity import aliases
+    from sanequeue.realtime.local_inventory import read_snapshot
+    if 'report_shift_inventory' not in g:
+        g.report_shift_inventory=read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json'))
+    names=aliases((account['phone'],),g.report_shift_inventory)
+    names=[name for name in names if name.startswith(('SIP/','PJSIP/','Local/'))]
+    return dict(agent=account['phone'],aliases=names,valid_from=account['phone_assigned_at'],valid_until=None)
+
 install_reports(module.app, STATE/'history.sqlite3',
     role=lambda:cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'),
     sections=lambda:account_sections(current_user.get_id(),cfg.get_value_set_default('roles',current_user.get_id() or '','viewer')),
     can_queue=lambda queue,action:POLICIES.access(current_user.get_id() or '',cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'),queue,action),
     own_interfaces=report_own_interfaces,
     known_agents=report_known_agents,
+    planning_path=PLANNING.path,
+    shift_identity=report_shift_identity,
     own_since=lambda:read_accounts(ACCOUNTS_PATH).get(current_user.get_id(),{}).get('phone_assigned_at',0),
     recording_root=cfg.get_value_set_default('sanequeue','recording_root','/var/spool/asterisk/monitor'),
     reason_label=lambda queue,reason:next((item['label'] for item in POLICIES.reasons(queue) if item['id']==reason),reason))

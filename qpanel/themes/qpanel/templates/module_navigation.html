@@ -13,8 +13,14 @@
 {{item('reports','نمای کلی گزارش‌ها','Report overview')}}
 {{shortcut('reports','history-analysis-section','روندها و تحلیل صف','Queue trends & analysis')}}
 {% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-export-jobs-section','خروجی‌های پس‌زمینه','Background exports')}}{% endif %}
+{% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-plan-section','قالب و زمان‌بندی گزارش','Report plans & schedules')}}{% endif %}
 {{shortcut('reports','history-calls-section','تماس‌ها و فایل صوتی','Calls & recordings')}}
+{% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-followup-section','مراجعه پس از رهاشدن','Contact after abandonment')}}{% endif %}
+{% if user_role in ('admin','supervisor') and can_view_section('audit') %}{{shortcut('reports','history-quality-section','کنترل کیفیت مکالمه','Call quality reviews')}}{% endif %}
 {{shortcut('reports','history-agents-section','عملکرد کارشناسان','Agent performance')}}
+{{shortcut('reports','history-agent-metrics-section','زمان رسیدگی و اشغال','Handling & occupancy evidence')}}
+{% if can_view_section('shifts') %}{{shortcut('reports','history-shifts-section','پایبندی و تأخیر شیفت','Shift adherence & lateness')}}{% endif %}
+{% if user_role=='admin' and can_view_section('users') %}{{shortcut('reports','history-cdr-section','ترافیک خطوط و CDR','Trunk traffic & CDR')}}{% endif %}
 {{shortcut('reports','history-activity-section','حضور و علت توقف','Duty & pause reasons')}}
 {{shortcut('reports','history-intervals-section','ریز تغییر وضعیت','State intervals')}}
 {{shortcut('reports','history-outbound-section','تماس حین توقف','Calls during pauses')}}

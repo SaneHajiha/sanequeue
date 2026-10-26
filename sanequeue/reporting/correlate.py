@@ -12,6 +12,15 @@ def project(db, pbx, event_id, event):
     channel = str(row.get('channame') or row.get('channel') or '')
     linked = str(row.get('linkedid') or '')
     kind = event.kind.upper()
+    if event.source.startswith('queue_log') and kind=='CONNECT':
+        values=row.get('values');caller=row.get('callid');queue=row.get('queue');agent=row.get('agent')
+        peer=values[1] if isinstance(values,list) and len(values)>1 else None
+        valid=lambda value,maximum:isinstance(value,str) and 0<len(value)<=maximum and value.isprintable() and value not in ('NONE','<unknown>','REALTIME')
+        if valid(caller,512) and valid(peer,512) and caller!=peer and valid(queue,128) and valid(agent,256):
+            db.execute('INSERT OR IGNORE INTO evidence_edges VALUES(?,?,?,?,?,?,?,?,?)',
+                (pbx,event_id,'queue_connect_peer','uniqueid',caller,'uniqueid',peer,event.timestamp,
+                 json.dumps(dict(queue=queue,agent=agent),ensure_ascii=False,sort_keys=True)))
+        return
     if uid and uid not in ('NONE', '<unknown>'):
         started = event.timestamp if kind in ('CHAN_START', 'CDR') else None
         answered = event.timestamp if kind == 'ANSWER' else None
@@ -46,14 +55,24 @@ def project(db, pbx, event_id, event):
     if kind in ('BRIDGE_ENTER', 'BRIDGE_EXIT'):
         edge(kind.lower(), 'bridge', extra.get('bridge_id'))
     if kind in ('ATTENDEDTRANSFER', 'BLINDTRANSFER'):
-        target = extra.get('transfer_target_channel_name') or extra.get('channel2_name')
+        # CEL channel2_name is the second initiating channel, not the transfer
+        # target (notably in bridge-app transfers). Rebuild only this event's
+        # transfer projections so bounded replay also removes legacy fallback.
+        db.execute('DELETE FROM evidence_edges WHERE pbx=? AND event_id=? AND relation IN (?,?,?)',
+            (pbx,event_id,'attendedtransfer','blindtransfer','transfer_second_channel'))
+        db.execute('DELETE FROM transfers WHERE pbx=? AND event_id=?',(pbx,event_id))
+        target=extra.get('transfer_target_channel_name')
+        target=target if isinstance(target,str) else ''
         if target:
             edge(kind.lower(), 'channel', target, extra)
-        else:
+        elif kind=='BLINDTRANSFER':
             # A dialplan destination is not the identity of an answered peer.
-            target = str(extra.get('context', '')) + '/' + str(extra.get('extension', ''))
-            if target != '/':
+            context,extension=extra.get('context'),extra.get('extension')
+            if isinstance(context,str) and context and isinstance(extension,str) and extension:
+                target=context+'/'+extension
                 edge(kind.lower(), 'destination', target, extra)
+        if kind=='ATTENDEDTRANSFER' and isinstance(extra.get('channel2_name'),str):
+            edge('transfer_second_channel','channel',extra['channel2_name'])
         db.execute('''INSERT OR IGNORE INTO transfers(pbx,event_id,transfer_type,from_uid,target,
                    consultation_started,consultation_ended,consultation_duration,handoff_at)
                    VALUES(?,?,?,?,?,NULL,NULL,NULL,?)''',

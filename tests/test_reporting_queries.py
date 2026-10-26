@@ -92,7 +92,7 @@ class ReportTests(unittest.TestCase):
         project_batch(other)
         self.assertEqual(visits(self.archive, Scope(('8001',)), self.stamp, self.stamp + 100)['rows'], [])
 
-    def client(self, *, role='supervisor', menus=('reports',), details=False, denied=(), known=()):
+    def client(self, *, role='supervisor', menus=('reports',), details=False, denied=(), known=(), planning_path=None, shift_identity=None):
         app = Flask(__name__)
         app.secret_key = 'synthetic-test-key'
         class User(UserMixin):
@@ -102,7 +102,7 @@ class ReportTests(unittest.TestCase):
         install(app, self.archive.path, role=lambda: role, sections=lambda: set(menus),
                 can_queue=lambda q, action: q == '8001' and action not in denied and (action != 'caller_details' or details),
                 own_interfaces=lambda: ('Local/100@from-queue/n',), recording_root=self.root / 'audio',
-                known_agents=lambda: known)
+                known_agents=lambda: known, planning_path=planning_path, shift_identity=shift_identity)
         client = app.test_client()
         with client.session_transaction() as session:
             session.update(_user_id='test', _fresh=True)
@@ -253,7 +253,8 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(self.client(denied=('recording_play',)).get(url).status_code, 403)
         self.assertEqual(self.client(denied=('recording_download',)).get(url+'&download=1').status_code, 403)
         self.assertEqual(self.client(denied=('recording_play',)).get(url+'&download=1').status_code, 200)
-        self.assertEqual(client.head(url).status_code, 200)
+        with client.head(url) as head:
+            self.assertEqual(head.status_code, 200)
         audit_url = url.replace('?', '/access?')
         self.assertEqual(client.get(audit_url).status_code, 403)
         auditor = self.client(menus=('reports', 'audit'))

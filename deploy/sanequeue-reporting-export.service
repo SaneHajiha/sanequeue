@@ -1,5 +1,5 @@
 [Unit]
-Description=SaneQueue private bounded CSV export worker
+Description=SaneQueue private bounded CSV and Excel export worker
 After=local-fs.target sanequeue-reporting.service
 
 [Service]

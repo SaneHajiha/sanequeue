@@ -46,7 +46,7 @@ RELEASE="/opt/sanequeue-releases/${VERSION}-$(date +%Y%m%d%H%M%S)"
 install -d -m 755 "$RELEASE"
 tar -C "$SOURCE" --exclude=.git --exclude=.venv --exclude=__pycache__ --exclude=var --exclude=logs --exclude=outputs --exclude=work --exclude=config.ini --exclude='*.sqlite*' --exclude='local_*.json' --exclude=session.key --exclude='.env' -cf - . | tar -C "$RELEASE" -xf -
 "$PYTHON" -m venv "$RELEASE/.venv"
-nice -n 10 "$RELEASE/.venv/bin/python" -m pip install --disable-pip-version-check --timeout 120 -r "$RELEASE/requirements/modern.txt"
+nice -n 10 "$RELEASE/.venv/bin/python" -m pip install --disable-pip-version-check --timeout 120 -r "$RELEASE/requirements/modern.txt" -r "$RELEASE/requirements/reporting.txt"
 "$RELEASE/.venv/bin/pybabel" compile -d "$RELEASE/qpanel/translations"
 if [[ -t 0 || ( -f /var/lib/sanequeue/local_accounts.json && -n ${SANEQUEUE_PUBLIC_ORIGIN:-} ) ]]; then "$RELEASE/.venv/bin/python" "$RELEASE/scripts/provision.py" --release "$RELEASE";
 else "$RELEASE/.venv/bin/python" "$RELEASE/scripts/provision.py" --release "$RELEASE" </dev/tty; fi

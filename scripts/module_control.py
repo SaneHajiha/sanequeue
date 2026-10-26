@@ -12,7 +12,14 @@ import subprocess
 import time
 import tempfile
 
-UNITS=('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer','sanequeue-inventory.service','sanequeue-redis.service','sanequeue-fastagi.service','sanequeue-pbx-apply.timer','sanequeue-pbx-apply.service')
+UNITS=('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer','sanequeue-inventory.service','sanequeue-redis.service','sanequeue-fastagi.service','sanequeue-pbx-apply.timer','sanequeue-pbx-apply.service','sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-reporting-ai.service')
+
+
+def enabled_units(unit_dir=Path('/etc/systemd/system'),ai_marker=Path('/etc/sanequeue/reporting-ai.enabled')):
+    """Do not require optional services from installations predating reports."""
+    return tuple(unit for unit in UNITS if unit not in ('sanequeue-inventory.service','sanequeue-pbx-apply.service')
+        and (not unit.startswith('sanequeue-reporting') or (unit_dir/unit).is_file())
+        and (unit!='sanequeue-reporting-ai.service' or ai_marker.is_file()))
 
 def without_managed_access(text):
     return re.sub(r'(?m)^; BEGIN SANEQUEUE MANAGED ACCESS\n.*?^; END SANEQUEUE MANAGED ACCESS\n?','',text,flags=re.S)
@@ -51,7 +58,7 @@ def main():
     if args.action=='enable':
         flag.unlink(missing_ok=True)
         run('systemctl','start','sanequeue-pbx-apply.service')
-        result=run('systemctl','enable','--now',*(unit for unit in UNITS if unit not in ('sanequeue-inventory.service','sanequeue-pbx-apply.service')))
+        result=run('systemctl','enable','--now',*enabled_units())
         if result.returncode:raise RuntimeError('module_start_failed_check_journal')
         print('SaneQueue enabled. Asterisk was not restarted.');return
     if args.action=='uninstall' and not args.yes:parser.error('Use uninstall --yes; configuration and private state will be retained')

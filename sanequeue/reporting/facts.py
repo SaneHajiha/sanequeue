@@ -9,7 +9,9 @@ import math
 import re
 import time
 import os
+import unicodedata
 from .identity import parties, canonical
+from .snapshot_schema import SCHEMA as SNAPSHOT_SCHEMA, bootstrap as bootstrap_snapshots
 from sanequeue.realtime.local_inventory import read_snapshot
 
 
@@ -26,7 +28,10 @@ CREATE TABLE IF NOT EXISTS report_visits(
  caller TEXT,agent TEXT,outcome TEXT,wait_seconds REAL,talk_seconds REAL,
  segment_ended_by TEXT,coverage TEXT,PRIMARY KEY(pbx,id));
 CREATE INDEX IF NOT EXISTS rv_queue_time ON report_visits(pbx,queue,entered,id);
+CREATE INDEX IF NOT EXISTS rv_queue_ended ON report_visits(pbx,queue,ended,entered) WHERE ended IS NOT NULL;
+CREATE INDEX IF NOT EXISTS rv_queue_open ON report_visits(pbx,queue,entered) WHERE ended IS NULL;
 CREATE INDEX IF NOT EXISTS rv_call ON report_visits(pbx,callid);
+CREATE INDEX IF NOT EXISTS rv_caller_time ON report_visits(pbx,caller,entered,id);
 CREATE TABLE IF NOT EXISTS report_cdr(
  pbx TEXT,source_key TEXT,event_id INTEGER,ts REAL,uid TEXT,linkedid TEXT,
  src TEXT,dst TEXT,channel TEXT,dstchannel TEXT,duration REAL,billsec REAL,
@@ -34,6 +39,11 @@ CREATE TABLE IF NOT EXISTS report_cdr(
 CREATE INDEX IF NOT EXISTS rc_time ON report_cdr(pbx,ts,source_key);
 CREATE INDEX IF NOT EXISTS rc_uid ON report_cdr(pbx,uid);
 CREATE INDEX IF NOT EXISTS rc_linked ON report_cdr(pbx,linkedid);
+CREATE TABLE IF NOT EXISTS report_cdr_extra(
+ pbx TEXT,event_id INTEGER,source_key TEXT,source_channel TEXT,destination_channel TEXT,
+ internal_caller_ext TEXT,outbound_cid TEXT,outbound_cid_source TEXT,did TEXT,trunk TEXT,
+ trunk_provenance TEXT,inventory_observed REAL,PRIMARY KEY(pbx,event_id));
+CREATE INDEX IF NOT EXISTS rce_source ON report_cdr_extra(pbx,source_key,event_id);
 CREATE TABLE IF NOT EXISTS report_recording_refs(pbx TEXT,source_key TEXT,basename TEXT,
  PRIMARY KEY(pbx,source_key));
 CREATE INDEX IF NOT EXISTS rrf_name ON report_recording_refs(pbx,basename);
@@ -49,12 +59,14 @@ CREATE TABLE IF NOT EXISTS report_activity(
  pbx TEXT,source_key TEXT,event_id INTEGER,queue TEXT,agent TEXT,state TEXT,reason TEXT,
  starts REAL,ends REAL,on_duty INTEGER,coverage TEXT,canonical_agent TEXT,PRIMARY KEY(pbx,source_key));
 CREATE INDEX IF NOT EXISTS ra_queue ON report_activity(pbx,queue,starts);
+CREATE INDEX IF NOT EXISTS ra_queue_ended ON report_activity(pbx,queue,ends,starts) WHERE ends IS NOT NULL;
+CREATE INDEX IF NOT EXISTS ra_queue_open ON report_activity(pbx,queue,starts) WHERE ends IS NULL;
 CREATE INDEX IF NOT EXISTS ra_agent ON report_activity(pbx,agent,starts);
 CREATE TABLE IF NOT EXISTS report_cdr_parties(
  pbx TEXT,source_key TEXT,agent TEXT,direction TEXT,inventory_observed REAL,
  PRIMARY KEY(pbx,source_key));
 '''
-PROJECTION_VERSION = 5
+PROJECTION_VERSION = 8
 
 
 def number(value):
@@ -63,6 +75,42 @@ def number(value):
         return result if math.isfinite(result) and 0 <= result <= 315360000 else None
     except (ValueError, TypeError):
         return None
+
+
+def _cdr_number(value):
+    """Normalize an explicit numeric source field, never infer it from src."""
+    value=str(value if value is not None else '').strip()
+    match=re.fullmatch(r'[^<>]*<([^<>]+)>',value)
+    if match:value=match.group(1)
+    value=''.join(str(unicodedata.digit(char)) if char.isdecimal() else char for char in value)
+    value=re.sub(r'[\s().-]','',value)
+    return value if re.fullmatch(r'\+?[0-9]{1,24}',value) else None
+
+
+def _cdr_extra(db,pbx,event_id,key,row,evidence,inventory):
+    if db.execute('SELECT 1 FROM report_cdr_extra WHERE pbx=? AND event_id=?',(pbx,event_id)).fetchone():return
+    source=str(row.get('channel') or '');destination=str(row.get('dstchannel') or '')
+    prior=db.execute('''SELECT source_channel,destination_channel,trunk,trunk_provenance,inventory_observed
+      FROM report_cdr_extra WHERE pbx=? AND source_key=? AND event_id<? ORDER BY event_id DESC LIMIT 1''',
+      (pbx,key,event_id)).fetchone()
+    # Never apply a newer inventory epoch to an older frozen identity proof.
+    verified=bool(inventory and inventory.get('observed_at') is not None and evidence[2]==inventory.get('observed_at'))
+    endpoints={item['technology']+'/'+item['endpoint']:item['category'] for item in (inventory or {}).get('endpoints',[]) if verified}
+    def trunk(channel):
+        if endpoints.get(channel)=='trunk':return channel
+        base,separator,suffix=channel.rpartition('-')
+        return base if separator and re.fullmatch('[0-9a-fA-F]+',suffix) and endpoints.get(base)=='trunk' else None
+    trunks={value for value in (trunk(source),trunk(destination)) if value}
+    selected=next(iter(trunks)) if len(trunks)==1 else None
+    provenance=('first_projection_inventory' if selected else 'ambiguous_trunk_pair' if len(trunks)>1
+                else 'no_known_trunk' if verified else 'inventory_epoch_mismatch' if inventory else 'inventory_unavailable')
+    observed=(inventory or {}).get('observed_at')
+    if prior and (source,destination)==tuple(prior[:2]):selected,provenance,observed=prior[2:]
+    origin=evidence[0].split('/',1)[1] if evidence[1] in ('outbound','internal') and evidence[0].startswith(('SIP/','PJSIP/')) else None
+    cid_source=next((field for field in ('outbound_cnum','outbound_cid') if row.get(field) not in (None,'')),None)
+    db.execute('INSERT INTO report_cdr_extra VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+      (pbx,event_id,key,source,destination,origin,_cdr_number(row.get(cid_source)) if cid_source else None,
+       cid_source,_cdr_number(row.get('did')),selected,provenance,observed))
 
 
 def _visit_id(pbx, queue, callid, event_id):
@@ -87,7 +135,8 @@ def _rebuild_visits(db, pbx, queue, callid):
     if len(events) > 10000:
         raise ValueError('queue_call_evidence_limit')
     # Only derived facts are replaced. No source history is removed.
-    db.execute('DELETE FROM report_visits WHERE pbx=? AND queue=? AND callid=?', (pbx, queue, callid))
+    existing = {row[1]:tuple(row) for row in db.execute(
+        'SELECT * FROM report_visits WHERE pbx=? AND queue=? AND callid=?', (pbx,queue,callid))}
     visits = []
     current = None
     for event_id, ts, kind, agent, data in events:
@@ -152,10 +201,14 @@ def _rebuild_visits(db, pbx, queue, callid):
     for visit in visits:
         if visit['ended'] is None and visit['coverage'] == 'observed':
             visit['coverage'] = 'missing_end'
-        db.execute('INSERT INTO report_visits VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                   (pbx, visit['id'], callid, queue, *(visit[k] for k in (
+        values = (pbx, visit['id'], callid, queue, *(visit[k] for k in (
                        'entered', 'answered', 'ended', 'caller', 'agent', 'outcome',
-                       'wait_seconds', 'talk_seconds', 'segment_ended_by', 'coverage'))))
+                       'wait_seconds', 'talk_seconds', 'segment_ended_by', 'coverage')))
+        if existing.get(visit['id']) != values:
+            db.execute('INSERT OR REPLACE INTO report_visits VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)', values)
+        existing.pop(visit['id'], None)
+    for ident in existing:
+        db.execute('DELETE FROM report_visits WHERE pbx=? AND id=?', (pbx,ident))
 
 
 def project_batch(archive, *, limit=500, inventory=None):
@@ -164,7 +217,7 @@ def project_batch(archive, *, limit=500, inventory=None):
     if inventory is None:
         inventory=read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json'))
     with archive.writer() as db:
-        db.executescript(SCHEMA)
+        db.executescript(SCHEMA+SNAPSHOT_SCHEMA)
         db.execute('BEGIN IMMEDIATE')
         columns = {row[1] for row in db.execute('PRAGMA table_info(report_activity)')}
         if 'canonical_agent' not in columns:
@@ -231,10 +284,14 @@ def project_batch(archive, *, limit=500, inventory=None):
                   disposition=excluded.disposition,recording=excluded.recording''', values)
                 db.execute('INSERT OR REPLACE INTO report_cdr_parties VALUES(?,?,?,?,?)',
                            (archive.pbx,key,*evidence))
+                _cdr_extra(db,archive.pbx,event_id,key,row,evidence,inventory)
                 from pathlib import PurePosixPath
                 db.execute('INSERT OR REPLACE INTO report_recording_refs VALUES(?,?,?)',
                            (archive.pbx,key,PurePosixPath(values[-1]).name if values[-1] else ''))
             elif source == 'cel' and kind.upper() in ('ATTENDEDTRANSFER', 'BLINDTRANSFER'):
+                from .correlate import project as project_relations
+                from .store import Event
+                project_relations(db,archive.pbx,event_id,Event(source,key,ts,kind,row))
                 uid, linkedid = str(row.get('uniqueid') or ''), str(row.get('linkedid') or '')
                 previous_transfer = db.execute('SELECT uid,linkedid FROM report_cel_transfers WHERE pbx=? AND source_key=?',
                                                (archive.pbx, key)).fetchone()
@@ -249,6 +306,10 @@ def project_batch(archive, *, limit=500, inventory=None):
                     dirty.update(db.execute('SELECT DISTINCT queue,callid FROM report_queue_events WHERE pbx=? AND callid=?',
                                             (archive.pbx, identity)).fetchall())
             elif source.startswith('queue_log') and row.get('queue') and row.get('callid'):
+                if kind.upper()=='CONNECT':
+                    from .correlate import project as project_relations
+                    from .store import Event
+                    project_relations(db,archive.pbx,event_id,Event(source,key,ts,kind,row))
                 queue, callid = str(row['queue']), str(row['callid'])
                 if queue in ('NONE', 'ALL') or callid in ('NONE', 'REALTIME'):
                     continue
@@ -260,4 +321,5 @@ def project_batch(archive, *, limit=500, inventory=None):
             _rebuild_visits(db, archive.pbx, queue, callid)
         cursor = events[-1][0] if events else after
         db.execute('INSERT OR REPLACE INTO report_projection VALUES(?,?,?)', (archive.pbx, cursor, time.time()))
+        bootstrap_snapshots(db, archive.pbx, limit=limit)
     return dict(processed=len(events), after_id=cursor)

@@ -3,17 +3,16 @@
 HTTP callers authorize creation and every later access themselves. A stored
 scope never expands with new grants. Permission revocation can also be checked
 by ExportWorker.authorize; download must always reauthorize the current user.
-Pages are short read transactions. A changing projection fails the job rather
-than publishing a mixture of historical snapshots. XLSX/PDF are not supported.
-The watermark is global: unrelated live events can invalidate even an export
-of yesterday. Busy installations may therefore need repeated attempts. A
-future scoped revision or explicit private snapshot is required for reliable
-large exports under continuous traffic; this worker does not hide that gap.
+Pages use immutable fact versions pinned at request time, with short read
+transactions. New ingestion never changes that snapshot. Legacy jobs without
+a snapshot token retain their conservative global-watermark behavior.
+CSV and XLSX are streamed in bounded pages. PDF is not supported by this worker.
 """
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from dataclasses import dataclass
 import csv
+from datetime import datetime
 import hashlib
 import io
 import json
@@ -28,11 +27,14 @@ import stat
 import threading
 import time
 import uuid
+from zoneinfo import ZoneInfo
 
 from .exports import table
 from .privacy import display_number
 from .queries import Scope, _where
 from .store import Archive, QueryDeadline
+from . import visit_snapshots
+from . import xlsx_stream
 
 _ID=re.compile(r'[0-9a-f]{32}\Z')
 _MODES={'full','masked','hidden','pseudonymous'}
@@ -111,6 +113,10 @@ class JobStore:
               rows INTEGER DEFAULT 0,bytes INTEGER DEFAULT 0,error_code TEXT,checksum TEXT);
               CREATE INDEX IF NOT EXISTS ej_queue ON export_jobs(state,available_at,created);
               CREATE INDEX IF NOT EXISTS ej_owner ON export_jobs(owner,created,id);''')
+            columns={row[1] for row in db.execute('PRAGMA table_info(export_jobs)')}
+            for name in ('request_key','request_hash'):
+                if name not in columns:db.execute('ALTER TABLE export_jobs ADD COLUMN '+name+' TEXT')
+            db.execute('CREATE UNIQUE INDEX IF NOT EXISTS ej_request ON export_jobs(owner,request_key) WHERE request_key IS NOT NULL')
 
     @contextmanager
     def _db(self,*,write=False):
@@ -125,12 +131,12 @@ class JobStore:
         finally:db.close()
 
     def create(self,owner,scope,start,end,*,watermark,pbx='primary',number_modes,
-               language='en',outcome=None,format='csv'):
+               language='en',outcome=None,format='csv',snapshot=None,request_key=None):
         if not isinstance(owner,str) or not 1<=len(owner)<=128:raise ValueError('invalid_export_owner')
         _where(pbx,scope,start,end)
         if not scope.queues:raise ValueError('empty_export_scope')
         if not isinstance(watermark,int) or isinstance(watermark,bool) or watermark<0:raise ValueError('invalid_export_watermark')
-        if format!='csv' or language not in ('fa','en'):raise ValueError('unsupported_export_format_or_language')
+        if format not in ('csv','xlsx') or language not in ('fa','en'):raise ValueError('unsupported_export_format_or_language')
         if outcome is not None and outcome not in _OUTCOMES:raise ValueError('invalid_report_outcome')
         queues=tuple(dict.fromkeys(scope.queues));agents=tuple(dict.fromkeys(scope.agents))
         if any(not isinstance(v,str) or not 1<=len(v)<=256 for v in (*queues,*agents)):
@@ -138,17 +144,34 @@ class JobStore:
         if set(number_modes)!=set(queues) or any(mode not in _MODES for mode in number_modes.values()):
             raise ValueError('invalid_export_number_policy')
         if not math.isfinite(float(scope.not_before)):raise ValueError('invalid_export_assignment_cutoff')
+        if snapshot is not None:visit_snapshots.validate_token(snapshot)
         spec=dict(owner=owner,pbx=str(pbx),start=float(start),end=float(end),watermark=watermark,
                   scope=dict(queues=list(queues),agents=list(agents),self_only=bool(scope.self_only),not_before=float(scope.not_before)),
-                  number_modes=dict(number_modes),language=language,outcome=outcome,format='csv',
+                  number_modes=dict(number_modes),language=language,outcome=outcome,format=format,
                   unit='queue_visit',number_policy_version='1')
+        if snapshot is not None:spec['snapshot']=dict(snapshot)
+        if request_key is not None and (not isinstance(request_key,str) or not re.fullmatch('[A-Za-z0-9_.:-]{1,128}',request_key)):
+            raise ValueError('invalid_export_request_key')
+        core={key:value for key,value in spec.items() if key not in ('watermark','snapshot')}
+        request_hash=hashlib.sha256(_json(core).encode()).hexdigest()
         payload=_json(spec);ident=uuid.uuid4().hex;now=time.time()
         with self._db(write=True) as db:
+            if request_key is not None:
+                prior=db.execute('SELECT * FROM export_jobs WHERE owner=? AND request_key=?',(owner,request_key)).fetchone()
+                if prior:
+                    self._public(prior)
+                    if prior['request_hash']!=request_hash:raise ExportFailure('export_request_conflict')
+                    return prior['id']
             counts=db.execute("SELECT COUNT(*),COALESCE(SUM(owner=?),0) FROM export_jobs WHERE state IN ('queued','running')",(owner,)).fetchone()
             if counts[0]>=10 or counts[1]>=3:raise ExportFailure('export_queue_quota')
-            db.execute('INSERT INTO export_jobs(id,owner,state,spec,spec_hash,created,updated,available_at) VALUES(?,?,?,?,?,?,?,?)',
-                       (ident,owner,'queued',payload,hashlib.sha256(payload.encode()).hexdigest(),now,now,now))
+            db.execute('INSERT INTO export_jobs(id,owner,state,spec,spec_hash,created,updated,available_at,request_key,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                       (ident,owner,'queued',payload,hashlib.sha256(payload.encode()).hexdigest(),now,now,now,request_key,request_hash))
         return ident
+
+    def by_request(self,owner,request_key):
+        if not isinstance(owner,str) or not 1<=len(owner)<=128 or not isinstance(request_key,str) or not re.fullmatch('[A-Za-z0-9_.:-]{1,128}',request_key):raise ValueError('invalid_export_request_key')
+        with self._db() as db:
+            return self._public(db.execute('SELECT * FROM export_jobs WHERE owner=? AND request_key=?',(owner,request_key)).fetchone())
 
     @staticmethod
     def _public(row):
@@ -156,6 +179,11 @@ class JobStore:
         result=dict(row);payload=result.pop('spec');digest=result.pop('spec_hash')
         if hashlib.sha256(payload.encode()).hexdigest()!=digest:raise ExportFailure('export_spec_integrity')
         result['spec']=json.loads(payload)
+        if result.get('request_key') is not None:
+            core={key:value for key,value in result['spec'].items() if key not in ('watermark','snapshot')}
+            if result.get('request_hash')!=hashlib.sha256(_json(core).encode()).hexdigest():
+                raise ExportFailure('export_request_integrity')
+        result.pop('request_hash',None)
         result.pop('worker',None);result.pop('lease_until',None)
         return result
 
@@ -190,16 +218,16 @@ class JobStore:
             return db.execute("UPDATE export_jobs SET state=?,rows=?,bytes=?,updated=?,lease_until=?,error_code=?,checksum=? WHERE id=? AND state='running' AND worker=?",
                               (state,rows,size,now,now+lease_seconds,error,checksum,ident,worker)).rowcount==1
 
-    def _defer(self,ident,worker,error):
+    def _defer(self,ident,worker,error,*,preserve_manifest=False):
         with self._db(write=True) as db:
-            db.execute("UPDATE export_jobs SET state='queued',available_at=?,updated=?,worker=NULL,lease_until=NULL,attempts=MAX(0,attempts-1),rows=0,bytes=0,checksum=NULL,error_code=? WHERE id=? AND state='running' AND worker=?",
-                       (time.time()+30,time.time(),error,ident,worker))
+            db.execute("UPDATE export_jobs SET state='queued',available_at=?,updated=?,worker=NULL,lease_until=NULL,attempts=MAX(0,attempts-1),rows=CASE WHEN ? THEN rows ELSE 0 END,bytes=CASE WHEN ? THEN bytes ELSE 0 END,checksum=CASE WHEN ? THEN checksum ELSE NULL END,error_code=? WHERE id=? AND state='running' AND worker=?",
+                       (time.time()+30,time.time(),preserve_manifest,preserve_manifest,preserve_manifest,error,ident,worker))
 
     def open_output(self,ident,owner):
         job=self.get(ident,owner)
         if job is None or job['state']!='completed':raise FileNotFoundError('export_not_completed')
         if self.output_dir.is_symlink():raise ValueError('export_storage_symlink')
-        path=self.output_dir/(ident+'.csv')
+        path=self.output_dir/(ident+'.'+job['spec']['format'])
         fd=os.open(path,os.O_RDONLY|getattr(os,'O_NOFOLLOW',0)|getattr(os,'O_BINARY',0))
         metadata=os.fstat(fd)
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_size!=job['bytes']:
@@ -250,7 +278,13 @@ class ExportWorker:
         if spec['pbx']!=self.archive.pbx:raise ExportFailure('export_pbx_mismatch')
         if 'pseudonymous' in spec['number_modes'].values() and (not isinstance(self.number_key,bytes) or len(self.number_key)<32):
             raise ExportFailure('export_number_key_unavailable')
-        if projection_watermark(self.archive)!=spec['watermark']:raise ExportFailure('export_projection_changed')
+        if spec.get('snapshot') is not None:
+            try:
+                with self.archive.reader() as db:visit_snapshots.validate(db,self.archive.pbx,spec['snapshot'])
+            except visit_snapshots.SnapshotUnavailable as error:
+                raise ExportFailure(str(error)) from None
+        elif projection_watermark(self.archive)!=spec['watermark']:
+            raise ExportFailure('export_projection_changed')
 
     def _page(self,spec,before,deadline):
         remaining=deadline-time.monotonic()
@@ -263,6 +297,12 @@ class ExportWorker:
             clause+=' AND (entered<? OR (entered=? AND id<?))';args.extend((before[0],before[0],before[1]))
         bounded=Archive(self.archive.path,pbx=self.archive.pbx,read_seconds=min(2,remaining))
         with bounded.reader() as db:
+            if spec.get('snapshot') is not None:
+                try:
+                    return visit_snapshots.page(db,self.archive.pbx,spec['snapshot'],scope,spec['start'],
+                        spec['end'],before=before,outcome=spec['outcome'],limit=self.limits.page_size)
+                except visit_snapshots.SnapshotUnavailable as error:
+                    raise ExportFailure(str(error)) from None
             watermark=db.execute('SELECT after_id FROM report_projection WHERE pbx=?',(self.archive.pbx,)).fetchone()
             if not watermark or watermark[0]!=spec['watermark']:raise ExportFailure('export_projection_changed')
             return [dict(row) for row in db.execute('SELECT * FROM report_visits WHERE '+clause+
@@ -293,7 +333,7 @@ class ExportWorker:
             job=self.store.claim(worker,lease_seconds=self.limits.lease_seconds)
             if job is None:return dict(state='idle')
             ident=job['id'];spec=job['spec'];part=self.store.output_dir/(ident+'.'+worker+'.part')
-            final=self.store.output_dir/(ident+'.csv');published=False
+            final=self.store.output_dir/(ident+'.'+spec['format']);published=False
             rows_written=0;size=0;digest=hashlib.sha256()
             deadline=time.monotonic()+self.limits.max_seconds
             try:
@@ -310,7 +350,7 @@ class ExportWorker:
                 # No active worker can own these remnants while this lock is held.
                 for old in self.store.output_dir.glob(ident+'.*.part'):old.unlink()
                 fd=os.open(part,os.O_WRONLY|os.O_CREAT|os.O_EXCL|getattr(os,'O_NOFOLLOW',0)|getattr(os,'O_BINARY',0),0o600)
-                with os.fdopen(fd,'wb') as output:
+                with os.fdopen(fd,'wb') as output, ExitStack() as cleanup:
                     def write(data):
                         nonlocal size
                         if size+len(data)>self.limits.max_bytes:raise ExportFailure('export_byte_limit')
@@ -319,7 +359,14 @@ class ExportWorker:
                         text=io.StringIO(newline='');writer=csv.writer(text)
                         writer.writerow(["'"+v if isinstance(v,str) and v.lstrip().startswith(('=','+','-','@','\t','\r','\n')) else v for v in values])
                         write(text.getvalue().encode('utf-8'))
-                    write(b'\xef\xbb\xbf');headers,_=table([],spec['language']);line(headers)
+                    workbook=None
+                    if spec['format']=='xlsx':
+                        zone=ZoneInfo('Asia/Tehran')
+                        period=datetime.fromtimestamp(spec['start'],zone).isoformat()+' .. '+datetime.fromtimestamp(spec['end'],zone).isoformat()+' [end exclusive]'
+                        workbook=xlsx_stream.Workbook(output,spec['language'],period=period,max_bytes=self.limits.max_bytes)
+                        cleanup.callback(workbook.abort)
+                    else:
+                        write(b'\xef\xbb\xbf');headers,_=table([],spec['language']);line(headers)
                     before=None
                     while True:
                         self._gate(deadline);self._check(spec)
@@ -331,13 +378,22 @@ class ExportWorker:
                             row['caller']=display_number(row['caller'],spec['number_modes'][row['queue']],
                                 secret=self.number_key,tenant='default',pbx=spec['pbx'],version=spec['number_policy_version'])
                         _,body=table(rows,spec['language'])
-                        for values in body:line(values)
+                        if workbook:
+                            workbook.append(body);size=output.tell()
+                        else:
+                            for values in body:line(values)
                         rows_written+=len(rows)
                         before=(rows[-1]['entered'],rows[-1]['id'])
                         self._check(spec)
                         if not self.store._update(ident,worker,rows=rows_written,size=size,lease_seconds=self.limits.lease_seconds):raise _Cancelled('cancelled')
                     self._gate(deadline);self._check(spec)
+                    if workbook:workbook.close();size=output.tell()
                     output.flush();os.fsync(output.fileno())
+                if spec['format']=='xlsx':
+                    digest=hashlib.sha256()
+                    with part.open('rb') as completed:
+                        while chunk:=completed.read(65536):
+                            self._gate(deadline);digest.update(chunk)
                 if not self.store._update(ident,worker,rows=rows_written,size=size,checksum=digest.hexdigest(),lease_seconds=self.limits.lease_seconds):raise _Cancelled('cancelled')
                 os.link(part,final);published=True;part.unlink()
                 if os.name!='nt':
@@ -348,11 +404,12 @@ class ExportWorker:
                 if not self.store._update(ident,worker,state='completed',rows=rows_written,size=size,checksum=digest.hexdigest()):raise _Cancelled('cancelled')
                 return dict(id=ident,state='completed',rows=rows_written,bytes=size)
             except _Deferred as error:
-                self.store._defer(ident,worker,str(error));return dict(id=ident,state='queued',error=str(error))
+                self.store._defer(ident,worker,str(error),preserve_manifest=bool(job['checksum']) and not published and final.exists())
+                return dict(id=ident,state='queued',error=str(error))
             except _Cancelled:
                 return dict(id=ident,state='cancelled')
             except Exception as error:
-                reason=str(error) if isinstance(error,ExportFailure) else 'export_query_deadline' if isinstance(error,QueryDeadline) else 'export_failed'
+                reason=str(error) if isinstance(error,(ExportFailure,xlsx_stream.SizeLimit)) else 'export_query_deadline' if isinstance(error,QueryDeadline) else 'export_failed'
                 self.store._update(ident,worker,state='failed',rows=rows_written,size=0,error=reason)
                 return dict(id=ident,state='failed',error=reason)
             finally:
