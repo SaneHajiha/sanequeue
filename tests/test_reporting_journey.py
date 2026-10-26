@@ -245,7 +245,7 @@ class JourneyTests(unittest.TestCase):
                   self.cel('private-root-uid','CHAN_START',100),
                   self.event('cel','peer-uid','CHAN_START',103,channame='Local/peer;2'),
                   self.cel('private-root-uid','ATTENDEDTRANSFER',104,
-                    eventextra=json.dumps(dict(channel2_name='Local/peer;2',private='x'*3000))))
+                    eventextra=json.dumps(dict(transfer_target_channel_name='Local/peer;2',private='x'*3000))))
         result=self.report()
         self.assertTrue(result['coverage']['limit_reached'])
         self.assertEqual(len([node for node in result['nodes'] if node['type']=='call_leg']),1)
