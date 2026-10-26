@@ -63,3 +63,8 @@ The [queue-visit builder](REPORT_BUILDER.en.md) adds whitelisted columns, wait/t
 
 
 Published-source verification: commit `1c5ad85b2b3072be1dfb3479e1e94668227bae24` passed [CI run 98](https://github.com/SaneHajiha/sanequeue/actions/runs/40340342178) on Python 3.10/3.11/3.12; the 3.11 job recorded 736 passing tests, and all four real-script frontend harnesses passed. This does not replace live server/call/load acceptance. Preview deployment is blocked by Windows access to the existing SSH key.
+
+
+## Archive-only backup and restore development
+
+[Operator archive backup](ARCHIVE_BACKUP.en.md) now uses the SQLite online backup API with committed WAL preservation, bounded time/size/space, SHA-256 and core-schema checks, a final private completion marker, and restore into a new directory only. Thirteen local tests pass (one Linux symlink test skipped on Windows); full exact-commit CI is checked at publication. An independent review found and fixed premature completion-marker publication after fsync failure. This backs up only the reporting archive: other module databases, media and PBX configuration need a separate full-installation recovery plan. No live database switch, automatic retention or archive partitioning was added.
