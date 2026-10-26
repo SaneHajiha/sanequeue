@@ -6,6 +6,7 @@ FastAGI consumes only the root-published snapshot, never this web store.
 from contextlib import contextmanager
 import hashlib
 import io
+import itertools
 import json
 import math
 import os
@@ -117,7 +118,9 @@ class IncidentStore:
         notice = validate_notice(value, allowed)
         expected = value.get('expected_revision')
         if isinstance(expected, bool) or not isinstance(expected, int) or expected < 0:raise ValueError('notice_revision_required')
-        self.audio(notice['audio'])
+        # Disabling must remain possible when a web-state source file is lost.
+        # The immutable hash/config/binding remain validated; no audio is used.
+        if notice['enabled']:self.audio(notice['audio'])
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
             latest = db.execute('SELECT MAX(revision) FROM notices WHERE binding=?', (notice['binding'],)).fetchone()[0] or 0
@@ -139,22 +142,35 @@ class IncidentStore:
                 content = stream.read(1100001)
             if hashlib.sha256(content).hexdigest() != ident:raise ValueError('notice_audio_hash_mismatch')
             with wave.open(io.BytesIO(content), 'rb') as sound:
-                if (sound.getnchannels(), sound.getsampwidth(), sound.getframerate(), sound.getcomptype()) != (1, 2, 8000, 'NONE') or not 0 < sound.getnframes() <= 480000:
+                frames=sound.getnframes()
+                if (sound.getnchannels(), sound.getsampwidth(), sound.getframerate(), sound.getcomptype()) != (1, 2, 8000, 'NONE') or not 0 < frames <= 480000 or len(sound.readframes(frames))!=frames*2:
                     raise ValueError('invalid_notice_audio')
             return path, content
         except (OSError, EOFError, wave.Error):raise ValueError('notice_audio_unavailable') from None
 
     def upload(self, content):
+        """Offline helper only; HTTP uploads enqueue durable media jobs."""
         from .features import CONVERSION, convert_audio
         if not CONVERSION.acquire(blocking=False):raise ValueError('audio_conversion_busy')
         try:audio, seconds = convert_audio(content)
         finally:CONVERSION.release()
+        return self.publish(audio,seconds)
+
+    def publish(self, audio, seconds):
+        if not audio or len(audio)>1100000:raise ValueError('invalid_notice_audio')
+        try:
+            with wave.open(io.BytesIO(audio),'rb') as sound:
+                frames=sound.getnframes();actual=frames/sound.getframerate()
+                if (sound.getnchannels(),sound.getsampwidth(),sound.getframerate(),sound.getcomptype())!=(1,2,8000,'NONE') or not 0<actual<=60 or len(sound.readframes(frames))!=frames*2:
+                    raise ValueError('invalid_notice_audio')
+        except (wave.Error,EOFError,ZeroDivisionError):raise ValueError('invalid_notice_audio') from None
+        seconds=round(actual,2)
         ident = hashlib.sha256(audio).hexdigest()
         if self.sounds.is_symlink():raise ValueError('invalid_notice_audio_directory')
         self.sounds.mkdir(parents=True, mode=0o750, exist_ok=True)
         with PUBLICATION_LOCK:
             target=self.sounds/(ident+'.wav')
-            if len(list(self.sounds.glob('*.wav'))) >= 30 and not target.exists():raise ValueError('notice_audio_capacity')
+            if sum(1 for _ in itertools.islice(self.sounds.glob('*.wav'),30)) >= 30 and not target.exists():raise ValueError('notice_audio_capacity')
             fd,name=tempfile.mkstemp(prefix='.notice-',dir=self.sounds)
             try:
                 with os.fdopen(fd,'wb') as stream:stream.write(audio);stream.flush();os.fsync(stream.fileno())
@@ -174,6 +190,9 @@ def snapshot(store, allowed):
     for row in current:
         try:
             value = validate_notice(row, allowed)
+            # Only the latest revision was selected. Omitting a disabled one
+            # must never fall back to an older enabled revision or need audio.
+            if not value['enabled']:continue
             store.audio(value['audio'])
         except ValueError:continue
         rows[value['binding']] = dict(value, revision=row['revision'], **allowed[value['binding']])
@@ -237,12 +256,35 @@ def install(app, state, role, admin, csrf):
     @login_required
     def incident_upload():
         admin();csrf()
-        if not registry():return jsonify(error='no_supported_notice_bindings'), 409
+        allowed=registry()
+        if not allowed:return jsonify(error='no_supported_notice_bindings'), 409
+        from .incident_media import MediaJobs,local_authorizer
+        owner=current_user.get_id()
+        authorize=local_authorizer(app.config.get('SANEQUEUE_MEDIA_ACCOUNTS',os.environ.get('SANEQUEUE_MEDIA_ACCOUNTS',Path(state)/'local_accounts.json')))
+        if not authorize(owner):abort(403)
+        binding=request.form.get('binding','')
+        if binding not in allowed:return jsonify(error='unsupported_notice_binding'),400
         uploaded = request.files.get('audio')
         if not uploaded:return jsonify(error='audio_required'), 400
-        try:return jsonify(store.upload(uploaded.read(8 * 1024 * 1024 + 1)))
-        except ImportError:return jsonify(error='audio_dependency_unavailable'), 503
+        try:
+            job=MediaJobs(state).enqueue(owner,binding,uploaded.read(8*1024*1024+1),authorize=authorize)
+            response=jsonify(job);response.status_code=202;response.headers['Cache-Control']='no-store';return response
+        except PermissionError:abort(403)
         except ValueError as error:return jsonify(error=str(error)), 400
+
+    @app.route('/api/pbx/incidents/media/<ident>')
+    @login_required
+    def incident_media_status(ident):
+        admin()
+        from .incident_media import MediaJobs,local_authorizer
+        owner=current_user.get_id()
+        authorize=local_authorizer(app.config.get('SANEQUEUE_MEDIA_ACCOUNTS',os.environ.get('SANEQUEUE_MEDIA_ACCOUNTS',Path(state)/'local_accounts.json')))
+        try:
+            job=MediaJobs(state).status(ident,owner,authorize)
+            if job['binding'] not in registry():abort(403)
+        except PermissionError:abort(403)
+        except (ValueError,LookupError):abort(404)
+        response=jsonify(job);response.headers['Cache-Control']='no-store';return response
 
     @app.route('/api/pbx/incidents/audio/<ident>')
     @login_required

@@ -12,7 +12,7 @@ import subprocess
 import time
 import tempfile
 
-UNITS=('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer','sanequeue-inventory.service','sanequeue-redis.service','sanequeue-fastagi.service','sanequeue-pbx-apply.timer','sanequeue-pbx-apply.service','sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-reporting-ai.service')
+UNITS=('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer','sanequeue-inventory.service','sanequeue-redis.service','sanequeue-fastagi.service','sanequeue-pbx-apply.timer','sanequeue-pbx-apply.service','sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-reporting-ai.service','sanequeue-media.service')
 
 
 def enabled_units(unit_dir=Path('/etc/systemd/system'),ai_marker=Path('/etc/sanequeue/reporting-ai.enabled')):

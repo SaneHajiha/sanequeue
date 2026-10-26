@@ -36,3 +36,9 @@ Tests live in tests/test_reporting_*; CI checks JS syntax. Consult Actions for t
 See [phase five](REPORTING_PHASE5.md) for exact behaviour, ceilings, operator steps, privacy and remaining items. Direct Persian PDF, unrestricted report builders, fully proven multi-hop recording ownership, complete IVR without instrumentation, PBX instrumentation for currently unobserved ACW, outbound callback proof, customer survey response ingestion, VIP/blacklist sources, archive partitions/restore, transcript-wide search, generative AI and production SQL auto-provisioning are not completed merely because the architecture describes them.
 
 Source/snapshot history is retained indefinitely. Monitor disk/WAL/private output growth. Never commit credentials, SSH keys, connection secrets, tokens, customer audio/transcripts or live databases.
+
+## Independent review and expanded module scope
+
+The reporting worker reauthorization, midnight plan retries, historical AI job lookup, stale-result clearing, automatic plan loading and bounded MP3/Ogg timed-note metadata fixes are implemented. Reporting now shows one selected authorized section. Exact-head CI passed on Python 3.10/3.11/3.12 (640 tests); 274 bounded lab reporting tests passed. See [review evidence](REVIEW_20261026.md).
+
+The initial [inbound status notice](INBOUND_NOTICES.en.md) includes API/UI, revision/expiry and an optional explicit hook. No live hook has been installed or accepted and playback events are not yet projected into reports. The additional survey/routing/fax/paging/campaign/reservation and related modules are tracked in the [module program](MODULE_PROGRAM.fa.md), not presented as completed.

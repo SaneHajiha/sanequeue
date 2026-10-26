@@ -10,7 +10,7 @@ from sanequeue.realtime.local_inventory import snapshot
 
 BEGIN='; BEGIN SANEQUEUE MANAGED ACCESS'
 END='; END SANEQUEUE MANAGED ACCESS'
-REPORTING_UNITS=('sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-reporting-ai.service')
+REPORTING_UNITS=('sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-reporting-ai.service','sanequeue-media.service')
 
 
 def manager_block(original,collector_secret,control_secret):
@@ -192,6 +192,7 @@ from sanequeue.reporting.work_sessions import WorkSessions
 from sanequeue.reporting.quality import QualityStore
 from sanequeue.reporting.ai_jobs import AIJobs
 from sanequeue.reporting.report_plans import SavedReports
+from sanequeue.pbx.incident_media import MediaJobs
 s=Path('/var/lib/sanequeue')
 Archive(s/'history.sqlite3').initialize()
 JobStore(s/'export-jobs.sqlite3',s/'private-exports').initialize()
@@ -200,6 +201,7 @@ WorkSessions(s/'work-sessions.sqlite3').initialize()
 QualityStore(s/'quality.sqlite3').initialize()
 AIJobs(s/'ai-jobs.sqlite3').initialize()
 SavedReports(s/'report-plans.sqlite3').initialize()
+MediaJobs(s).initialize()
 '''
         run(['runuser','-u','sanequeue','--',str(release/'.venv/bin/python'),'-c',initialization],cwd=release)
         redis_unit=f'[Unit]\nDescription=SaneQueue private Redis cache\nAfter=network.target\n[Service]\nUser=sanequeue\nGroup=sanequeue\nExecStart={redis} /etc/sanequeue/redis.conf\nRestart=on-failure\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=strict\nProtectHome=true\n[Install]\nWantedBy=multi-user.target\n'
@@ -209,7 +211,7 @@ SavedReports(s/'report-plans.sqlite3').initialize()
         (Path('/var/lib/asterisk/sounds/custom')).mkdir(parents=True,exist_ok=True)
         run(['systemctl','start','sanequeue-pbx-apply.service'])
         run(['systemctl','enable','--now','sanequeue-inventory.timer','sanequeue-collector.service','sanequeue.service','sanequeue-redis.service','sanequeue-pbx-apply.timer','sanequeue-fastagi.service'])
-        run(['systemctl','enable','--now','sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service'])
+        run(['systemctl','enable','--now','sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-media.service'])
         if (etc/'reporting-ai.enabled').is_file() and (etc/'reporting-ai.env').is_file():
             run(['systemctl','enable','--now','sanequeue-reporting-ai.service'])
         from redis import Redis

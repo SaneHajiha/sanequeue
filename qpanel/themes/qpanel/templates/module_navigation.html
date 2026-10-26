@@ -33,7 +33,7 @@
 {% if can_view_section('control') or can_view_section('directory') or (user_role=='admin' and can_view_section('telephony')) %}
 <details class="nav-module" data-module="telephony"><summary>{{t('تلفن و ارتباطات','Telephony')}}</summary><div class="module-items">
 {{item('control','کنترل تماس','Call controls')}}{{item('directory','دفترچه تلفن','Directory')}}
-{% if user_role=='admin' and can_view_section('telephony') %}{{item('telephony','تنظیمات ماژول‌های تلفنی','Telephone module settings')}}{{shortcut('telephony','telephony-waiting','انتظار داخلی و کال‌بک','Extension waiting & callback')}}{{shortcut('telephony','telephony-callerid','اصلاح شماره تماس‌گیرنده','Caller ID formatting')}}{{shortcut('telephony','pbx-audio-slots','پیام‌های صوتی','Voice prompts')}}{{shortcut('telephony','callback-jobs','درخواست‌های کال‌بک','Callback requests')}}{% endif %}
+{% if user_role=='admin' and can_view_section('telephony') %}{{item('telephony','تنظیمات ماژول‌های تلفنی','Telephone module settings')}}{{shortcut('telephony','telephony-waiting','انتظار داخلی و کال‌بک','Extension waiting & callback')}}{{shortcut('telephony','telephony-callerid','اصلاح شماره تماس‌گیرنده','Caller ID formatting')}}{{shortcut('telephony','pbx-audio-slots','پیام‌های صوتی','Voice prompts')}}{{shortcut('telephony','callback-jobs','درخواست‌های کال‌بک','Callback requests')}}{{shortcut('telephony','incident-notices','پیام وضعیت ورودی','Inbound status notice')}}{% endif %}
 </div></details>{% endif %}
 {% if can_view_section('alerts') or can_view_section('pbx') or (user_role in ('admin','supervisor') and can_view_section('audit')) %}
 <details class="nav-module" data-module="health"><summary>{{t('هشدار و سلامت','Alerts & health')}}</summary><div class="module-items">

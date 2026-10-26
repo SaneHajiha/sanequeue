@@ -9,13 +9,14 @@ import re
 import secrets
 import shutil
 import sqlite3
+import stat
 import subprocess
 import tempfile
 import time
 import wave
 
 from .features import FeatureStore,validate,normalize_number,bundled_prompt
-from .incidents import IncidentStore,bindings as incident_bindings,snapshot as incident_snapshot,dialplan as incident_dialplan
+from .incidents import IncidentStore,bindings as incident_bindings,validate_notice,dialplan as incident_dialplan
 from sanequeue.realtime.local_inventory import read_snapshot
 
 MARKER='; SANEQUEUE MANAGED TELEPHONY V1'
@@ -100,12 +101,82 @@ def require_idle():
     if int(match[1]):raise ValueError('active_calls_defer_dialplan_change')
 
 
+def _read_root_json(path,*,maximum=2_000_000,owner_uid=0):
+    """Root-published data only; never follow a web-writable spool symlink."""
+    try:fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    except FileNotFoundError:return None,None
+    with os.fdopen(fd,'rb') as stream:
+        meta=os.fstat(stream.fileno())
+        if not stat.S_ISREG(meta.st_mode) or meta.st_uid!=owner_uid or meta.st_mode&0o022 or meta.st_nlink!=1 or meta.st_size>maximum:
+            raise ValueError('invalid_root_published_snapshot')
+        data=stream.read(maximum+1)
+    if len(data)>maximum:raise ValueError('invalid_root_published_snapshot')
+    value=json.loads(data)
+    if not isinstance(value,dict):raise ValueError('invalid_root_published_snapshot')
+    return value,data
+
+
+def _notice_snapshot(store,allowed):
+    """Optional notice failure withdraws notices, with explicit safe diagnostics."""
+    diagnostic=dict(state='ok',eligible=0,disabled=0,omitted=0,error_codes=[])
+    if not allowed:diagnostic['state']='no_authorized_bindings';return {},diagnostic
+    if not store.path.exists():diagnostic['state']='not_initialized';return {},diagnostic
+    try:current=store.current(read_only=True,allowed=allowed)
+    except (OSError,ValueError,TypeError,sqlite3.Error):
+        diagnostic.update(state='unavailable',error_codes=['notice_store_unavailable'])
+        return {},diagnostic
+    result={}
+    for row in current:
+        try:
+            value=validate_notice(row,allowed)
+            if not value['enabled']:diagnostic['disabled']+=1;continue
+            revision=row['revision']
+            if isinstance(revision,bool) or not isinstance(revision,int) or revision<=0:raise ValueError('invalid_revision')
+            store.audio(value['audio'])
+            result[value['binding']]=dict(value,revision=revision,**allowed[value['binding']])
+        except (OSError,ValueError,TypeError,KeyError):diagnostic['omitted']+=1
+    diagnostic['eligible']=len(result)
+    if diagnostic['omitted']:diagnostic.update(state='partial',error_codes=['notice_source_or_config_invalid'])
+    return result,diagnostic
+
+
+def _withdraw_notices(runtime_path,desired,gid):
+    """Only remove old entries. Activation/extension waits for successful apply."""
+    previous,raw=_read_root_json(runtime_path)
+    if previous is None:return None,0
+    if not re.fullmatch('[a-f0-9]{64}',previous.get('token','')) or not isinstance(previous.get('incidents',{}),dict):
+        raise ValueError('invalid_root_published_snapshot')
+    existing=previous.get('incidents',{})
+    retained={key:row for key,row in existing.items() if desired.get(key)==row}
+    removed=len(existing)-len(retained)
+    if removed:
+        previous['incidents']=retained
+        raw=json.dumps(previous,ensure_ascii=False,sort_keys=True).encode()
+        atomic(runtime_path,raw,0,gid)
+    return raw,removed
+
+
 def apply():
     if os.geteuid()!=0:raise PermissionError('root_required')
     state=Path('/var/lib/sanequeue');spool=Path('/var/spool/asterisk/sanequeue');configdir=Path('/etc/asterisk')
     sq=grp.getgrnam('sanequeue').gr_gid;ast=pwd.getpwnam('asterisk')
     if spool.is_symlink():raise ValueError('spool_symlink_refused')
     spool.mkdir(parents=True,exist_ok=True);os.chown(spool,ast.pw_uid,sq);os.chmod(spool,0o2770)
+    flag=spool/'disabled'
+    if (state/'module.disabled').exists():atomic(flag,b'disabled\n',0,ast.pw_gid)
+    # Withdrawals and emergency disable must not depend on unrelated feature
+    # settings, legacy dialplan validation, audio installation or idle calls.
+    incidents=IncidentStore(state)
+    notices,notice_diagnostic=_notice_snapshot(incidents,incident_bindings())
+    runtime_path=spool/'runtime.json'
+    old_runtime,withdrawn=_withdraw_notices(runtime_path,notices,ast.pw_gid)
+    safety=dict(notice_snapshot=notice_diagnostic,notice_withdrawn=withdrawn)
+    atomic(Path('/run/sanequeue/pbx-status.json'),json.dumps(dict(state='notice_safety_updated',applied=False,
+        observed_at=time.time(),**safety)).encode(),0,sq)
+    if (state/'module.disabled').exists():
+        status=dict(state='disabled',applied=False,observed_at=time.time(),**safety)
+        atomic(Path('/run/sanequeue/pbx-status.json'),json.dumps(status).encode(),0,sq)
+        return status
     token_path=spool/'adapter-token'
     if not token_path.exists():atomic(token_path,secrets.token_hex(32).encode(),0,ast.pw_gid)
     if token_path.is_symlink():raise ValueError('token_symlink_refused')
@@ -126,7 +197,7 @@ def apply():
     macro=original_macro.read_text() if original_macro.exists() else ''
     available=bool('###CallWaiting And CallBack' in macro or MARKER in macro)
     status={'state':'not_requested','legacy_callback_available':available,'legacy_formatter_available':formatter.is_file(),
-            'observed_at':time.time(),'requested_hash':digest(json.dumps(settings,sort_keys=True).encode()),'applied':False}
+            'observed_at':time.time(),'requested_hash':digest(json.dumps(settings,sort_keys=True).encode()),'applied':False,**safety}
     names={}
     dbpath=state/'planning.sqlite3'
     if dbpath.exists():
@@ -140,23 +211,20 @@ def apply():
                 safe=''.join(c for c in str(name) if c.isprintable() and c not in '$}{\\"')[:80]
                 if safe:names.setdefault(queue,{}).setdefault(number,safe)
         finally:db.close()
-    incidents=IncidentStore(state)
-    notices=incident_snapshot(incidents,incident_bindings()) if incidents.path.exists() else {}
     runtime={'token':token,'settings':settings,'phones':phones,'directory':names,'incidents':notices}
     content=json.dumps(runtime,ensure_ascii=False,sort_keys=True).encode()
     if len(content)>2_000_000:raise ValueError('telephone_runtime_capacity_exceeded')
-    runtime_path=spool/'runtime.json'
-    old_runtime=runtime_path.read_bytes() if runtime_path.exists() else None
-    if store.path.exists():
+    feature_settings_present=store.path.exists()
+    if feature_settings_present or notices:
         if settings['callback']['enabled'] and not available:raise ValueError('unsupported_dial_one_adapter')
         if not custom.is_file():raise ValueError('unsupported_custom_dialplan_adapter')
         backup=Path('/var/backups/sanequeue/pbx-feature-originals');backup.mkdir(parents=True,exist_ok=True);os.chmod(backup,0o700)
         changes={managed:dialplan(token).encode()}
-        if available:changes[original_macro]=patch_macro(macro).encode()
+        if feature_settings_present and available:changes[original_macro]=patch_macro(macro).encode()
         if custom.exists():
             text=custom.read_text()
             if '#include sanequeue-features.conf' not in text:changes[custom]=(text.rstrip()+'\n#include sanequeue-features.conf\n').encode()
-        if formatter.exists():
+        if feature_settings_present and formatter.exists():
             text=formatter.read_text()
             contexts=re.findall(r'^\[([^\]]+)\]',text,re.M)
             if contexts!=['numberformatter']:raise ValueError('unsupported_formatter_adapter')
@@ -212,10 +280,9 @@ def apply():
             raise
         status.update(state='applied',applied=True,applied_at=time.time(),directory_entries=sum(len(v) for v in names.values()))
     elif old_runtime!=content:atomic(runtime_path,content,0,ast.pw_gid)
-    flag=spool/'disabled'
+    status_path=Path('/run/sanequeue/pbx-status.json');atomic(status_path,json.dumps(status).encode(),0,sq)
     if (state/'module.disabled').exists():atomic(flag,b'disabled\n',0,ast.pw_gid)
     else:flag.unlink(missing_ok=True)
-    status_path=Path('/run/sanequeue/pbx-status.json');atomic(status_path,json.dumps(status).encode(),0,sq)
     return status
 
 
@@ -252,5 +319,11 @@ if __name__=='__main__':
     except Exception as error:
         if os.geteuid()==0:
             gid=grp.getgrnam('sanequeue').gr_gid
-            atomic('/run/sanequeue/pbx-status.json',json.dumps({'state':'apply_failed','error':str(error) if isinstance(error,ValueError) else type(error).__name__,'observed_at':time.time(),'applied':False}).encode(),0,gid)
+            safety={}
+            try:
+                previous,_=_read_root_json('/run/sanequeue/pbx-status.json',maximum=32768)
+                if previous:
+                    safety={key:previous[key] for key in ('notice_snapshot','notice_withdrawn') if key in previous}
+            except (OSError,ValueError):pass
+            atomic('/run/sanequeue/pbx-status.json',json.dumps({'state':'apply_failed','error':str(error) if isinstance(error,ValueError) else type(error).__name__,'observed_at':time.time(),'applied':False,**safety}).encode(),0,gid)
         raise SystemExit(1)
