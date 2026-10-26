@@ -15,6 +15,7 @@ import time
 import wave
 
 from .features import FeatureStore,validate,normalize_number,bundled_prompt
+from .incidents import IncidentStore,bindings as incident_bindings,snapshot as incident_snapshot,dialplan as incident_dialplan
 from sanequeue.realtime.local_inventory import read_snapshot
 
 MARKER='; SANEQUEUE MANAGED TELEPHONY V1'
@@ -77,7 +78,7 @@ exten => s,1,Set(SQ_CID_CHANGED=0)
  same => n,ExecIf($["${SQ_CID_CHANGED}"="1"]?Set(__SQ_ORIGINAL_CALLERID=${CALLERID(num)}))
  same => n,ExecIf($["${SQ_CID_CHANGED}"="1"]?Set(CALLERID(num)=${SQ_CID_NUMBER}))
  same => n(done),Return()
-'''.replace('URL',url)
+'''.replace('URL',url)+incident_dialplan(token)
 
 
 def atomic(path,content,uid,gid,mode=0o640):
@@ -139,7 +140,9 @@ def apply():
                 safe=''.join(c for c in str(name) if c.isprintable() and c not in '$}{\\"')[:80]
                 if safe:names.setdefault(queue,{}).setdefault(number,safe)
         finally:db.close()
-    runtime={'token':token,'settings':settings,'phones':phones,'directory':names}
+    incidents=IncidentStore(state)
+    notices=incident_snapshot(incidents,incident_bindings()) if incidents.path.exists() else {}
+    runtime={'token':token,'settings':settings,'phones':phones,'directory':names,'incidents':notices}
     content=json.dumps(runtime,ensure_ascii=False,sort_keys=True).encode()
     if len(content)>2_000_000:raise ValueError('telephone_runtime_capacity_exceeded')
     runtime_path=spool/'runtime.json'
@@ -172,6 +175,13 @@ def apply():
                 if sound.getnchannels()!=1 or sound.getsampwidth()!=2 or sound.getframerate()!=8000 or not 0<sound.getnframes()<=480000:raise ValueError('invalid_pbx_audio')
             destination=sounds/(ident+'.wav')
             if not destination.exists():atomic(destination,data,0,ast.pw_gid)
+        for row in notices.values():
+            _,data=incidents.audio(row['audio'])
+            destination=sounds/(row['audio']+'.wav')
+            if destination.is_symlink():raise ValueError('notice_audio_destination_symlink')
+            if destination.exists():
+                if destination.read_bytes()!=data:raise ValueError('notice_audio_destination_changed')
+            else:atomic(destination,data,0,ast.pw_gid)
         # Context replacement is deferred until the test/production PBX has no active calls.
         if any(not path.exists() or path.read_bytes()!=data for path,data in changes.items()):
             require_idle()

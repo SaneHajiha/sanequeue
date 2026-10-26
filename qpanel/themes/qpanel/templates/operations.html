@@ -403,6 +403,7 @@
 <dialog id="advanced-confirm" aria-labelledby="advanced-confirm-title" aria-describedby="advanced-confirm-summary"><form method="dialog"><h2 id="advanced-confirm-title">{{ t('تأیید عملیات تماس','Confirm call action') }}</h2><p id="advanced-confirm-summary"></p><div class="dialog-actions"><button value="cancel">{{ t('انصراف','Cancel') }}</button><button value="apply" class="primary">{{ t('تأیید و اجرا','Confirm and apply') }}</button></div></form></dialog>
 <dialog id="action-dialog" aria-labelledby="action-title" aria-describedby="action-description"><form id="action-form"><h2 id="action-title"></h2><p id="action-description" class="muted"></p><div id="action-fields"></div><p id="action-error" role="alert" class="overdue"></p><div class="dialog-actions"><button type="button" id="action-cancel">{{ t('انصراف','Cancel') }}</button><button type="submit" class="primary">{{ t('اجرای عملیات','Apply action') }}</button></div></form></dialog>
 <section id="telephony-view" class="view" hidden>
+{% include theme('incident_notices.html') %}
 <section class="panel"><div class="panel-heading"><div><h2>{{ t('انتظار داخلی و تماس برگشتی','Extension waiting & callback') }}</h2><p>{{ t('فقط بین داخلی‌های شناسایی‌شده؛ شماره‌گیری بیرونی مجاز نیست.','Discovered internal extensions only; no external callback dialing.') }}</p></div><button id="telephony-refresh" type="button">↻ {{ t('بازخوانی','Refresh') }}</button></div>
 <form id="telephony-form" class="pbx-feature-form">
 <div class="pbx-feature-grid"><fieldset id="telephony-waiting"><legend>{{ t('انتظار و کال‌بک','Waiting & callback') }}</legend>
@@ -444,6 +445,7 @@
 <script src="{{ theme_static('js/planning.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/organization.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/telephony.js') }}?v={{ current_version() }}" defer></script>
+<script src="{{ theme_static('js/incident-notices.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/reports.js') }}?v={{ current_version() }}&help=1" defer></script>
 <script src="{{ theme_static('js/report-analytics.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/report-exports.js') }}?v=20261026-1" defer></script>

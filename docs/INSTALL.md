@@ -17,6 +17,8 @@ On first install, choose an administrator username, a 12–200 character passwor
 
 ## What is provisioned
 
+Timed quality-review notes use recording metadata on the already authorized file descriptor. Install the small optional reporting dependencies in the application virtual environment with `/opt/sanequeue/.venv/bin/python -m pip install -r /opt/sanequeue/requirements/reporting.txt` to support MP3 and Ogg Vorbis/Opus duration parsing through Mutagen. WAV uses the Python standard library. The web request never starts FFmpeg/FFprobe or decodes audio. Metadata reads are capped at 512 KiB, 1,024 I/O/seek operations and a cooperative 250 ms deadline. Missing parsers, malformed/truncated headers or budget exhaustion return HTTP 415 and do not save timed notes; attaching an authorized recording without notes does not probe duration. This metadata check is not proof of complete or decodable audio.
+
 - Immutable source release under `/opt/sanequeue-releases/`; `/opt/sanequeue` points to it.
 - Restricted `sanequeue` OS identity and private state in `/var/lib/sanequeue`.
 - Two loopback-only AMI identities: read/reporting collector and separate agent/call/originate control account. The installer adds a delimited block to `manager_custom.conf`, preserving other accounts and file ownership. It performs `manager reload`, never an Asterisk restart.

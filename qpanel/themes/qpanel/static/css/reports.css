@@ -20,3 +20,16 @@ body[data-view="reports"] .monitor-preferences { display: none !important; }
 .history-quality-review [data-quality-scores]{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
 .history-quality-review textarea{min-height:84px;max-width:100%;resize:vertical}
 .history-transcript{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.9}
+/* Keep common controls compact; the selected report owns the remaining space. */
+.reports-workspace{gap:14px}
+.reports-workspace>.panel{margin-bottom:0}
+.reports-workspace>.report-intro{padding:14px 18px;gap:12px}
+.report-intro h2{font-size:1.15rem;margin:4px 0}
+.report-intro p{margin:4px 0;line-height:1.8}
+.report-source-badge{white-space:normal;padding:8px 12px}
+.history-filters{padding:16px;gap:12px}
+.history-navigation>label{display:flex;align-items:center;flex-wrap:wrap;gap:12px;width:100%;font-weight:600}
+.history-navigation select{flex:1;min-width:180px;max-width:100%;min-height:44px}
+.history-kpi{padding:14px}
+.history-kpi strong{margin:6px 0;font-size:1.7rem}
+.history-section[hidden],#history-kpis[hidden]{display:none!important}

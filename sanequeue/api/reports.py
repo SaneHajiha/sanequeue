@@ -5,10 +5,10 @@ import hashlib
 import hmac
 import io
 import os
+import re
 from pathlib import Path
 import sqlite3
 import time
-import wave
 from zoneinfo import ZoneInfo
 
 from flask import abort, jsonify, request, Response, g, session
@@ -33,7 +33,7 @@ from sanequeue.reporting.quality import QualityStore, QualityConflict, QualityUn
 from sanequeue.reporting.ai_jobs import AIJobs, AIConflict, AIUnavailable
 from sanequeue.reporting.report_plans import SavedReports,PlanConflict,PlanUnavailable,period_bounds
 from sanequeue.reporting.recording_scope import ownership as recording_ownership
-from sanequeue.reporting.audio import byte_range, open_recording
+from sanequeue.reporting.audio import byte_range, open_recording, duration_seconds, AudioDurationUnavailable
 from sanequeue.reporting.privacy import display_number
 from sanequeue.reporting.store import Archive, QueryDeadline
 
@@ -166,6 +166,10 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                            503: 'report_archive_not_initialized'}.get(error.code, 'report_request_failed')
                 if error.code == 503 and error.description == 'export_service_not_initialized':
                     message = 'export_service_not_initialized'
+                if error.code==415 and error.description in ('recording_duration_parser_unavailable',
+                        'recording_duration_budget_exceeded','recording_duration_invalid_metadata',
+                        'recording_duration_unsupported','recording_duration_invalid_source','recording_duration_invalid_seek'):
+                    message=error.description
                 response = app.make_response((jsonify(error=message), error.code))
             response.headers['Cache-Control'] = 'private, no-store'
             response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -313,11 +317,28 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if plan['archived']:abort(403)
         body=request.get_json(silent=True)
         if not isinstance(body,dict) or not isinstance(body.get('request_key'),str):raise ValueError('invalid_report_plan_run')
+        if not re.fullmatch('[A-Za-z0-9_.:-]{1,128}',body['request_key']):raise ValueError('invalid_report_plan_run')
+        request_key='manual:'+ident+':'+hashlib.sha256(body['request_key'].encode()).hexdigest()
+        previous=export_store.by_request(owner,request_key)
+        if previous is not None:
+            # Retry the original request, including its original period, even
+            # if Tehran midnight or a later plan edit has changed defaults.
+            if not export_permitted(previous):abort(403)
+            return jsonify(job=export_public(previous)),202
         period=period_bounds(time.time(),plan['period'])
         modes={queue:'full' if can_queue(queue,'caller_details') else 'masked' for queue in plan['queues']}
-        job_id=export_store.create(owner,queries.Scope(tuple(plan['queues'])),period['start'],period['end'],
-            watermark=projection_watermark(archive),pbx=pbx,number_modes=modes,format=plan['format'],language=plan['language'],
-            outcome=plan['outcome'],snapshot=visit_snapshots.capture(archive),request_key='manual:'+body['request_key'])
+        try:
+            job_id=export_store.create(owner,queries.Scope(tuple(plan['queues'])),period['start'],period['end'],
+                watermark=projection_watermark(archive),pbx=pbx,number_modes=modes,format=plan['format'],language=plan['language'],
+                outcome=plan['outcome'],snapshot=visit_snapshots.capture(archive),request_key=request_key)
+        except ExportFailure as error:
+            # Another request may have won the unique key after our lookup,
+            # including on the other side of midnight. It remains the original.
+            if str(error)!='export_request_conflict':raise
+            previous=export_store.by_request(owner,request_key)
+            if previous is None:raise
+            if not export_permitted(previous):abort(403)
+            job_id=previous['id']
         return jsonify(job=export_public(export_store.get(job_id,owner))),202
 
     @app.get('/api/history/plans/<ident>/runs')
@@ -644,8 +665,19 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                                    fallback_queues=[item['queue'] for item in result['rows'][0]['memberships']]):abort(403)
         return serve_recording(row,recording_id,download)
 
-    def authorized_detail(visit_id):
-        scope, start, end = context()
+    def authorized_detail(visit_id,*,by_identity=False):
+        if by_identity:
+            if 'reports' not in sections():abort(403)
+            if not archive.path.is_file():abort(503,description='report_archive_not_initialized')
+            # A job is already tied to an opaque visit. UI date/queue filters
+            # are not authority for that identity; current grants still are.
+            with archive.reader() as db:
+                visit=db.execute('SELECT queue,entered FROM report_visits WHERE pbx=? AND id=?',(pbx,visit_id)).fetchone()
+            if visit is None or not can_queue(visit['queue'],'view'):abort(404)
+            own=role()=='agent'
+            scope=queries.Scope((visit['queue'],),tuple(own_interfaces()),own,own_since() if own else 0)
+            start=float(visit['entered']);end=start+1
+        else:scope, start, end = context()
         result = queries.detail(archive, scope, start, end, visit_id)
         if result is None:
             abort(404)
@@ -657,8 +689,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if not quality_ready:raise QualityUnavailable('quality_storage_unavailable')
         return scope,start,end
 
-    def ai_authorized(visit_id,recording_id):
-        result=authorized_detail(visit_id);queue=result['visit']['queue']
+    def ai_authorized(visit_id,recording_id,*,by_identity=False):
+        result=authorized_detail(visit_id,by_identity=by_identity);queue=result['visit']['queue']
         if not ai_ready:raise AIUnavailable('ai_storage_unavailable')
         if role() not in ('admin','supervisor') or 'audit' not in sections():abort(403)
         if not can_queue(queue,'caller_details') or not can_queue(queue,'recording_play'):abort(403)
@@ -695,7 +727,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         job=ai_store.get(ident,current_user.get_id())
         if job is None:abort(404)
         if job['spec']['pbx']!=pbx:abort(404)
-        ai_authorized(job['spec']['visit_id'],job['spec']['recording_id'])
+        ai_authorized(job['spec']['visit_id'],job['spec']['recording_id'],by_identity=True)
         if not all(can_queue(queue,capability) for queue in job['spec'].get('queues',[job['spec']['queue']])
                    for capability in ('view','recording_play','caller_details')):abort(403)
         if request.method=='POST':
@@ -748,6 +780,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if not isinstance(body,dict):raise ValueError('invalid_quality_body')
         if not can_queue(queue,'caller_details'):abort(403)
         recording_id=body.get('recording_id');notes=body.get('notes') or []
+        if not isinstance(notes,list) or len(notes)>100:raise ValueError('quality_note_limit')
         recording_queues=[]
         if recording_id or notes:
             if not recording_id or recording_id not in {item['id'] for item in detail['recordings']}:abort(403)
@@ -764,10 +797,9 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                 folder=datetime.fromtimestamp(recording['ts'],ZoneInfo('Asia/Tehran')).strftime('%Y/%m/%d/')
                 fd,_=open_recording(recording_root,folder+recording['recording'])
             with os.fdopen(fd,'rb') as stream:
-                try:
-                    with wave.open(stream) as audio:duration=audio.getnframes()/audio.getframerate()
-                except (wave.Error,EOFError):abort(415)
-            if not isinstance(notes,list) or len(notes)>100:raise ValueError('quality_note_limit')
+                if notes:
+                    try:duration=duration_seconds(stream)
+                    except AudioDurationUnavailable as error:abort(415,description=str(error))
             for note in notes:
                 if not isinstance(note,dict) or isinstance(note.get('offset_seconds'),bool):raise ValueError('invalid_quality_note')
                 offset=float(note.get('offset_seconds',-1))

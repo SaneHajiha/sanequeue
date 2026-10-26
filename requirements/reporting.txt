@@ -1,2 +1,4 @@
 # Optional local read-only CDR/CEL importer; no ASR/GPU dependencies.
 PyMySQL==1.2.3
+# Optional bounded MP3/Ogg recording-duration metadata for timed QA notes.
+mutagen==1.48.1

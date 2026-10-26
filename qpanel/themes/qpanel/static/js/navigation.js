@@ -7,6 +7,41 @@
  const jump=document.getElementById('view-jump');
  const title=document.getElementById('view-title');
  const savedKey='sanequeue.navigation';
+ const report=document.getElementById('reports-view');
+ let reportPicker=null;
+ function reportSection(target='history-summary-section'){
+  if(!report)return;
+  const section=document.getElementById(target);
+  if(!section||!section.classList.contains('history-section')||!report.contains(section))return;
+  report.querySelectorAll('.history-section').forEach(item=>{item.hidden=item!==section;});
+  const kpis=document.getElementById('history-kpis');
+  if(kpis)kpis.hidden=target!=='history-summary-section';
+  if(reportPicker)reportPicker.value=target;
+ }
+ // One report at a time, using only the server-authorized navigation items.
+ // Native links and the full report remain available when JavaScript is off.
+ if(report){
+  const local=report.querySelector('.history-navigation');
+  if(local){
+   const label=document.createElement('label');
+   label.textContent=document.documentElement.lang==='fa'?'گزارش موردنظر':'Choose a report';
+   reportPicker=document.createElement('select');reportPicker.id='history-section-picker';
+   const overview=nav.querySelector('button[data-view="reports"]');
+   const destinations=[...(overview?[{target:'history-summary-section',button:overview}]:[]),
+    ...[...nav.querySelectorAll('[data-module-view="reports"]')].map(button=>({target:button.dataset.moduleTarget,button}))];
+   for(const destination of destinations){
+    if(!report.querySelector('#'+destination.target))continue;
+    const option=document.createElement('option');option.value=destination.target;
+    option.textContent=destination.button.textContent.trim();reportPicker.append(option);
+   }
+   reportPicker.addEventListener('change',()=>{
+    const destination=destinations.find(item=>item.target===reportPicker.value);
+    destination?.button.click();
+   });
+   label.append(reportPicker);local.replaceChildren(label);
+  }
+  reportSection();
+ }
  const remember=(view,target='')=>{try{sessionStorage.setItem(savedKey,JSON.stringify({view,target}));}catch{}};
  groups.forEach(group=>group.addEventListener('toggle',()=>{
   if(group.open)groups.forEach(other=>{if(other!==group)other.open=false;});
@@ -25,7 +60,8 @@
   if(link){
    const button=[...nav.querySelectorAll('button[data-view]')].find(b=>b.dataset.view===link.dataset.moduleView);
    if(!button)return;
-   button.click();
+   if(document.body.dataset.view!==link.dataset.moduleView)button.click();
+   if(link.dataset.moduleView==='reports')reportSection(link.dataset.moduleTarget);
    remember(link.dataset.moduleView,link.dataset.moduleTarget);
    nav.querySelectorAll('.module-shortcut').forEach(item=>{if(item===link)item.setAttribute('aria-current','location');else item.removeAttribute('aria-current');});
    requestAnimationFrame(()=>{
@@ -35,6 +71,7 @@
   }
   const view=event.target.closest('button[data-view]');
   if(view){
+   if(view.dataset.view==='reports')reportSection();
    activate(view.dataset.view);remember(view.dataset.view);
    nav.querySelectorAll('.module-shortcut').forEach(item=>item.removeAttribute('aria-current'));
    document.querySelector('.topbar')?.scrollIntoView({block:'start',behavior:'instant'});

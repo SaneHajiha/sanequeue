@@ -29,3 +29,7 @@
  .heading-actions{flex-shrink:0}
 }
 @media(prefers-reduced-motion:reduce){.module-navigation .nav-module>summary:after{transition:none}}
+/* Information labels must remain legible in Persian and English. */
+.module-navigation .nav-module>summary{font-size:13px}
+.module-navigation .nav-item,.module-navigation .module-shortcut{font-size:13px;min-height:44px;line-height:1.8}
+.module-navigation .module-shortcut{padding-inline-start:18px}
