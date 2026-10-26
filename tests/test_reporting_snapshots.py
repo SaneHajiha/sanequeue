@@ -50,7 +50,7 @@ class SnapshotTests(unittest.TestCase):
         store=JobStore(self.fixture.root/'jobs.db',self.fixture.root/'exports');store.initialize()
         ident=store.create('alice',Scope(('8001',)),90,300,watermark=projection_watermark(self.archive),
                            snapshot=token,number_modes={'8001':'full'})
-        worker=ExportWorker(store,self.archive,limits=Limits(min_free_bytes=0,max_load_per_cpu=0))
+        worker=ExportWorker(store,self.archive,limits=Limits(min_free_bytes=0,max_load_per_cpu=0),authorize=lambda spec:True)
         original=worker._page;pages=[]
         def changing_page(*args):
             rows=original(*args);pages.append(len(rows))

@@ -1,8 +1,8 @@
 """Durable private CSV exports in a separate, resource-limited worker.
 
 HTTP callers authorize creation and every later access themselves. A stored
-scope never expands with new grants. Permission revocation can also be checked
-by ExportWorker.authorize; download must always reauthorize the current user.
+scope never expands with new grants. The CLI reloads local grants before work,
+between pages and before publication; download must independently reauthorize.
 Pages use immutable fact versions pinned at request time, with short read
 transactions. New ingestion never changes that snapshot. Legacy jobs without
 a snapshot token retain their conservative global-watermark behavior.
@@ -68,6 +68,51 @@ def projection_watermark(archive):
         row=db.execute('SELECT after_id FROM report_projection WHERE pbx=?',(archive.pbx,)).fetchone()
     if row is None:raise ExportFailure('projection_unavailable')
     return int(row[0])
+
+
+def _local_json(path):
+    """One bounded regular-file snapshot; missing policies must never default."""
+    path=Path(path)
+    if path.is_symlink():raise ValueError('invalid_export_authorization_file')
+    fd=os.open(path,os.O_RDONLY|getattr(os,'O_NOFOLLOW',0)|getattr(os,'O_BINARY',0)|getattr(os,'O_NONBLOCK',0))
+    with os.fdopen(fd,'rb') as stream:
+        info=os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size>2*1024*1024:
+            raise ValueError('invalid_export_authorization_file')
+        data=stream.read(2*1024*1024+1)
+    if len(data)>2*1024*1024:raise ValueError('invalid_export_authorization_file')
+    return json.loads(data)
+
+
+def local_authorizer(accounts_path,policies_path):
+    """Return a fail-closed callback; no grant/account cache survives a check."""
+    from qpanel.local_accounts import validate_identity
+    from qpanel.queue_policies import validate_config
+    from sanequeue.security.permissions import sections_for,validate_sections,ROLE_ACTIONS
+    def authorize(spec):
+        try:
+            accounts=_local_json(accounts_path)
+            if not isinstance(accounts,dict) or len(accounts)>100:return False
+            for username,account in accounts.items():
+                if not isinstance(account,dict):return False
+                validate_identity(username,account.get('role'),account.get('phone',''))
+                validate_sections(account['role'],account.get('menus'))
+                if not str(account.get('password_hash','')).startswith('pbkdf2:sha256:'):return False
+            account=accounts.get(spec['owner'])
+            if not account or account['role'] not in ('admin','supervisor') or 'reports' not in sections_for(account['role'],account):return False
+            raw=_local_json(policies_path)
+            if not isinstance(raw,dict) or type(raw.get('version')) is not int or raw['version']!=1 or not all(key in raw for key in ('queues','supervisors')):return False
+            policy=validate_config(raw);role=account['role']
+            grant=policy['supervisors'].get(spec['owner'],{})
+            def allowed(queue,capability):
+                return capability in ROLE_ACTIONS[role] and (role=='admin' or
+                    queue in grant.get('queues',[]) and capability in grant.get('actions',[]))
+            queues=spec['scope']['queues'];modes=spec['number_modes']
+            return bool(queues and set(modes)==set(queues) and all(
+                allowed(queue,'view') and allowed(queue,'report_export') and
+                (modes[queue]!='full' or allowed(queue,'caller_details')) for queue in queues))
+        except Exception:return False
+    return authorize
 
 
 @dataclass(frozen=True)
@@ -262,7 +307,7 @@ def _worker_lock(path):
 class ExportWorker:
     def __init__(self,store,archive,*,number_key=None,limits=None,authorize=None,disabled_file=None):
         self.store=store;self.archive=archive;self.number_key=number_key
-        self.limits=limits or Limits();self.authorize=authorize or (lambda spec:True)
+        self.limits=limits or Limits();self.authorize=authorize if authorize is not None else (lambda spec:False)
         self.disabled_file=Path(disabled_file or os.getenv('SANEQUEUE_DISABLE_FILE','/var/lib/sanequeue/module.disabled'))
         if store.path.resolve()==archive.path.resolve():raise ValueError('export_jobs_database_is_archive')
 
@@ -395,6 +440,7 @@ class ExportWorker:
                         while chunk:=completed.read(65536):
                             self._gate(deadline);digest.update(chunk)
                 if not self.store._update(ident,worker,rows=rows_written,size=size,checksum=digest.hexdigest(),lease_seconds=self.limits.lease_seconds):raise _Cancelled('cancelled')
+                self._gate(deadline);self._check(spec)
                 os.link(part,final);published=True;part.unlink()
                 if os.name!='nt':
                     directory=os.open(self.store.output_dir,os.O_RDONLY|os.O_DIRECTORY)
@@ -434,12 +480,16 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--jobs-db',required=True);parser.add_argument('--output-dir',required=True)
     parser.add_argument('--archive',required=True);parser.add_argument('--pbx',default='primary')
+    parser.add_argument('--accounts');parser.add_argument('--policies')
     parser.add_argument('--disabled-file');parser.add_argument('--number-key-file')
     parser.add_argument('--interval',type=float,default=10);parser.add_argument('--once',action='store_true')
     args=parser.parse_args()
     if not 1<=args.interval<=300:parser.error('interval must be between 1 and 300')
     store=JobStore(args.jobs_db,args.output_dir);store.initialize()
-    worker=ExportWorker(store,Archive(args.archive,pbx=args.pbx),number_key=_number_key(args.number_key_file),disabled_file=args.disabled_file)
+    state=Path(args.archive).absolute().parent
+    worker=ExportWorker(store,Archive(args.archive,pbx=args.pbx),number_key=_number_key(args.number_key_file),
+        disabled_file=args.disabled_file,authorize=local_authorizer(args.accounts or state/'local_accounts.json',
+            args.policies or state/'local_queue_policies.json'))
     stopped=threading.Event()
     for signum in (signal.SIGINT,signal.SIGTERM):signal.signal(signum,lambda *_:stopped.set())
     while not stopped.is_set():

@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -8,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from sanequeue.reporting.export_jobs import (JobStore,ExportWorker,ExportFailure,Limits,
-    projection_watermark,_worker_lock,_number_key)
+    projection_watermark,_worker_lock,_number_key,local_authorizer,main)
 from sanequeue.reporting.facts import project_batch
 from sanequeue.reporting.queries import Scope
 from sanequeue.reporting.store import Archive
@@ -34,7 +35,17 @@ class ExportJobTests(unittest.TestCase):
             watermark=projection_watermark(self.archive),number_modes=modes or {'8001':'masked'},**extra)
 
     def worker(self,**extra):
+        extra.setdefault('authorize',lambda spec:True)
         return ExportWorker(self.store,self.archive,limits=extra.pop('limits',self.limits),**extra)
+
+    def local_grants(self,*,role='supervisor',actions=None):
+        self.accounts=self.root/'local_accounts.json';self.policies=self.root/'local_queue_policies.json'
+        self.account_data={'alice':dict(role=role,phone='PJSIP/100',menus=['reports'],password_hash='pbkdf2:sha256:test')}
+        self.policy_data=dict(version=1,queues={'8001':{},'8002':{}},supervisors={'alice':dict(
+            queues=['8001','8002'],actions=actions or ['view','report_export','caller_details'])})
+        self.accounts.write_text(json.dumps(self.account_data),encoding='utf-8')
+        self.policies.write_text(json.dumps(self.policy_data),encoding='utf-8')
+        return local_authorizer(self.accounts,self.policies)
 
     def read(self,ident,owner='alice'):
         fd,size=self.store.open_output(ident,owner)
@@ -260,3 +271,78 @@ class ExportJobTests(unittest.TestCase):
         self.assertEqual(self.worker().run_once()['error'],'export_projection_changed')
         self.assertFalse((self.store.output_dir/(ident+'.csv')).exists())
         self.assertEqual(self.store.get(ident,'alice')['state'],'failed')
+
+    def test_default_worker_and_missing_local_account_fail_closed_before_reading(self):
+        self.seed();ident=self.create()
+        worker=ExportWorker(self.store,self.archive,limits=self.limits)
+        with patch.object(worker,'_page') as page:
+            self.assertEqual(worker.run_once()['error'],'export_access_revoked');page.assert_not_called()
+        self.assertFalse((self.store.output_dir/(ident+'.csv')).exists())
+        authorize=self.local_grants();self.accounts.unlink();ident=self.create()
+        worker=self.worker(authorize=authorize)
+        with patch.object(worker,'_page') as page:
+            self.assertEqual(worker.run_once()['error'],'export_access_revoked');page.assert_not_called()
+
+    def test_local_permissions_reloaded_between_pages_and_partial_is_removed(self):
+        self.seed(405);ident=self.create();authorize=self.local_grants()
+        worker=self.worker(authorize=authorize);original=worker._page;calls=[]
+        def revoke_after_first_page(*args):
+            rows=original(*args);calls.append(len(rows))
+            self.policy_data['supervisors']['alice']['actions']=['view']
+            self.policies.write_text(json.dumps(self.policy_data),encoding='utf-8')
+            return rows
+        worker._page=revoke_after_first_page
+        self.assertEqual(worker.run_once()['error'],'export_access_revoked');self.assertEqual(calls,[200])
+        self.assertFalse((self.store.output_dir/(ident+'.csv')).exists())
+        self.assertFalse(list(self.store.output_dir.glob('*.part')))
+
+    def test_full_number_downgrade_and_every_frozen_queue_are_checked(self):
+        authorize=self.local_grants();ident=self.create(scope=Scope(('8001','8002')),modes={'8001':'masked','8002':'full'})
+        spec=self.store.get(ident,'alice')['spec'];self.assertTrue(authorize(spec))
+        self.policy_data['supervisors']['alice']['actions']=['view','report_export']
+        self.policies.write_text(json.dumps(self.policy_data),encoding='utf-8');self.assertFalse(authorize(spec))
+        masked={**spec,'number_modes':{'8001':'masked','8002':'masked'}};self.assertTrue(authorize(masked))
+        self.policy_data['supervisors']['alice']['queues']=['8001']
+        self.policies.write_text(json.dumps(self.policy_data),encoding='utf-8');self.assertFalse(authorize(masked))
+
+    def test_missing_or_corrupt_policy_denies_even_admin_and_role_menu_revocation(self):
+        authorize=self.local_grants(role='admin');ident=self.create();spec=self.store.get(ident,'alice')['spec']
+        self.assertTrue(authorize(spec));self.policies.unlink();self.assertFalse(authorize(spec))
+        for raw in ('{broken','{}','[]'):
+            self.policies.write_text(raw,encoding='utf-8');self.assertFalse(authorize(spec))
+        authorize=self.local_grants();self.account_data['alice']['menus']=[]
+        self.accounts.write_text(json.dumps(self.account_data),encoding='utf-8');self.assertFalse(authorize(spec))
+        self.account_data['alice'].update(menus=['reports'],role='viewer')
+        self.accounts.write_text(json.dumps(self.account_data),encoding='utf-8');self.assertFalse(authorize(spec))
+
+    def test_prepublication_check_prevents_link_after_last_page_revocation(self):
+        self.seed();ident=self.create();authorize=self.local_grants();original=self.store._update
+        def revoke_at_manifest(*args,**kwargs):
+            result=original(*args,**kwargs)
+            if kwargs.get('checksum'):self.accounts.write_text('{}',encoding='utf-8')
+            return result
+        with patch.object(self.store,'_update',side_effect=revoke_at_manifest),patch('sanequeue.reporting.export_jobs.os.link') as link:
+            self.assertEqual(self.worker(authorize=authorize).run_once()['error'],'export_access_revoked')
+            link.assert_not_called()
+        self.assertFalse((self.store.output_dir/(ident+'.csv')).exists())
+
+    def test_cli_wires_explicit_and_archive_adjacent_authorization_paths(self):
+        self.local_grants()
+        for explicit in (False,True):
+            argv=['exports','--jobs-db',str(self.store.path),'--output-dir',str(self.store.output_dir),
+                  '--archive',str(self.archive.path),'--once']
+            if explicit:argv+=['--accounts',str(self.accounts),'--policies',str(self.policies)]
+            with self.subTest(explicit=explicit),patch('sys.argv',argv),patch('sanequeue.reporting.export_jobs.JobStore'),\
+                 patch('sanequeue.reporting.export_jobs.ExportWorker') as constructor,\
+                 patch('sanequeue.reporting.export_jobs.signal.signal'),patch('builtins.print'):
+                constructor.return_value.run_once.return_value={'state':'idle'};main()
+                authorize=constructor.call_args.kwargs['authorize']
+                spec=dict(owner='alice',scope={'queues':['8001']},number_modes={'8001':'full'})
+                self.assertTrue(authorize(spec));self.accounts.unlink();self.assertFalse(authorize(spec))
+            self.local_grants()
+
+    def test_completed_cancel_stays_false_after_authorization_revocation(self):
+        self.seed();authorize=self.local_grants();ident=self.create()
+        self.assertEqual(self.worker(authorize=authorize).run_once()['state'],'completed')
+        self.accounts.write_text('{}',encoding='utf-8')
+        self.assertFalse(self.store.cancel(ident,'alice'));self.assertEqual(self.store.get(ident,'alice')['state'],'completed')

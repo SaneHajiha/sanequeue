@@ -139,7 +139,7 @@ class ReportTests(unittest.TestCase):
         ident = response.json['id']
         self.assertNotIn('spec', response.json)
         self.assertEqual(client.get(path+'/'+ident+'/download').status_code, 404)
-        worker = ExportWorker(store, self.archive, limits=Limits(min_free_bytes=0,max_load_per_cpu=0))
+        worker = ExportWorker(store, self.archive, limits=Limits(min_free_bytes=0,max_load_per_cpu=0), authorize=lambda spec:True)
         self.assertEqual(worker.run_once()['state'], 'completed')
         download = client.get(path+'/'+ident+'/download')
         self.assertEqual(download.status_code, 200)
