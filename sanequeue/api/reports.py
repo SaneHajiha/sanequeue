@@ -1035,3 +1035,14 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
 
     from sanequeue.api.report_builder import install as install_report_builder
     install_report_builder(app,archive,context=context,role=role,sections=sections,can_queue=can_queue,pbx=pbx)
+
+    from sanequeue.api.customer_segments import install as install_customer_segments
+    install_customer_segments(app,archive,context=context,role=role,sections=sections,can_queue=can_queue,pbx=pbx)
+
+    from sanequeue.api.generative import install as install_generative
+    def authorize_generation(source_spec, deadline=None):
+        _, proof = ai_authorized(source_spec['visit_id'], source_spec['recording_id'],
+                                 by_identity=True, deadline=deadline)
+        return proof
+    install_generative(app, ai_store, archive, role=role, sections=sections,
+                       can_queue=can_queue, authorize_source=authorize_generation)

@@ -22,8 +22,9 @@ function setup(file){
  const document={createElement:tag=>element(tag+'-'+(++serial)),documentElement:{lang:'en'},body:{dataset:{view:'live'}},getElementById:element,
   addEventListener(k,v){events.set(k,v);},dispatchEvent(event){events.get(event.type)?.(event);}};
  const context={document,window:{},URLSearchParams,Intl,Date,Number,String,Math,AbortController,
+  FormData:class{constructor(form){this.rows=Object.entries(form.elements||{}).map(([k,v])=>[k,v.value||'']);}[Symbol.iterator](){return this.rows[Symbol.iterator]();}},
   MutationObserver:class{constructor(callback){observers.push(callback);}observe(){}},CustomEvent:class{constructor(type){this.type=type;}},
-  fetch(url,options={}){return new Promise((resolve,reject)=>pending.push({url,signal:options.signal,resolve:data=>resolve({ok:true,redirected:false,headers:{get:()=> 'application/json'},json:async()=>data}),reject}));},
+  fetch(url,options={}){return new Promise((resolve,reject)=>pending.push({url,options,signal:options.signal,resolve:data=>resolve({ok:true,redirected:false,headers:{get:()=> 'application/json'},json:async()=>data}),reject}));},
   console,setTimeout,URL,crypto:require('node:crypto').webcrypto};
  vm.runInNewContext(fs.readFileSync(path.join(root,'qpanel/themes/qpanel/static/js',file),'utf8'),context,{filename:file});
  return {element,fields,document,pending,observers,events};
@@ -125,4 +126,23 @@ async function journey(){
  const last=click();pending[8].resolve(payload);await last;document.dispatchEvent({type:'sanequeue:reports-loaded'});
  assert.equal(host.innerHTML,'','a new applied report discards completed private journey data too');
 }
-(async()=>{await reporting();await plans();await transcripts();await exportRecovery();await journey();console.log('Reporting frontend: failure, stale-response, plan-loading, transcript, export recovery and journey lifecycle checks passed');})().catch(error=>{console.error(error);process.exitCode=1;});
+async function customerSegments(){
+ const {element,pending,document,observers}=setup('customer-segments.js');
+ const form=element('segments-vip-form');form.elements={queue:element('segment-queue'),number:element('segment-number'),enabled:element('segment-enabled'),period:element('segment-period')};
+ const host=element('segments-results'),section=element('history-customer-segments-section');
+ const payload={vip:[{queue:'8001',classification:'unclassified',visits:1,answered:1,abandoned:0,sla_denominator:0,sla_percent:null}],blocks:[],observations:[{queue:'8001',number:'<img src=x onerror=alert(1)>',at:100,reason:'blacklist',source:'source'}],labels:[],queues:['8001'],can_manage:true};
+ document.body.dataset.view='reports';observers[0]();assert.equal(pending.length,1);
+ document.dispatchEvent({type:'sanequeue:reports-loaded'});pending[1].resolve(payload);await settle();
+ const text=node=>node.textContent+' '+node.children.map(text).join(' ');
+ assert.match(text(host),/<img/);assert.equal(host.innerHTML,'','customer numbers must use text nodes');
+ const current=host.children.length;pending[0].reject(Error('stale'));await settle();assert.equal(host.children.length,current);
+ element('segments-refresh').listeners.click();section.hidden=true;observers[1]();pending[2].resolve(payload);await settle();assert.equal(host.children.length,0);
+ section.hidden=false;observers[1]();pending[3].resolve(payload);await settle();
+ form.elements.queue.value='8001';form.elements.number.value='09123456789';form.elements.enabled.value='1';form.elements.period.checked=false;
+ const save=form.listeners.submit({preventDefault(){}});assert.equal(pending[4].options.headers['X-CSRF-Token'],'test');const first=JSON.parse(pending[4].options.body);
+ pending[4].reject(Error('uncertain'));await save;
+ const retry=form.listeners.submit({preventDefault(){}});const second=JSON.parse(pending[5].options.body);assert.equal(first.request_key,second.request_key,'uncertain metadata save retries the same logical operation');
+ pending[5].resolve({});await settle();pending[6].resolve(payload);await retry;
+ document.body.dataset.view='live';observers[0]();assert.equal(host.children.length,0);assert.equal(form.hidden,true);
+}
+(async()=>{await reporting();await plans();await transcripts();await exportRecovery();await journey();await customerSegments();console.log('Reporting frontend: failure, stale-response, transcript, export recovery, journey and customer-segment lifecycle checks passed');})().catch(error=>{console.error(error);process.exitCode=1;});

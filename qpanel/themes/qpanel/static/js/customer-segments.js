@@ -1,0 +1,31 @@
+/* Private scoped reporting annotations, never telephone policy changes. */
+(()=>{'use strict';
+ const $=id=>document.getElementById(id),section=$('history-customer-segments-section');if(!section)return;
+ const fa=document.documentElement.lang==='fa',t=(a,b)=>fa?a:b,host=$('segments-results'),feedback=$('segments-feedback'),form=$('segments-vip-form');
+ let controller=null,generation=0,active=false,saveKey=null;
+ const text=(tag,value)=>{const el=document.createElement(tag);el.textContent=String(value??'—');return el;};
+ const stamp=v=>new Date(v*1000).toLocaleString(fa?'fa-IR':'en-GB',{timeZone:'Asia/Tehran'});
+ const shown=()=>document.body.dataset.view==='reports'&&!section.hidden;
+ function reset(){generation++;controller?.abort();controller=null;host.replaceChildren();feedback.textContent='';form.hidden=true;section.removeAttribute('aria-busy');active=false;}
+ function query(){const params=new URLSearchParams(new FormData($('history-filters')));params.set('sla_seconds',$('segments-sla').value||'20');return params;}
+ function table(title,columns,rows){host.append(text('h4',title));const table=document.createElement('table');table.className='table';const head=document.createElement('thead'),hr=document.createElement('tr');columns.forEach(c=>hr.append(text('th',c[1])));head.append(hr);table.append(head);const body=document.createElement('tbody');for(const row of rows){const tr=document.createElement('tr');for(const [key]of columns)tr.append(text('td',row[key]));body.append(tr);}table.append(body);host.append(table);if(!rows.length)host.append(text('p',t('داده‌ای در این محدوده ثبت نشده است.','No recorded data in this scope.')));}
+ async function load(){if(!shown())return;reset();active=true;const current=generation;controller=new AbortController();section.setAttribute('aria-busy','true');feedback.textContent=t('در حال خواندن…','Loading…');
+  try{const response=await fetch('/api/history/customer-segments?'+query(),{credentials:'same-origin',signal:controller.signal});if(response.redirected||!response.headers.get('content-type')?.includes('application/json'))throw Error();const data=await response.json();if(current!==generation||!shown())return;if(!response.ok)throw Error();
+   const kinds={vip:t('VIP','VIP'),not_vip:t('غیر VIP صریح','Explicitly not VIP'),unclassified:t('طبقه‌بندی نشده','Unclassified')};const reason={blacklist:t('لیست مسدود','Blacklist'),policy:t('سیاست تماس','Policy'),security:t('امنیت','Security'),other:t('سایر','Other')};
+   table(t('SLA بر حسب طبقه‌بندی در زمان ورود','SLA by classification at entry'),[['queue',t('صف','Queue')],['classification',t('طبقه','Class')],['visits',t('مراجعه','Visits')],['answered',t('پاسخ','Answered')],['abandoned',t('رهاشده','Abandoned')],['sla_denominator',t('مخرج SLA','SLA denominator')],['sla_percent',t('درصد SLA','SLA %')]],data.vip.map(row=>({...row,classification:kinds[row.classification],sla_percent:row.sla_percent==null?'—':row.sla_percent.toFixed(1)+'%'})));
+   table(t('مشاهدات مسدودی؛ نه شمارش قطعی مشتری','Blocked observations; not unique customer counts'),[['queue',t('صف','Queue')],['reason',t('علت','Reason')],['observations',t('مشاهده','Observations')]],data.blocks.map(r=>({...r,reason:reason[r.reason]||r.reason})));
+   table(t('آخرین مشاهدات واردشده (حداکثر ۱۰۰)','Latest imported observations (up to 100)'),[['queue',t('صف','Queue')],['number',t('شماره','Number')],['at',t('زمان','Time')],['reason',t('علت','Reason')],['source',t('منبع','Source')]],data.observations.map(r=>({...r,at:stamp(r.at),reason:reason[r.reason]||r.reason})));
+   table(t('نسخه‌های برچسب؛ حداکثر ۱۰۰','Annotation history; up to 100'),[['queue',t('صف','Queue')],['number',t('شماره','Number')],['effective',t('تاریخ اثر','Effective time')],['enabled',t('طبقه','Class')]],data.labels.map(r=>({...r,effective:stamp(r.effective),enabled:r.enabled?kinds.vip:kinds.not_vip})));
+   form.elements.queue.replaceChildren();for(const queue of data.queues){const option=text('option',queue);option.value=queue;form.elements.queue.append(option);}form.hidden=!data.can_manage;feedback.textContent=t('بازه و مخرج هر شاخص را با فیلتر اصلی بررسی کنید.','Check the selected period and metric denominator.');
+  }catch{if(current===generation&&shown()){host.replaceChildren();feedback.textContent=t('گزارش دریافت نشد؛ بازهٔ حداکثر ۳۱ روز، مجوز و وضعیت آرشیو را بررسی کنید.','Report unavailable; check the 31-day range, permissions and archive.');}}
+  finally{if(current===generation)section.removeAttribute('aria-busy');}
+ }
+ form.addEventListener('input',()=>{saveKey=null;});
+ form.addEventListener('submit',async event=>{event.preventDefault();if(!shown())return;const current=generation;const button=form.querySelector('button[type=submit]');button.disabled=true;
+  try{const fields={queue:form.elements.queue.value,number:form.elements.number.value,enabled:form.elements.enabled.value==='1',apply_from_period_start:form.elements.period.checked};const signature=JSON.stringify([fields,fields.apply_from_period_start?query().get('from'):null]);if(!saveKey||saveKey.signature!==signature)saveKey={signature,key:crypto.randomUUID()};const token=JSON.parse($('ops-config').textContent).csrf;const response=await fetch('/api/history/customer-segments/vip?'+query(),{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':token},body:JSON.stringify({...fields,request_key:saveKey.key})});if(current!==generation||!shown())return;if(!response.ok||response.redirected)throw Error();saveKey=null;form.elements.number.value='';await load();}
+  catch{if(current===generation&&shown())feedback.textContent=t('ثبت تأیید نشد؛ مجوز، شماره یا تضاد نسخه را بررسی کنید. برای تلاش مجدد همان ورودی را نگه دارید.','Save unconfirmed; check permission, number or version conflict. Keep the same input for a retry.');}
+  finally{button.disabled=false;}
+ });
+ $('segments-refresh').addEventListener('click',load);document.addEventListener('sanequeue:reports-loaded',()=>{if(shown())load();else reset();});
+ const observe=()=>{if(shown()){if(!active)load();}else if(active)reset();};new MutationObserver(observe).observe(document.body,{attributes:true,attributeFilter:['data-view']});new MutationObserver(observe).observe(section,{attributes:true,attributeFilter:['hidden']});observe();
+})();

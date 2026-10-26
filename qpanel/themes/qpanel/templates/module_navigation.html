@@ -13,6 +13,7 @@
 {{item('reports','نمای کلی گزارش‌ها','Report overview')}}
 {{shortcut('reports','history-analysis-section','روندها و تحلیل صف','Queue trends & analysis')}}
 {{shortcut('reports','history-builder-section','گزارش‌ساز','Report builder')}}
+{% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-customer-segments-section','مشتریان مهم و مسدودی','VIP & blocked observations')}}{% endif %}
 {% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-export-jobs-section','خروجی‌های پس‌زمینه','Background exports')}}{% endif %}
 {% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-plan-section','قالب و زمان‌بندی گزارش','Report plans & schedules')}}{% endif %}
 {{shortcut('reports','history-calls-section','تماس‌ها و فایل صوتی','Calls & recordings')}}
@@ -28,7 +29,7 @@
 {{shortcut('reports','history-outbound-section','تماس حین توقف','Calls during pauses')}}
 {{shortcut('reports','history-work-section','هپی‌کال و نظرسنجی','Happy calls & surveys')}}
 </div></details>{% endif %}
-{% if can_view_section('surveys') %}<details class="nav-module" data-module="customer-surveys"><summary>{{t('صدای مشتری و رضایت','Customer satisfaction')}}</summary><div class="module-items">{{item('surveys','نظرسنجی کلیدی مشتری','Customer DTMF surveys')}}{% if user_role=='admin' %}{{shortcut('surveys','survey-design','طراحی فرم نظرسنجی','Survey form design')}}{% endif %}{{shortcut('surveys','survey-results','پاسخ‌ها و شاخص رضایت','Responses & satisfaction')}}</div></details>{% endif %}
+{% if can_view_section('surveys') %}<details class="nav-module" data-module="customer-surveys"><summary>{{t('صدای مشتری و رضایت','Customer satisfaction')}}</summary><div class="module-items">{{item('surveys','نظرسنجی کلیدی مشتری','Customer DTMF surveys')}}{% if user_role in ('admin','supervisor') %}<button type="button" class="nav-item" data-view="voice-feedback">{{t('بازخورد صوتی و پیگیری','Voice feedback & follow-up')}}</button>{% endif %}{% if user_role=='admin' %}{{shortcut('surveys','survey-design','طراحی فرم نظرسنجی','Survey form design')}}{% endif %}{{shortcut('surveys','survey-results','پاسخ‌ها و شاخص رضایت','Responses & satisfaction')}}</div></details>{% endif %}
 {% if can_view_section('agents') or can_view_section('presence') or can_view_section('shifts') %}
 <details class="nav-module" data-module="team"><summary>{{t('کارشناسان و شیفت','Team & shifts')}}</summary><div class="module-items">
 {{item('agents','کارشناسان و عضویت صف','Agents & membership','agent-count')}}{{item('presence','داخلی‌ها و حضور','Extensions & presence')}}{{item('shifts','برنامه شیفت','Shift planning')}}

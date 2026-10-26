@@ -49,7 +49,7 @@ Snapshot history and source events are not automatically deleted. This increases
 
 ## Still outside the completed scope
 
-Unrestricted report builders; verified multi-hop/transferred audio ownership; complete IVR digits without PBX instrumentation; ACW instrumentation when the source lacks explicit states; outbound callback proof; live survey route acceptance and free-form voice feedback; VIP-specific SLA/blacklist sources; archive partition routing and full-installation/live restore drills; cross-account transcript discovery; generative AI analysis; production SQL auto-provisioning; multi-version installation/load/RTP certification. Do not label these as tested or implemented merely because the architecture describes them.
+Unrestricted report builders; verified multi-hop/transferred audio ownership; complete IVR digits without PBX instrumentation; ACW instrumentation when the source lacks explicit states; outbound callback proof; live survey route acceptance and automatic phone voice intake; automatic PBX blacklist-source ingestion; archive partition routing and full-installation/live restore drills; cross-account transcript discovery; real-model inference acceptance; production SQL auto-provisioning; multi-version installation/load/RTP certification. Do not label these as tested or implemented merely because the architecture describes them.
 
 Laboratory acceptance and current handoff documents record the actual passing checks and unresolved items. No private audio, transcript, database, messaging token or SSH key belongs in this repository.
 
@@ -66,3 +66,13 @@ Builder steps and limits: [Persian](REPORT_BUILDER.fa.md), [English](REPORT_BUIL
 Archive-only backup and recovery drill: [Persian](ARCHIVE_BACKUP.fa.md), [English](ARCHIVE_BACKUP.en.md). Operator CLI, committed-WAL preservation, corruption verification and no-overwrite restore are implemented; production size/load and live cutover acceptance remain open.
 
 Journey evidence/unknown-reason guide: [Persian](CALL_JOURNEY.fa.md), [English](CALL_JOURNEY.en.md). Projection version 9 is rebuilt only by the bounded reporting worker. The root IVR window does not widen CDR/graph/downstream access. Consistent direct causality is distinct from queue-segment termination; contradictory or pre-connection causes remain unknown.
+
+
+## New development checkpoint: bounded optional modules
+
+- [VIP/blocked observations](CUSTOMER_SEGMENTS.en.md): temporal per-queue reporting labels, separate answered-known-wait SLA denominator, exact normalized numbers, append-only database triggers, scoped/masked observation history and bounded idempotent operator import. Labels do not change PBX routing; imports are not independent blocking proof or an automatic blacklist adapter.
+- [Voice feedback](VOICE_FEEDBACK.en.md): authorized manual WAV intake, independent play/download grants, access audit, review/follow-up workflow and private atomic storage. This does not claim automatic phone capture or speaker identity.
+- [Generative assistance](GENERATIVE_ANALYSIS.en.md): opt-in owner-private pinned transcript analysis through a strict loopback service, fresh multi-queue grants, killable background child and cited source excerpts. No model is installed or enabled by default. Client worker limits do not limit a separate model service. Real Persian quality/inference load remain untested.
+- [Archive catalog](ARCHIVE_CATALOG.en.md): monthly-labelled full reporting snapshots with durable intent/retry, verification and no-overwrite restore. These are not physical event partitions, transparent archive query routing, full installation backups or live cutover.
+
+The actual theme loader exposed unresolved raw template includes; they now use the theme helper and have real installed-loader FA/EN regression coverage. The preview deployment helper includes the new modules but was not executed: SSH again failed because Windows denies access to the existing key. No PBX or server service was changed. Exact-source CI is recorded in the publication PR; live browser, phone, inference and call-load acceptance remain separate. All-module development is not complete.

@@ -155,6 +155,8 @@ def install(app,state,role):
     install_incidents(app,state,role,admin,csrf)
     from sanequeue.surveys.api import install as install_surveys
     install_surveys(app,state)
+    from sanequeue.surveys.voice_feedback_api import install as install_voice_feedback
+    install_voice_feedback(app,state)
     @app.before_request
     def prompt_limit():
         if request.path=='/api/pbx/features/audio':request.max_content_length=8*1024*1024+65536

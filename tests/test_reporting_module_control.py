@@ -5,6 +5,14 @@ from pathlib import Path
 from scripts.module_control import UNITS,enabled_units
 
 class ReportingModuleControlTests(unittest.TestCase):
+    def test_generative_worker_is_stopped_but_not_enabled_without_explicit_opt_in(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);marker=root/'generative.enabled';unit='sanequeue-generative.service'
+            self.assertIn(unit,UNITS)
+            self.assertNotIn(unit,enabled_units(root,generative_marker=marker))
+            (root/unit).touch()
+            self.assertNotIn(unit,enabled_units(root,generative_marker=marker))
+            marker.touch();self.assertIn(unit,enabled_units(root,generative_marker=marker))
     def test_survey_stop_coverage_but_enable_requires_installed_unit_and_opt_in(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);marker=root/'surveys.enabled';unit='sanequeue-surveys.service'

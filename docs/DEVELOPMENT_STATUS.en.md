@@ -73,3 +73,13 @@ Published-source verification: commit `1c5ad85b2b3072be1dfb3479e1e94668227bae24`
 ## Indexed journey and termination correctness
 
 [Call journey guide](CALL_JOURNEY.en.md): root-only pre-queue IVR inside report/assignment cutoffs is implemented without widening CDR, relation or downstream windows. A version-9 current-source CEL identity projection is indexed by UID/time and rebuilt only in the existing bounded worker; HTTP waits for catch-up and performs no DDL. Final causality requires agreeing current causes from two proven peers, after their connection; conflicting/missing/complex evidence stays unknown. Queue-segment termination remains separate. Browser stale success/failure and private-data disposal are covered. Thirty-seven targeted backend tests and the real-script frontend harness passed locally. Exact-source CI is checked at publication; real PBX/phone, load and visual acceptance remain open.
+
+
+## New development checkpoint: bounded optional modules
+
+- [VIP/blocked observations](CUSTOMER_SEGMENTS.en.md): temporal per-queue reporting labels, separate answered-known-wait SLA denominator, exact normalized numbers, append-only database triggers, scoped/masked observation history and bounded idempotent operator import. Labels do not change PBX routing; imports are not independent blocking proof or an automatic blacklist adapter.
+- [Voice feedback](VOICE_FEEDBACK.en.md): authorized manual WAV intake, independent play/download grants, access audit, review/follow-up workflow and private atomic storage. This does not claim automatic phone capture or speaker identity.
+- [Generative assistance](GENERATIVE_ANALYSIS.en.md): opt-in owner-private pinned transcript analysis through a strict loopback service, fresh multi-queue grants, killable background child and cited source excerpts. No model is installed or enabled by default. Client worker limits do not limit a separate model service. Real Persian quality/inference load remain untested.
+- [Archive catalog](ARCHIVE_CATALOG.en.md): monthly-labelled full reporting snapshots with durable intent/retry, verification and no-overwrite restore. These are not physical event partitions, transparent archive query routing, full installation backups or live cutover.
+
+The actual theme loader exposed unresolved raw template includes; they now use the theme helper and have real installed-loader FA/EN regression coverage. The preview deployment helper includes the new modules but was not executed: SSH again failed because Windows denies access to the existing key. No PBX or server service was changed. Exact-source CI is recorded in the publication PR; live browser, phone, inference and call-load acceptance remain separate. All-module development is not complete.

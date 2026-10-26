@@ -10,7 +10,7 @@ from sanequeue.realtime.local_inventory import snapshot
 
 BEGIN='; BEGIN SANEQUEUE MANAGED ACCESS'
 END='; END SANEQUEUE MANAGED ACCESS'
-REPORTING_UNITS=('sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-reporting-ai.service','sanequeue-media.service')
+REPORTING_UNITS=('sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-reporting-ai.service','sanequeue-media.service','sanequeue-generative.service')
 
 
 def manager_block(original,collector_secret,control_secret):
@@ -183,7 +183,7 @@ def main():
             # Do not copy privileged PBX database credentials into the web app.
             sql_args='--mysql-config /etc/sanequeue/reporting-sql.ini' if (etc/'reporting-sql.ini').is_file() else ''
             private(etc/'reporting.env','REPORTING_SQL_ARGS='+sql_args+'\n')
-        private(etc/'reporting-web.env','SANEQUEUE_REPORT_AI_ENABLED='+str(int((etc/'reporting-ai.enabled').is_file() and (etc/'reporting-ai.env').is_file()))+'\n')
+        private(etc/'reporting-web.env','SANEQUEUE_REPORT_AI_ENABLED='+str(int((etc/'reporting-ai.enabled').is_file() and (etc/'reporting-ai.env').is_file()))+'\nSANEQUEUE_TEXT_ANALYSIS_ENABLED='+str(int((etc/'generative.enabled').is_file() and (etc/'generative.json').is_file()))+'\n')
         initialization='''from pathlib import Path
 from sanequeue.reporting.store import Archive
 from sanequeue.reporting.export_jobs import JobStore
@@ -214,6 +214,8 @@ MediaJobs(s).initialize()
         run(['systemctl','enable','--now','sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-media.service'])
         if (etc/'reporting-ai.enabled').is_file() and (etc/'reporting-ai.env').is_file():
             run(['systemctl','enable','--now','sanequeue-reporting-ai.service'])
+        if (etc/'generative.enabled').is_file() and (etc/'generative.json').is_file():
+            run(['systemctl','enable','--now','sanequeue-generative.service'])
         from redis import Redis
         cache=Redis(host='127.0.0.1',port=16379,password=redis_secret,socket_timeout=3)
         maintenance=(state/'module.disabled').exists()

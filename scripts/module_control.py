@@ -12,15 +12,16 @@ import subprocess
 import time
 import tempfile
 
-UNITS=('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer','sanequeue-inventory.service','sanequeue-redis.service','sanequeue-fastagi.service','sanequeue-pbx-apply.timer','sanequeue-pbx-apply.service','sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-reporting-ai.service','sanequeue-media.service','sanequeue-surveys.service')
+UNITS=('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer','sanequeue-inventory.service','sanequeue-redis.service','sanequeue-fastagi.service','sanequeue-pbx-apply.timer','sanequeue-pbx-apply.service','sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-reporting-ai.service','sanequeue-media.service','sanequeue-surveys.service','sanequeue-generative.service')
 
 
-def enabled_units(unit_dir=Path('/etc/systemd/system'),ai_marker=Path('/etc/sanequeue/reporting-ai.enabled'),survey_marker=Path('/etc/sanequeue/surveys.enabled')):
+def enabled_units(unit_dir=Path('/etc/systemd/system'),ai_marker=Path('/etc/sanequeue/reporting-ai.enabled'),survey_marker=Path('/etc/sanequeue/surveys.enabled'),generative_marker=Path('/etc/sanequeue/generative.enabled')):
     """Do not require optional services from installations predating reports."""
     return tuple(unit for unit in UNITS if unit not in ('sanequeue-inventory.service','sanequeue-pbx-apply.service')
         and (not unit.startswith('sanequeue-reporting') or (unit_dir/unit).is_file())
         and (unit!='sanequeue-reporting-ai.service' or ai_marker.is_file())
-        and (unit!='sanequeue-surveys.service' or ((unit_dir/unit).is_file() and survey_marker.is_file() and not survey_marker.is_symlink())))
+        and (unit!='sanequeue-surveys.service' or ((unit_dir/unit).is_file() and survey_marker.is_file() and not survey_marker.is_symlink()))
+        and (unit!='sanequeue-generative.service' or ((unit_dir/unit).is_file() and generative_marker.is_file() and not generative_marker.is_symlink())))
 
 def without_managed_access(text):
     return re.sub(r'(?m)^; BEGIN SANEQUEUE MANAGED ACCESS\n.*?^; END SANEQUEUE MANAGED ACCESS\n?','',text,flags=re.S)

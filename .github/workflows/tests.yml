@@ -53,3 +53,8 @@ jobs:
       - run: node --check qpanel/themes/qpanel/static/js/navigation.js
       - run: node --check qpanel/themes/qpanel/static/js/incident-notices.js
       - run: node tests/incident_frontend.cjs
+      - run: node --check qpanel/themes/qpanel/static/js/customer-segments.js
+      - run: node --check qpanel/themes/qpanel/static/js/voice-feedback.js
+      - run: node --check qpanel/themes/qpanel/static/js/generative-reports.js
+      - run: node tests/voice_feedback_frontend.cjs
+      - run: node tests/generative_frontend.cjs

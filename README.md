@@ -52,3 +52,12 @@ Third-party copyright and license notices are preserved in [LICENSE](LICENSE) an
 
 
 [ماژول‌های تلفنی و صوت پیش‌فرض](docs/TELEPHONY_MODULES.fa.md) · [Telephone modules and bundled audio](docs/TELEPHONY_MODULES.en.md) · [Beta.25 release notes](docs/RELEASE_BETA26.md)
+
+
+## New development checkpoint: bounded optional modules
+
+- [VIP/blocked observations](CUSTOMER_SEGMENTS.en.md): temporal per-queue reporting labels, separate answered-known-wait SLA denominator, exact normalized numbers, append-only database triggers, scoped/masked observation history and bounded idempotent operator import. Labels do not change PBX routing; imports are not independent blocking proof or an automatic blacklist adapter.
+- [Voice feedback](VOICE_FEEDBACK.en.md): authorized manual WAV intake, independent play/download grants, access audit, review/follow-up workflow and private atomic storage. This does not claim automatic phone capture or speaker identity.
+- [Generative assistance](GENERATIVE_ANALYSIS.en.md): opt-in owner-private pinned transcript analysis through a strict loopback service, fresh multi-queue grants, killable background child and cited source excerpts. No model is installed or enabled by default. Client worker limits do not limit a separate model service. Real Persian quality/inference load remain untested.
+- [Archive catalog](ARCHIVE_CATALOG.en.md): monthly-labelled full reporting snapshots with durable intent/retry, verification and no-overwrite restore. These are not physical event partitions, transparent archive query routing, full installation backups or live cutover.
+

@@ -437,6 +437,7 @@
  <section id="directory-view" class="view" hidden><section class="panel"><div class="panel-heading"><div><h2>{{ t('دفترچه تلفن صف','Queue directory') }}</h2><p>{{ t('مخاطبان دارای محدوده دسترسی صف؛ این صفحه خودکار شماره‌گیری نمی‌کند.','Queue-scoped contacts; this page does not place calls.') }}</p></div><button data-planning-load="directory">{{ t('به‌روزرسانی','Refresh') }}</button></div><div id="directory-content"></div></section></section>
  {% if history_available and can_view_section('reports') %}{% include theme('reports.html') %}{% endif %}
  {% include theme('surveys.html') %}
+ {% include theme('voice_feedback.html') %}
  <footer><span>صانع · SaneQueue <strong>{{ current_version() }}</strong></span><span>{{ t('اطلاعات مجوز در فایل NOTICE','License information in NOTICE') }}</span></footer>
  </main></div>
 <script id="ops-config" type="application/json">{{ ops_config|tojson }}</script>
@@ -449,6 +450,7 @@
 <script src="{{ theme_static('js/telephony.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/incident-notices.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/surveys.js') }}?v={{ current_version() }}" defer></script>
+<script src="{{ theme_static('js/voice-feedback.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/reports.js') }}?v={{ current_version() }}&help=1" defer></script>
 <script src="{{ theme_static('js/report-analytics.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/report-exports.js') }}?v=20261026-1" defer></script>
@@ -459,8 +461,10 @@
 <script src="{{ theme_static('js/journey-reports.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/quality-reports.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/ai-reports.js') }}?v=20261026-1" defer></script>
+<script src="{{ theme_static('js/generative-reports.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/transcript-search.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/report-builder.js') }}?v=20261026-1" defer></script>
+<script src="{{ theme_static('js/customer-segments.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/report-plans.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/followup-reports.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/agent-metrics-reports.js') }}?v=20261026-1" defer></script>
