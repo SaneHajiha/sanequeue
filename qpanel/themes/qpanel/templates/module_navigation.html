@@ -11,11 +11,14 @@
 {% if history_available and can_view_section('reports') %}
 <details class="nav-module" data-module="reporting"><summary>{{t('گزارش‌ها و تحلیل','Reports & analytics')}}</summary><div class="module-items">
 {{item('reports','نمای کلی گزارش‌ها','Report overview')}}
+{{shortcut('reports','history-analysis-section','روندها و تحلیل صف','Queue trends & analysis')}}
+{% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-export-jobs-section','خروجی‌های پس‌زمینه','Background exports')}}{% endif %}
 {{shortcut('reports','history-calls-section','تماس‌ها و فایل صوتی','Calls & recordings')}}
 {{shortcut('reports','history-agents-section','عملکرد کارشناسان','Agent performance')}}
 {{shortcut('reports','history-activity-section','حضور و علت توقف','Duty & pause reasons')}}
 {{shortcut('reports','history-intervals-section','ریز تغییر وضعیت','State intervals')}}
 {{shortcut('reports','history-outbound-section','تماس حین توقف','Calls during pauses')}}
+{{shortcut('reports','history-work-section','هپی‌کال و نظرسنجی','Happy calls & surveys')}}
 </div></details>{% endif %}
 {% if can_view_section('agents') or can_view_section('presence') or can_view_section('shifts') %}
 <details class="nav-module" data-module="team"><summary>{{t('کارشناسان و شیفت','Team & shifts')}}</summary><div class="module-items">

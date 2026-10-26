@@ -33,3 +33,7 @@ jobs:
       - run: node --check qpanel/themes/qpanel/static/js/organization.js
       - run: node --check qpanel/themes/qpanel/static/js/telephony.js
       - run: node --check qpanel/themes/qpanel/static/js/reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/report-analytics.js
+      - run: node --check qpanel/themes/qpanel/static/js/report-exports.js
+      - run: node --check qpanel/themes/qpanel/static/js/recording-audit.js
+      - run: node --check qpanel/themes/qpanel/static/js/work-reports.js

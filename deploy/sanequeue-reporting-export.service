@@ -1,0 +1,30 @@
+[Unit]
+Description=SaneQueue private bounded CSV export worker
+After=local-fs.target sanequeue-reporting.service
+
+[Service]
+Type=simple
+User=sanequeue
+Group=sanequeue
+WorkingDirectory=/opt/sanequeue
+ExecStart=/opt/sanequeue/.venv/bin/python -m sanequeue.reporting.export_jobs --jobs-db /var/lib/sanequeue/export-jobs.sqlite3 --output-dir /var/lib/sanequeue/private-exports --archive /var/lib/sanequeue/history.sqlite3
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=10
+UMask=0077
+Nice=19
+IOSchedulingClass=idle
+CPUQuota=10%
+MemoryMax=128M
+TasksMax=16
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# Query-only SQLite readers may need the archive's WAL shared-memory file.
+# Application code opens the archive mode=ro/query_only and writes only job DB.
+ReadWritePaths=/var/lib/sanequeue
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

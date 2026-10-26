@@ -92,7 +92,7 @@ class ReportTests(unittest.TestCase):
         project_batch(other)
         self.assertEqual(visits(self.archive, Scope(('8001',)), self.stamp, self.stamp + 100)['rows'], [])
 
-    def client(self, *, role='supervisor', menus=('reports',), details=False, denied=()):
+    def client(self, *, role='supervisor', menus=('reports',), details=False, denied=(), known=()):
         app = Flask(__name__)
         app.secret_key = 'synthetic-test-key'
         class User(UserMixin):
@@ -101,11 +101,60 @@ class ReportTests(unittest.TestCase):
         manager.user_loader(lambda ident: User())
         install(app, self.archive.path, role=lambda: role, sections=lambda: set(menus),
                 can_queue=lambda q, action: q == '8001' and action not in denied and (action != 'caller_details' or details),
-                own_interfaces=lambda: ('Local/100@from-queue/n',), recording_root=self.root / 'audio')
+                own_interfaces=lambda: ('Local/100@from-queue/n',), recording_root=self.root / 'audio',
+                known_agents=lambda: known)
         client = app.test_client()
         with client.session_transaction() as session:
             session.update(_user_id='test', _fresh=True)
         return client
+
+    def test_analytics_api_scope_validation_and_no_sensitive_identifiers(self):
+        self.seed()
+        query = '?from=2026-10-24&to=2026-10-25&compare=1'
+        response = self.client().get('/api/history/analytics'+query)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['totals']['visits'], 1)
+        self.assertNotIn('09123456789', response.text)
+        self.assertNotIn('09999999999', response.text)
+        self.assertEqual(response.headers['Cache-Control'], 'private, no-store')
+        self.assertEqual(self.client(menus=()).get('/api/history/analytics'+query).status_code, 403)
+        self.assertEqual(self.client().get('/api/history/analytics'+query+'&queue=8002').status_code, 403)
+        self.assertEqual(self.client().get('/api/history/analytics'+query+'&sla=nan').status_code, 400)
+        self.assertEqual(self.client().get('/api/history/analytics'+query.replace('compare=1','compare=maybe')).status_code, 400)
+
+    def test_background_export_owner_csrf_and_permission_revocation(self):
+        from sanequeue.reporting.export_jobs import JobStore, ExportWorker, Limits
+        self.seed()
+        store = JobStore(self.root/'export-jobs.sqlite3', self.root/'private-exports')
+        store.initialize()
+        denied = []
+        client = self.client(details=True, denied=denied)
+        with client.session_transaction() as session:
+            session['csrf_token'] = 'test-csrf'
+        query = '?from=2026-10-24&to=2026-10-25&lang=fa'
+        path = '/api/history/export-jobs'
+        self.assertEqual(client.post(path+query).status_code, 403)
+        response = client.post(path+query, headers={'X-CSRF-Token': 'test-csrf'})
+        self.assertEqual(response.status_code, 202)
+        ident = response.json['id']
+        self.assertNotIn('spec', response.json)
+        self.assertEqual(client.get(path+'/'+ident+'/download').status_code, 404)
+        worker = ExportWorker(store, self.archive, limits=Limits(min_free_bytes=0,max_load_per_cpu=0))
+        self.assertEqual(worker.run_once()['state'], 'completed')
+        download = client.get(path+'/'+ident+'/download')
+        self.assertEqual(download.status_code, 200)
+        self.assertIn('09123456789', download.data.decode('utf-8-sig'))
+        self.assertEqual(download.headers['Cache-Control'], 'private, no-store')
+        denied.append('caller_details')
+        self.assertEqual(client.get(path+'/'+ident+'/download').status_code, 403)
+        self.assertEqual(client.get(path).json['jobs'], [])
+        self.assertEqual(self.client(role='agent').get(path).status_code, 403)
+        self.assertEqual(client.get(path+'/'+'0'*32+'/download').status_code, 404)
+
+    def test_export_service_does_not_initialize_on_http_request(self):
+        self.seed()
+        self.assertEqual(self.client().get('/api/history/export-jobs').status_code, 503)
+        self.assertFalse((self.root/'export-jobs.sqlite3').exists())
 
     @property
     def dates(self):
@@ -205,6 +254,17 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(self.client(denied=('recording_download',)).get(url+'&download=1').status_code, 403)
         self.assertEqual(self.client(denied=('recording_play',)).get(url+'&download=1').status_code, 200)
         self.assertEqual(client.head(url).status_code, 200)
+        audit_url = url.replace('?', '/access?')
+        self.assertEqual(client.get(audit_url).status_code, 403)
+        auditor = self.client(menus=('reports', 'audit'))
+        audited = auditor.get(audit_url)
+        self.assertEqual(audited.status_code, 200)
+        self.assertEqual({row['action'] for row in audited.json['rows']}, {'play_request','download_request'})
+        self.assertTrue(all(set(row)=={'id','user','timestamp','action'} for row in audited.json['rows']))
+        self.assertNotIn('test.wav', audited.text)
+        self.assertEqual(self.client(menus=('reports','audit'),denied=('recording_play','recording_download')).get(audit_url).status_code,403)
+        with patch('sanequeue.api.reports.AuditStore.append',side_effect=__import__('sanequeue.reporting.access_audit',fromlist=['AuditUnavailable']).AuditUnavailable('recording_audit_unavailable')):
+            self.assertEqual(client.get(url).status_code,503)
         self.assertEqual(client.get(url.replace('audio-id', 'unrelated')).status_code, 404)
         for path in ('../secret', '/etc/passwd', 'x\\secret', '\x00'):
             with self.assertRaises(ValueError):

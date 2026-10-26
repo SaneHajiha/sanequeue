@@ -87,7 +87,10 @@ install_organization(module.app,STATE,lambda:cfg.get_value_set_default('roles',c
 
 @module.app.before_request
 def maintenance_controls():
-    if os.getenv('SANEQUEUE_REPORTING_PREVIEW') == '1' and request.method not in ('GET','HEAD','OPTIONS') and request.path != '/login':
+    report_job_request=(request.path in ('/api/history/export-jobs','/api/history/work-sessions') or
+        re.fullmatch(r'/api/history/export-jobs/[0-9a-f]{32}/cancel',request.path) is not None or
+        re.fullmatch(r'/api/history/work-sessions/[0-9a-f]{32}/close',request.path) is not None)
+    if os.getenv('SANEQUEUE_REPORTING_PREVIEW') == '1' and request.method not in ('GET','HEAD','OPTIONS') and request.path != '/login' and not report_job_request:
         return jsonify(error='reporting_preview_read_only'),403
     if module_disabled() and (request.path in ('/api/control','/api/members/pause') or request.path.startswith('/api/ami/')):
         return jsonify(error='module_disabled'),503
@@ -1157,11 +1160,18 @@ def report_own_interfaces():
     assigned=tuple(x.strip() for x in cfg.get_value_set_default('agent_interfaces',current_user.get_id() or '','').split(',') if x.strip())
     return aliases(assigned,read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json')))
 
+def report_known_agents():
+    from sanequeue.realtime.local_inventory import read_snapshot
+    data=read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json'))
+    return tuple(sorted({item['technology']+'/'+item['endpoint'] for item in (data or {}).get('endpoints',[])
+                         if item.get('category')=='extension'}))
+
 install_reports(module.app, STATE/'history.sqlite3',
     role=lambda:cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'),
     sections=lambda:account_sections(current_user.get_id(),cfg.get_value_set_default('roles',current_user.get_id() or '','viewer')),
     can_queue=lambda queue,action:POLICIES.access(current_user.get_id() or '',cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'),queue,action),
     own_interfaces=report_own_interfaces,
+    known_agents=report_known_agents,
     own_since=lambda:read_accounts(ACCOUNTS_PATH).get(current_user.get_id(),{}).get('phone_assigned_at',0),
     recording_root=cfg.get_value_set_default('sanequeue','recording_root','/var/spool/asterisk/monitor'),
     reason_label=lambda queue,reason:next((item['label'] for item in POLICIES.reasons(queue) if item['id']==reason),reason))
