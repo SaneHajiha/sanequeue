@@ -60,3 +60,6 @@ Checkpoint source commit `1a6a7cec72a5d166ced6b6623e969a3538df7c86` passed [exac
 The [queue-visit builder](REPORT_BUILDER.en.md) adds whitelisted columns, wait/talk filters, bounded grouping, private immutable definitions and agent scope. Preview reads live archive facts; arbitrary SQL, all-CDR construction and custom file export are not claimed.
 
 [Private export artifact reconciliation](EXPORT_RECOVERY.en.md) handles process death followed by cancellation/retry exhaustion. Durable intents, shared database budgets, persistent directory scanning and private quarantine preserve abandoned content. Completed outputs, archives and recordings remain untouched. There is no disk reclamation or quarantine download/automatic restore. Cache headers and view disposal were checked for the builder/export centre.
+
+
+Published-source verification: commit `1c5ad85b2b3072be1dfb3479e1e94668227bae24` passed [CI run 98](https://github.com/SaneHajiha/sanequeue/actions/runs/40340342178) on Python 3.10/3.11/3.12; the 3.11 job recorded 736 passing tests, and all four real-script frontend harnesses passed. This does not replace live server/call/load acceptance. Preview deployment is blocked by Windows access to the existing SSH key.
