@@ -1,5 +1,6 @@
 """Private artifact recovery, including actual process death rather than finally."""
 import json
+import errno
 import os
 from pathlib import Path
 import subprocess
@@ -102,6 +103,24 @@ class ArtifactRecoveryTests(unittest.TestCase):
         source,row=self.intent();self.drain();self.assertFalse(source.exists())
         self.assertEqual((self.reconciler.directory/row['target']).read_bytes(),b'private')
         self.drain();self.assertEqual(len(list(self.reconciler.directory.iterdir())),1)
+
+    def test_link_filesystem_failures_preserve_source_and_retry_durable_intent(self):
+        # A mounted quarantine or full filesystem must never trigger copy/delete.
+        for failure in (errno.EXDEV,errno.ENOSPC):
+            with self.subTest(errno=failure):
+                source,row=self.intent()
+                with patch('sanequeue.reporting.export_maintenance.os.link',side_effect=OSError(failure,'injected link failure')):
+                    result=self.reconciler.run_once(now=1000,max_seconds=1)
+                self.assertEqual(result['state'],'unavailable')
+                self.assertEqual(source.read_bytes(),b'private')
+                self.assertFalse((self.reconciler.directory/row['target']).exists())
+                entry=next(item for item in owner_artifacts(self.store,'alice') if item['id']==row['id'])
+                self.assertEqual(entry['state'],'pending')
+                self.drain()
+                self.assertFalse(source.exists())
+                self.assertEqual((self.reconciler.directory/row['target']).read_bytes(),b'private')
+                entry=next(item for item in owner_artifacts(self.store,'alice') if item['id']==row['id'])
+                self.assertEqual(entry['state'],'quarantined')
 
     def test_target_collision_never_overwrites_or_removes_source(self):
         source,row=self.intent();self.reconciler._directories(create=True)
