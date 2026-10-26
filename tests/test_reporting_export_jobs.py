@@ -187,7 +187,7 @@ class ExportJobTests(unittest.TestCase):
         with self.assertRaisesRegex(ExportFailure,'quota'):self.create()
         for i in range(7):self.create(owner='owner-'+str(i))
         with self.assertRaisesRegex(ExportFailure,'quota'):self.create(owner='global')
-        with self.assertRaises(ValueError):self.create(format='pdf')
+        with self.assertRaises(ValueError):self.create(format='html')
         with self.assertRaisesRegex(ValueError,'database_is_archive'):
             JobStore(self.archive.path,self.root/'another-output').initialize()
         key=self.root/'key';key.write_bytes(b'x'*32);os.chmod(key,0o600)

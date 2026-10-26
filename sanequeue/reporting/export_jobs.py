@@ -6,7 +6,7 @@ between pages and before publication; download must independently reauthorize.
 Pages use immutable fact versions pinned at request time, with short read
 transactions. New ingestion never changes that snapshot. Legacy jobs without
 a snapshot token retain their conservative global-watermark behavior.
-CSV and XLSX are streamed in bounded pages. PDF is not supported by this worker.
+CSV/XLSX use bounded pages. PDF shares the worker with a lower row/page ceiling.
 """
 import argparse
 from contextlib import contextmanager, ExitStack
@@ -35,6 +35,7 @@ from .queries import Scope, _where
 from .store import Archive, QueryDeadline
 from . import visit_snapshots
 from . import xlsx_stream
+from . import pdf_stream
 
 _ID=re.compile(r'[0-9a-f]{32}\Z')
 _MODES={'full','masked','hidden','pseudonymous'}
@@ -181,7 +182,7 @@ class JobStore:
         _where(pbx,scope,start,end)
         if not scope.queues:raise ValueError('empty_export_scope')
         if not isinstance(watermark,int) or isinstance(watermark,bool) or watermark<0:raise ValueError('invalid_export_watermark')
-        if format not in ('csv','xlsx') or language not in ('fa','en'):raise ValueError('unsupported_export_format_or_language')
+        if format not in ('csv','xlsx','pdf') or language not in ('fa','en'):raise ValueError('unsupported_export_format_or_language')
         if outcome is not None and outcome not in _OUTCOMES:raise ValueError('invalid_report_outcome')
         queues=tuple(dict.fromkeys(scope.queues));agents=tuple(dict.fromkeys(scope.agents))
         if any(not isinstance(v,str) or not 1<=len(v)<=256 for v in (*queues,*agents)):
@@ -356,7 +357,9 @@ class ExportWorker:
     def _published_matches(self,job,path,deadline):
         """Recover only a file authenticated by the pre-publication manifest."""
         if not job['checksum'] or not re.fullmatch('[0-9a-f]{64}',job['checksum']):return False
-        if not 0<=job['rows']<=self.limits.max_rows or not 0<job['bytes']<=self.limits.max_bytes:return False
+        max_rows=min(self.limits.max_rows,pdf_stream.MAX_ROWS) if job['spec']['format']=='pdf' else self.limits.max_rows
+        max_bytes=min(self.limits.max_bytes,pdf_stream.MAX_BYTES) if job['spec']['format']=='pdf' else self.limits.max_bytes
+        if not 0<=job['rows']<=max_rows or not 0<job['bytes']<=max_bytes:return False
         fd=os.open(path,os.O_RDONLY|getattr(os,'O_NOFOLLOW',0)|getattr(os,'O_BINARY',0))
         digest=hashlib.sha256()
         with os.fdopen(fd,'rb') as stream:
@@ -404,12 +407,21 @@ class ExportWorker:
                         text=io.StringIO(newline='');writer=csv.writer(text)
                         writer.writerow(["'"+v if isinstance(v,str) and v.lstrip().startswith(('=','+','-','@','\t','\r','\n')) else v for v in values])
                         write(text.getvalue().encode('utf-8'))
-                    workbook=None
+                    workbook=None;document=None
                     if spec['format']=='xlsx':
                         zone=ZoneInfo('Asia/Tehran')
                         period=datetime.fromtimestamp(spec['start'],zone).isoformat()+' .. '+datetime.fromtimestamp(spec['end'],zone).isoformat()+' [end exclusive]'
                         workbook=xlsx_stream.Workbook(output,spec['language'],period=period,max_bytes=self.limits.max_bytes)
                         cleanup.callback(workbook.abort)
+                    elif spec['format']=='pdf':
+                        def pdf_check():
+                            self._gate(deadline);self._check(spec)
+                            if not self.store._update(ident,worker,rows=rows_written,size=output.tell(),lease_seconds=self.limits.lease_seconds):
+                                raise _Cancelled('cancelled')
+                        document=pdf_stream.Document(output,spec['language'],start=spec['start'],end=spec['end'],
+                            queues=spec['scope']['queues'],outcome=spec['outcome'],check=pdf_check,
+                            max_rows=min(self.limits.max_rows,pdf_stream.MAX_ROWS),max_bytes=min(self.limits.max_bytes,pdf_stream.MAX_BYTES))
+                        cleanup.callback(document.abort)
                     else:
                         write(b'\xef\xbb\xbf');headers,_=table([],spec['language']);line(headers)
                     before=None
@@ -425,6 +437,8 @@ class ExportWorker:
                         _,body=table(rows,spec['language'])
                         if workbook:
                             workbook.append(body);size=output.tell()
+                        elif document:
+                            document.append(body);size=output.tell()
                         else:
                             for values in body:line(values)
                         rows_written+=len(rows)
@@ -433,8 +447,9 @@ class ExportWorker:
                         if not self.store._update(ident,worker,rows=rows_written,size=size,lease_seconds=self.limits.lease_seconds):raise _Cancelled('cancelled')
                     self._gate(deadline);self._check(spec)
                     if workbook:workbook.close();size=output.tell()
+                    if document:document.close();size=output.tell()
                     output.flush();os.fsync(output.fileno())
-                if spec['format']=='xlsx':
+                if spec['format'] in ('xlsx','pdf'):
                     digest=hashlib.sha256()
                     with part.open('rb') as completed:
                         while chunk:=completed.read(65536):
@@ -455,7 +470,7 @@ class ExportWorker:
             except _Cancelled:
                 return dict(id=ident,state='cancelled')
             except Exception as error:
-                reason=str(error) if isinstance(error,(ExportFailure,xlsx_stream.SizeLimit)) else 'export_query_deadline' if isinstance(error,QueryDeadline) else 'export_failed'
+                reason=str(error) if isinstance(error,(ExportFailure,xlsx_stream.SizeLimit,pdf_stream.PdfFailure)) else 'export_query_deadline' if isinstance(error,QueryDeadline) else 'export_failed'
                 self.store._update(ident,worker,state='failed',rows=rows_written,size=0,error=reason)
                 return dict(id=ident,state='failed',error=reason)
             finally:

@@ -5,6 +5,18 @@ from pathlib import Path
 from scripts.module_control import UNITS,enabled_units
 
 class ReportingModuleControlTests(unittest.TestCase):
+    def test_survey_stop_coverage_but_enable_requires_installed_unit_and_opt_in(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);marker=root/'surveys.enabled';unit='sanequeue-surveys.service'
+            self.assertIn(unit,UNITS)
+            self.assertNotIn(unit,enabled_units(root,root/'ai.enabled',marker))
+            marker.touch()
+            self.assertNotIn(unit,enabled_units(root,root/'ai.enabled',marker))
+            (root/unit).touch()
+            self.assertIn(unit,enabled_units(root,root/'ai.enabled',marker))
+            marker.unlink()
+            self.assertNotIn(unit,enabled_units(root,root/'ai.enabled',marker))
+
     def test_optional_installations_and_ai_opt_in(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);marker=root/'ai.enabled'

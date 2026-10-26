@@ -2,3 +2,7 @@
 PyMySQL==1.2.3
 # Optional bounded MP3/Ogg recording-duration metadata for timed QA notes.
 mutagen==1.48.1
+# Private background PDF renderer; no browser, network or ASR runtime.
+reportlab==4.4.9
+arabic-reshaper==3.0.0
+python-bidi==0.4.2

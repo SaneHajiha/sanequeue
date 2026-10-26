@@ -152,7 +152,7 @@ class ReportPlanTests(unittest.TestCase):
     def test_retained_quota_validation_and_no_external_destination(self):
         for spec in (dict(name='x'*121),dict(queues=[]),dict(queues=['8001']*257),dict(period='persian_month'),
                      dict(at='24:00'),dict(at='8:00'),dict(weekdays=[]),dict(weekdays=[True]),
-                     dict(enabled=1),dict(format='pdf')):
+                     dict(enabled=1),dict(format='html')):
             with self.subTest(spec=spec),self.assertRaises(ValueError):self.plan(**spec)
         for _ in range(200):self.plan()
         with self.assertRaises(PlanConflict):self.plan()

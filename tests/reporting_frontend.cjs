@@ -9,8 +9,8 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
 function setup(file){
  const nodes=new Map(),events=new Map(),observers=[],pending=[];
  function element(id){
-  if(!nodes.has(id))nodes.set(id,{id,value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,open:false,options:[],attrs:{},listeners:{},
-   replaceChildren(){this.innerHTML='';this.textContent='';},setAttribute(k,v){this.attrs[k]=v;},
+  if(!nodes.has(id))nodes.set(id,{id,value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,open:false,options:[],attrs:{},listeners:{},children:[],dataset:{},
+   replaceChildren(){this.innerHTML='';this.textContent='';this.children=[];},append(...items){this.children.push(...items);},setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},
    addEventListener(k,v){this.listeners[k]=v;},querySelector(){return element('date-caption');},querySelectorAll(){return [];},
    close(){this.open=false;this.listeners.close?.();},showModal(){this.open=true;}});
   return nodes.get(id);
@@ -18,7 +18,8 @@ function setup(file){
  const fields={};for(const key of ['from','to','queue','pause_direction','outcome'])fields[key]=element('field-'+key);
  fields.pause_direction.value='outbound';element('history-filters').elements=fields;
  element('ops-config').textContent='{"csrf":"test"}';
- const document={documentElement:{lang:'en'},body:{dataset:{view:'live'}},getElementById:element,
+ let serial=0;
+ const document={createElement:tag=>element(tag+'-'+(++serial)),documentElement:{lang:'en'},body:{dataset:{view:'live'}},getElementById:element,
   addEventListener(k,v){events.set(k,v);},dispatchEvent(event){events.get(event.type)?.(event);}};
  const context={document,window:{},URLSearchParams,Intl,Date,Number,String,Math,AbortController,
   MutationObserver:class{constructor(callback){observers.push(callback);}observe(){}},CustomEvent:class{constructor(type){this.type=type;}},
@@ -70,4 +71,20 @@ async function plans(){
  assert.equal(pending.length,2,'applied queue scope refreshes plans');
  pending[1].resolve({plans:[]});await settle();
 }
-(async()=>{await reporting();await plans();console.log('Reporting frontend: failure, stale-response, detail race and plan-loading checks passed');})().catch(error=>{console.error(error);process.exitCode=1;});
+async function transcripts(){
+ const {element,pending,observers,document}=setup('transcript-search.js');
+ document.body.dataset.view='reports';
+ const submit=()=>element('transcript-search-form').listeners.submit({preventDefault(){}});
+ element('transcript-search-query').value='private query';
+ const old=submit(),current=submit();assert.equal(pending.length,2);
+ pending[1].resolve({rows:[{id:'job',queue:'8001',excerpt:'<img src=x onerror=alert(1)>'}]});await current;
+ const host=element('transcript-search-results');assert.equal(host.children.length,1);
+ const card=host.children[0];assert.equal(card.children[1].textContent,'<img src=x onerror=alert(1)>');
+ assert.equal(card.children[1].innerHTML,'','transcript excerpts never render trusted HTML');
+ pending[0].reject(Error('obsolete'));await old;assert.equal(host.children.length,1,'stale search error preserves current rows');
+ const failed=submit();assert.equal(host.children.length,0,'a new search clears prior private results');pending[2].reject(Error('revoked'));await failed;
+ assert.match(element('transcript-search-status').textContent,/Search failed/);
+ assert.equal(host.children.length,0);assert.equal(host.attrs['aria-busy'],undefined);
+ const leave=submit();document.body.dataset.view='live';observers[0]();pending[3].resolve({rows:[{id:'old',queue:'8001',excerpt:'PRIVATE OLD'}]});await leave;assert.equal(host.children.length,0,'leaving module invalidates pending private excerpts');assert.equal(element('transcript-search-status').textContent,'');
+}
+(async()=>{await reporting();await plans();await transcripts();console.log('Reporting frontend: failure, stale-response, detail race, plan-loading and transcript security checks passed');})().catch(error=>{console.error(error);process.exitCode=1;});

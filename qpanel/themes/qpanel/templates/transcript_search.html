@@ -1,0 +1,8 @@
+{% if user_role in ('admin','supervisor') and can_view_section('audit') %}
+<section id="history-transcript-section" class="panel history-section">
+ <div class="panel-heading"><div><h2>{{ t('جست‌وجوی متن مکالمات','Transcript search') }}</h2><p>{{ t('فقط متن‌های پردازش‌شدهٔ حساب شما با مجوز فعلیِ تمام صف‌های مرتبط نمایش داده می‌شوند. بازه و فیلترهای بالای صفحه به این جست‌وجو اعمال نمی‌شوند.','Only your processed transcripts with current access to every associated queue appear. The date and queue filters above do not apply to this search.') }}</p></div></div>
+ <form id="transcript-search-form" class="history-analysis-controls"><label for="transcript-search-query">{{ t('واژه‌ها یا شمارهٔ داخل متن','Words or number within transcript') }}</label><input id="transcript-search-query" type="search" maxlength="256" required><button type="submit">{{ t('جست‌وجو','Search') }}</button></form>
+ <p class="report-note">{{ t('همهٔ واژه‌ها باید وجود داشته باشند؛ جست‌وجو بخشی از یک کلمه نیست. حداکثر ۲۰ نتیجهٔ مجاز از پنجرهٔ محدود جست‌وجو نمایش داده می‌شود و نتیجهٔ خالی اثبات نبود مکالمه نیست. متن خودکار نیازمند بازبینی است.','All words must occur; this is not substring search. Up to 20 permitted matches are shown from a bounded search window; an empty result does not prove absence. Automatic transcripts require review.') }}</p>
+ <p id="transcript-search-status" role="status" aria-live="polite"></p><div id="transcript-search-results"></div>
+</section>
+{% endif %}

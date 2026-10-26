@@ -33,7 +33,7 @@ Tests live in tests/test_reporting_*; CI checks JS syntax. Consult Actions for t
 
 ## Remaining development
 
-See [phase five](REPORTING_PHASE5.md) for exact behaviour, ceilings, operator steps, privacy and remaining items. Direct Persian PDF, unrestricted report builders, fully proven multi-hop recording ownership, complete IVR without instrumentation, PBX instrumentation for currently unobserved ACW, outbound callback proof, customer survey response ingestion, VIP/blacklist sources, archive partitions/restore, transcript-wide search, generative AI and production SQL auto-provisioning are not completed merely because the architecture describes them.
+See [phase five](REPORTING_PHASE5.md) for exact behaviour, ceilings, operator steps, privacy and remaining items. Unrestricted report builders, fully proven multi-hop recording ownership, complete IVR without instrumentation, PBX instrumentation for currently unobserved ACW, outbound callback proof, live survey routing and free-form voice feedback, VIP/blacklist sources, archive partitions/restore, cross-account transcript discovery, generative AI and production SQL auto-provisioning are not completed merely because the architecture describes them.
 
 Source/snapshot history is retained indefinitely. Monitor disk/WAL/private output growth. Never commit credentials, SSH keys, connection secrets, tokens, customer audio/transcripts or live databases.
 
@@ -44,3 +44,11 @@ The reporting worker reauthorization, midnight plan retries, historical AI job l
 The initial [inbound status notice](INBOUND_NOTICES.en.md) includes API/UI, revision/expiry and an optional explicit hook. No live hook has been installed or accepted and playback events are not yet projected into reports. The additional survey/routing/fax/paging/campaign/reservation and related modules are tracked in the [module program](MODULE_PROGRAM.fa.md), not presented as completed.
 
 Latest source e12effec passed 665 CI tests across three Python versions; 40 incident/media tests passed on the bounded Linux lab runner. Real conversion of the public 14.84-second prompt completed in about 3.03 seconds, consuming 0.323 cgroup CPU seconds with about 29 MiB observed peak memory. This does not establish concurrent-call/RTP capacity or ASR accuracy; see the review evidence.
+
+## Current development checkpoint
+
+[Owner-scoped transcript search](TRANSCRIPT_SEARCH.en.md) is implemented with atomic FTS indexing, bounded legacy migration, fresh multi-queue recording authorization, safe excerpts and request-race protection. Seven new store/API tests and actual-script frontend security checks pass locally; the related AI/API set passed 26 tests (one optional local decoder test skipped). This does not validate ASR accuracy or live PBX load. Current SSH deployment is blocked by the Windows ACL of the previously created key, and Chrome review hit CDP focus timeouts; these attempts are not live acceptance or a new independent AI review.
+
+The new [customer survey slice](CUSTOMER_SURVEYS.en.md) has versioned bounded branching forms, idempotent answers, explicit CSAT denominators and independently scoped panel access. Nineteen module tests, two service-control tests and the actual JavaScript harness pass. The opt-in PBX adapter accepts only exactly proven Queue COMPLETEAGENT endings; transfer/caller-hangup/missing evidence are not guessed. Its service/hook is not automatically provisioned or live-phone accepted.
+
+[Direct bilingual PDFs](PDF_EXPORTS.md) now use the private export worker, immutable snapshots and current authorization, with explicit 1,000-row/100-page/8 MiB limits. Synthetic three-page FA/EN samples were rendered and inspected; live installation acceptance and unrestricted report construction remain separate.

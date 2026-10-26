@@ -1,10 +1,10 @@
 """Role ceilings, optional per-user sections, and independent queue grants."""
-SECTIONS = frozenset(('live','queues','calls','waiting','agents','presence','pbx','features','control','wallboard','alerts','audit','settings','users','policies','shifts','directory','telephony','reports'))
+SECTIONS = frozenset(('live','queues','calls','waiting','agents','presence','pbx','features','control','wallboard','alerts','audit','settings','users','policies','shifts','directory','telephony','reports','surveys'))
 ROLE_SECTIONS = {
     'admin':SECTIONS,
     'supervisor':SECTIONS-{'settings','users','policies','pbx','telephony'},
-    'agent':SECTIONS-{'settings','users','policies','pbx','control','audit','telephony'},
-    'viewer':SECTIONS-{'settings','users','policies','pbx','control','audit','shifts','telephony'},
+    'agent':SECTIONS-{'settings','users','policies','pbx','control','audit','telephony','surveys'},
+    'viewer':SECTIONS-{'settings','users','policies','pbx','control','audit','shifts','telephony','surveys'},
 }
 ROLE_ACTIONS = {
     'admin':frozenset(('view','pause','membership','monitor','hangup','priority','caller_details','transfer','park','pickup','dial')),
@@ -13,7 +13,7 @@ ROLE_ACTIONS = {
     'viewer':frozenset(('view',)),
 }
 for _role in ('admin','supervisor'):
-    ROLE_ACTIONS[_role] = ROLE_ACTIONS[_role] | {'report_export','recording_play','recording_download'}
+    ROLE_ACTIONS[_role] = ROLE_ACTIONS[_role] | {'report_export','recording_play','recording_download','survey_reports'}
 
 
 def validate_sections(role, sections):

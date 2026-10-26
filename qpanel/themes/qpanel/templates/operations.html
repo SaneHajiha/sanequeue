@@ -265,6 +265,7 @@
        <label><input type="checkbox" value="report_export"> {{ t('خروجی گزارش','Export reports') }}</label>
        <label><input type="checkbox" value="recording_play"> {{ t('پخش ضبط مکالمه','Play recordings') }}</label>
        <label><input type="checkbox" value="recording_download"> {{ t('دانلود ضبط مکالمه','Download recordings') }}</label>
+       <label><input type="checkbox" value="survey_reports"> {{ t('گزارش نظرسنجی مشتری','Customer survey reports') }}</label>
       </fieldset>
 
       <fieldset class="user-permission-checks user-full-row"><legend>{{ t('بخش‌های مجاز پنل','Allowed panel sections') }}</legend><div id="user-menu-select" class="user-permission-checks"></div><button type="button" id="user-menu-defaults">{{ t('انتخاب همهٔ بخش‌های مجاز نقش','Select all sections allowed by role') }}</button><p class="muted">{{ t('نقش سقف اختیار را تعیین می‌کند؛ منوها فقط در همان سقف قابل انتخاب‌اند. مجوز صف و عملیات نیز جداگانه بررسی می‌شود.','Role sets the permission ceiling. Sections stay within it; queue and action grants are checked separately.') }}</p></fieldset>
@@ -435,6 +436,7 @@
  <section id="shifts-view" class="view" hidden><section class="panel"><div class="panel-heading"><div><h2>{{ t('برنامه شیفت کارشناسان','Agent shift planning') }}</h2><p>{{ t('برنامه زمانی مستقل؛ وضعیت واقعی کارشناس را به‌صورت خودکار تغییر نمی‌دهد.','Scheduling only; never automatically changes an agent’s PBX state.') }}</p></div><button data-planning-load="shifts">{{ t('به‌روزرسانی','Refresh') }}</button></div><div id="shifts-content"></div></section></section>
  <section id="directory-view" class="view" hidden><section class="panel"><div class="panel-heading"><div><h2>{{ t('دفترچه تلفن صف','Queue directory') }}</h2><p>{{ t('مخاطبان دارای محدوده دسترسی صف؛ این صفحه خودکار شماره‌گیری نمی‌کند.','Queue-scoped contacts; this page does not place calls.') }}</p></div><button data-planning-load="directory">{{ t('به‌روزرسانی','Refresh') }}</button></div><div id="directory-content"></div></section></section>
  {% if history_available and can_view_section('reports') %}{% include theme('reports.html') %}{% endif %}
+ {% include theme('surveys.html') %}
  <footer><span>صانع · SaneQueue <strong>{{ current_version() }}</strong></span><span>{{ t('اطلاعات مجوز در فایل NOTICE','License information in NOTICE') }}</span></footer>
  </main></div>
 <script id="ops-config" type="application/json">{{ ops_config|tojson }}</script>
@@ -446,6 +448,7 @@
 <script src="{{ theme_static('js/organization.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/telephony.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/incident-notices.js') }}?v={{ current_version() }}" defer></script>
+<script src="{{ theme_static('js/surveys.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/reports.js') }}?v={{ current_version() }}&help=1" defer></script>
 <script src="{{ theme_static('js/report-analytics.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/report-exports.js') }}?v=20261026-1" defer></script>
@@ -456,6 +459,7 @@
 <script src="{{ theme_static('js/journey-reports.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/quality-reports.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/ai-reports.js') }}?v=20261026-1" defer></script>
+<script src="{{ theme_static('js/transcript-search.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/report-plans.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/followup-reports.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/agent-metrics-reports.js') }}?v=20261026-1" defer></script>

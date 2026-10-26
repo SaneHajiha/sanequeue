@@ -138,8 +138,16 @@ class AIJobs:
                   error TEXT,result TEXT,UNIQUE(pbx,owner,request_key));
                   CREATE INDEX IF NOT EXISTS aj_queue ON ai_jobs(pbx,state,available_at,sequence);
                   CREATE INDEX IF NOT EXISTS aj_owner ON ai_jobs(pbx,owner,sequence);
+                  CREATE TABLE IF NOT EXISTS ai_text_indexed(sequence INTEGER PRIMARY KEY);
+                  CREATE TABLE IF NOT EXISTS ai_text_cursor(pbx TEXT PRIMARY KEY,sequence INTEGER NOT NULL);
                   CREATE TRIGGER IF NOT EXISTS aj_spec_immutable BEFORE UPDATE OF id,pbx,owner,spec,spec_hash,request_key,created ON ai_jobs
                     BEGIN SELECT RAISE(ABORT,'immutable_ai_spec'); END;''')
+                try:db.execute("CREATE VIRTUAL TABLE IF NOT EXISTS ai_text_search USING fts5(body, tokenize='unicode61')")
+                except sqlite3.OperationalError as error:
+                    # Some supported deployments compile SQLite without FTS5.
+                    # Speech jobs remain usable; only indexed search is closed.
+                    if 'no such module' not in str(error).lower():raise
+
         except (OSError,sqlite3.Error):raise AIUnavailable('ai_job_store_unavailable') from None
 
     @contextmanager
@@ -232,8 +240,10 @@ class AIJobs:
             row=db.execute("SELECT * FROM ai_jobs WHERE pbx=? AND id=? AND state='running' AND worker=? AND lease_until>=?",(self.pbx,ident,worker,now)).fetchone()
             if row is None:return False
             payload=_result(result,json.loads(row['spec'])['maximum_seconds'])
-            return db.execute("UPDATE ai_jobs SET state='completed',result=?,progress=100,error=NULL,worker=NULL,lease_until=NULL,updated=? WHERE id=?",
-                              (payload,now,ident)).rowcount==1
+            changed=db.execute("UPDATE ai_jobs SET state='completed',result=?,progress=100,error=NULL,worker=NULL,lease_until=NULL,updated=? WHERE id=?",
+                               (payload,now,ident)).rowcount==1
+            if changed:self._index_text(db,row['sequence'],json.loads(payload))
+            return changed
 
     def fail(self,ident,worker,reason):
         _id(ident);worker=_text(worker,128,'worker');_reason(reason);now=time.time()
@@ -252,3 +262,44 @@ class AIJobs:
         with self._db(write=True) as db:
             return db.execute("UPDATE ai_jobs SET state='cancelled',result=NULL,error='cancelled',worker=NULL,lease_until=NULL,updated=? WHERE pbx=? AND id=? AND owner=? AND state IN ('queued','running')",
                 (time.time(),self.pbx,ident,owner)).rowcount==1
+
+    @staticmethod
+    def _index_text(db,sequence,result):
+        from .transcript_search import normalize
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE name='ai_text_search' AND type='table'").fetchone():return
+        raw=normalize(result['text']);normalized=normalize(result.get('normalized_text',''))
+        body=raw if normalized==raw else raw+'\n'+normalized
+        db.execute('INSERT INTO ai_text_search(rowid,body) VALUES(?,?)',(sequence,body))
+        db.execute('INSERT INTO ai_text_indexed(sequence) VALUES(?)',(sequence,))
+
+    def index_legacy_texts(self,limit=5):
+        """Bounded worker-only migration; never invoked by an HTTP read."""
+        if isinstance(limit,bool) or not isinstance(limit,int) or not 1<=limit<=5:
+            raise ValueError('invalid_ai_index_limit')
+        with self._db(write=True) as db:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE name='ai_text_search' AND type='table'").fetchone():return 0
+            prior=db.execute('SELECT sequence FROM ai_text_cursor WHERE pbx=?',(self.pbx,)).fetchone()
+            cursor=prior['sequence'] if prior else 0
+            rows=db.execute("""SELECT sequence,result FROM ai_jobs WHERE pbx=? AND sequence>? AND state='completed'
+                AND result IS NOT NULL ORDER BY sequence LIMIT ?""",(self.pbx,cursor,limit)).fetchall()
+            for row in rows:
+                if not db.execute('SELECT 1 FROM ai_text_indexed WHERE sequence=?',(row['sequence'],)).fetchone():
+                    self._index_text(db,row['sequence'],json.loads(row['result']))
+            if rows:db.execute('INSERT OR REPLACE INTO ai_text_cursor(pbx,sequence) VALUES(?,?)',(self.pbx,rows[-1]['sequence']))
+            return len(rows)
+
+    def search_text(self,owner,text,limit=50):
+        """Private candidates only. Caller must reauthorize each visit/audio chain."""
+        from .transcript_search import expression
+        owner=_text(owner,128,'owner');query=expression(text)
+        if isinstance(limit,bool) or not isinstance(limit,int) or not 1<=limit<=50:
+            raise ValueError('invalid_ai_search_limit')
+        with self._db() as db:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE name='ai_text_search' AND type='table'").fetchone():
+                raise AIUnavailable('ai_search_unavailable')
+            rows=db.execute("""SELECT j.id,j.spec,j.spec_hash,j.state,j.created,j.updated,j.attempts,j.progress,j.error,
+                NULL result, snippet(ai_text_search,0,'','',' … ',24) excerpt
+                FROM ai_text_search JOIN ai_jobs j ON j.sequence=ai_text_search.rowid
+                WHERE ai_text_search MATCH ? AND j.pbx=? AND j.owner=? AND j.state='completed'
+                ORDER BY j.sequence DESC LIMIT ?""",(query,self.pbx,owner,limit)).fetchall()
+            return [dict(job=self._public(row),excerpt=row['excerpt'][:2000]) for row in rows]

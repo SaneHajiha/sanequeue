@@ -163,7 +163,7 @@ class SavedReports:
         if not isinstance(queues,(list,tuple,set)) or not 1<=len(queues)<=256:raise ValueError('invalid_report_plan_queues')
         queues=sorted({_text(queue,128,'queue') for queue in queues})
         if outcome is not None and outcome not in _OUTCOMES:raise ValueError('invalid_report_plan_outcome')
-        if format not in ('xlsx','csv') or language not in ('fa','en') or period not in _PERIODS:raise ValueError('invalid_report_plan_options')
+        if format not in ('xlsx','csv','pdf') or language not in ('fa','en') or period not in _PERIODS:raise ValueError('invalid_report_plan_options')
         if not isinstance(at,str) or not re.fullmatch(r'(?:[01][0-9]|2[0-3]):[0-5][0-9]',at):raise ValueError('invalid_report_plan_at')
         if not isinstance(enabled,bool):raise ValueError('invalid_report_plan_enabled')
         weekdays=list(range(7)) if weekdays is None else weekdays

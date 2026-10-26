@@ -6,7 +6,7 @@ This development branch extends the historical reporting module. It is not a cer
 
 | Module | Behaviour | Evidence boundary |
 | --- | --- | --- |
-| Large exports | Private CSV/XLSX jobs, immutable visit-version snapshot, keyset pages of at most 200, cancellation and crash recovery | 100,000 rows, 32 MiB compressed and 64 MiB sheet XML limits; no partial download |
+| Large exports | Private CSV/XLSX/PDF jobs, immutable visit-version snapshot, keyset pages of at most 200, cancellation and crash recovery | 100,000 rows, 32 MiB compressed and 64 MiB sheet XML limits for CSV/XLSX; PDF has its own 1,000-row/100-page/8 MiB ceiling; no partial download |
 | Saved reports | Owner-private versioned plans; manual or selected weekdays at a Tehran time; previous day, seven complete days, previous Gregorian or Persian month | Delivery is inside the authenticated export centre; no automatic messenger/audio transmission or missed-day backfill |
 | Shift adherence | Scheduled intervals compared with observed queue presence; union of overlapping memberships | Unknown observation periods are not absence; no inferred lateness without a covered shift prefix |
 | Traffic | Global CDR segment report, real originating extension, outbound CID, party search, digit length, DID/trunk and hour/weekday filters | Global administrator scope required; segments are not unique conversations; current inventory is not historical proof |
@@ -46,10 +46,14 @@ Snapshot history and source events are not automatically deleted. This increases
 
 ## Still outside the completed scope
 
-Direct Persian PDF generation; unrestricted report builders; verified multi-hop/transferred audio ownership; complete IVR digits without PBX instrumentation; ACW instrumentation when the source lacks explicit states; outbound callback proof; customer survey response ingestion; VIP-specific SLA/blacklist sources; archive partition routing and restore drills; corpus-wide transcript search; generative AI analysis; production SQL auto-provisioning; multi-version installation/load/RTP certification. Do not label these as tested or implemented merely because the architecture describes them.
+Unrestricted report builders; verified multi-hop/transferred audio ownership; complete IVR digits without PBX instrumentation; ACW instrumentation when the source lacks explicit states; outbound callback proof; live survey route acceptance and free-form voice feedback; VIP-specific SLA/blacklist sources; archive partition routing and restore drills; cross-account transcript discovery; generative AI analysis; production SQL auto-provisioning; multi-version installation/load/RTP certification. Do not label these as tested or implemented merely because the architecture describes them.
 
 Laboratory acceptance and current handoff documents record the actual passing checks and unresolved items. No private audio, transcript, database, messaging token or SSH key belongs in this repository.
 
 ## Source semantics
 
 Transfer and Local-channel labels follow the [official Asterisk CEL specification](https://docs.asterisk.org/Configuration/Reporting/Channel-Event-Logging-CEL/CEL-Specification/). The second transferer channel is distinct from the explicit transfer target. Application-bound transfers can lack a proven target channel; they must not acquire one from a fallback name.
+
+## New bounded slices (2026-10-26)
+
+Direct bilingual [PDF exports](PDF_EXPORTS.md) share immutable snapshots, current grants, private publication, cancellation and recovery with the export worker. Shaped Persian and repeated headers were inspected on synthetic three-page FA/EN samples. [Transcript search](TRANSCRIPT_SEARCH.en.md) is owner-private and rechecks the full recording chain, with shared short-read deadlines and no HTTP indexing or broad text scan fallback. [Customer DTMF surveys](CUSTOMER_SURVEYS.en.md) add versioned bounded branching forms and explicit CSAT; the exact-evidence post-agent-hangup adapter is opt-in, not automatically provisioned or live accepted. These are implemented code slices, not multi-PBX/load certification.

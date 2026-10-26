@@ -43,9 +43,11 @@ jobs:
       - run: node --check qpanel/themes/qpanel/static/js/journey-reports.js
       - run: node --check qpanel/themes/qpanel/static/js/quality-reports.js
       - run: node --check qpanel/themes/qpanel/static/js/ai-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/transcript-search.js
       - run: node --check qpanel/themes/qpanel/static/js/followup-reports.js
       - run: node --check qpanel/themes/qpanel/static/js/agent-metrics-reports.js
       - run: node tests/reporting_frontend.cjs
+      - run: node tests/surveys_frontend.cjs
       - run: node --check qpanel/themes/qpanel/static/js/navigation.js
       - run: node --check qpanel/themes/qpanel/static/js/incident-notices.js
       - run: node tests/incident_frontend.cjs

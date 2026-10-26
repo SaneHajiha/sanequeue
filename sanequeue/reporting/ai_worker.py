@@ -157,6 +157,7 @@ def main():
     worker=AIWorker(store,Archive(args.archive),recording_root=args.recording_root,scratch=args.scratch,
         python=args.python,ffmpeg=args.ffmpeg,model=args.model,tokens=args.tokens,vad=args.vad,disabled_file=args.disabled_file)
     while True:
+        store.index_legacy_texts(limit=1)
         result=worker.run_once()
         if args.once:print(json.dumps(result));break
         time.sleep(10)

@@ -264,7 +264,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             finally:
                 stream.close()
         extension=job['spec']['format']
-        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if extension=='xlsx' else 'text/csv; charset=utf-8'
+        mime={'xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','pdf':'application/pdf',
+              'csv':'text/csv; charset=utf-8'}[extension]
         result = Response(chunks(), mimetype=mime, headers={
             'Content-Length': str(size), 'Content-Disposition': f'attachment; filename="sanequeue-{ident}.{extension}"'})
         result.call_on_close(stream.close)
@@ -665,20 +666,21 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                                    fallback_queues=[item['queue'] for item in result['rows'][0]['memberships']]):abort(403)
         return serve_recording(row,recording_id,download)
 
-    def authorized_detail(visit_id,*,by_identity=False):
+    def authorized_detail(visit_id,*,by_identity=False,query_archive=None):
+        detail_archive=query_archive or archive
         if by_identity:
             if 'reports' not in sections():abort(403)
             if not archive.path.is_file():abort(503,description='report_archive_not_initialized')
             # A job is already tied to an opaque visit. UI date/queue filters
             # are not authority for that identity; current grants still are.
-            with archive.reader() as db:
+            with detail_archive.reader() as db:
                 visit=db.execute('SELECT queue,entered FROM report_visits WHERE pbx=? AND id=?',(pbx,visit_id)).fetchone()
             if visit is None or not can_queue(visit['queue'],'view'):abort(404)
             own=role()=='agent'
             scope=queries.Scope((visit['queue'],),tuple(own_interfaces()),own,own_since() if own else 0)
             start=float(visit['entered']);end=start+1
         else:scope, start, end = context()
-        result = queries.detail(archive, scope, start, end, visit_id)
+        result = queries.detail(detail_archive, scope, start, end, visit_id)
         if result is None:
             abort(404)
         return result
@@ -689,8 +691,13 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if not quality_ready:raise QualityUnavailable('quality_storage_unavailable')
         return scope,start,end
 
-    def ai_authorized(visit_id,recording_id,*,by_identity=False):
-        result=authorized_detail(visit_id,by_identity=by_identity);queue=result['visit']['queue']
+    def ai_authorized(visit_id,recording_id,*,by_identity=False,deadline=None):
+        detail_archive=archive
+        if deadline is not None:
+            from sanequeue.reporting.transcript_search import DeadlineArchive
+            detail_archive=DeadlineArchive(archive,deadline)
+            g.report_recording_deadline=min(g.get('report_recording_deadline',deadline),deadline)
+        result=authorized_detail(visit_id,by_identity=by_identity,query_archive=detail_archive);queue=result['visit']['queue']
         if not ai_ready:raise AIUnavailable('ai_storage_unavailable')
         if role() not in ('admin','supervisor') or 'audit' not in sections():abort(403)
         if not can_queue(queue,'caller_details') or not can_queue(queue,'recording_play'):abort(403)
@@ -718,6 +725,29 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if not isinstance(body,dict) or body.get('language','fa')!='fa':raise ValueError('local_ai_persian_only')
         job=ai_store.create(current_user.get_id(),visit_id,recording_id,queue,'fa',body.get('request_key'),queues=proof)
         return jsonify(job=job),202
+
+    @app.get('/api/history/transcripts/search')
+    @login_required
+    @safe
+    def history_transcript_search():
+        if 'reports' not in sections() or 'audit' not in sections() or role() not in ('admin','supervisor'):
+            abort(403)
+        if not ai_ready:raise AIUnavailable('ai_storage_unavailable')
+        from werkzeug.exceptions import Forbidden, NotFound
+        rows=[];search_deadline=time.monotonic()+2
+        for candidate in ai_store.search_text(current_user.get_id(),request.args.get('q','')):
+            if time.monotonic()>=search_deadline:break
+            job=candidate['job'];spec=job['spec']
+            try:
+                ai_authorized(spec['visit_id'],spec['recording_id'],by_identity=True,deadline=search_deadline)
+                if not all(can_queue(queue,capability) for queue in spec.get('queues',[spec['queue']])
+                           for capability in ('view','recording_play','caller_details')):continue
+            except (Forbidden,NotFound):continue
+            rows.append(dict(id=job['id'],visit_id=spec['visit_id'],queue=spec['queue'],
+                             created=job['created'],excerpt=candidate['excerpt']))
+            if len(rows)>=20:break
+        # No hidden-candidate totals or pagination counters are disclosed.
+        return jsonify(rows=rows,bounded=True,limit=20,policy='owner_and_current_audio_scope')
 
     @app.route('/api/history/ai-jobs/<ident>',methods=['GET','POST'])
     @login_required

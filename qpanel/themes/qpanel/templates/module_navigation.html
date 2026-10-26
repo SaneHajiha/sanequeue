@@ -16,6 +16,7 @@
 {% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-plan-section','قالب و زمان‌بندی گزارش','Report plans & schedules')}}{% endif %}
 {{shortcut('reports','history-calls-section','تماس‌ها و فایل صوتی','Calls & recordings')}}
 {% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-followup-section','مراجعه پس از رهاشدن','Contact after abandonment')}}{% endif %}
+{% if user_role in ('admin','supervisor') and can_view_section('audit') %}{{shortcut('reports','history-transcript-section','جست‌وجوی متن مکالمه','Transcript search')}}{% endif %}
 {% if user_role in ('admin','supervisor') and can_view_section('audit') %}{{shortcut('reports','history-quality-section','کنترل کیفیت مکالمه','Call quality reviews')}}{% endif %}
 {{shortcut('reports','history-agents-section','عملکرد کارشناسان','Agent performance')}}
 {{shortcut('reports','history-agent-metrics-section','زمان رسیدگی و اشغال','Handling & occupancy evidence')}}
@@ -26,6 +27,7 @@
 {{shortcut('reports','history-outbound-section','تماس حین توقف','Calls during pauses')}}
 {{shortcut('reports','history-work-section','هپی‌کال و نظرسنجی','Happy calls & surveys')}}
 </div></details>{% endif %}
+{% if can_view_section('surveys') %}<details class="nav-module" data-module="customer-surveys"><summary>{{t('صدای مشتری و رضایت','Customer satisfaction')}}</summary><div class="module-items">{{item('surveys','نظرسنجی کلیدی مشتری','Customer DTMF surveys')}}{% if user_role=='admin' %}{{shortcut('surveys','survey-design','طراحی فرم نظرسنجی','Survey form design')}}{% endif %}{{shortcut('surveys','survey-results','پاسخ‌ها و شاخص رضایت','Responses & satisfaction')}}</div></details>{% endif %}
 {% if can_view_section('agents') or can_view_section('presence') or can_view_section('shifts') %}
 <details class="nav-module" data-module="team"><summary>{{t('کارشناسان و شیفت','Team & shifts')}}</summary><div class="module-items">
 {{item('agents','کارشناسان و عضویت صف','Agents & membership','agent-count')}}{{item('presence','داخلی‌ها و حضور','Extensions & presence')}}{{item('shifts','برنامه شیفت','Shift planning')}}
