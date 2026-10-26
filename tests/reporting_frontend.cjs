@@ -87,4 +87,12 @@ async function transcripts(){
  assert.equal(host.children.length,0);assert.equal(host.attrs['aria-busy'],undefined);
  const leave=submit();document.body.dataset.view='live';observers[0]();pending[3].resolve({rows:[{id:'old',queue:'8001',excerpt:'PRIVATE OLD'}]});await leave;assert.equal(host.children.length,0,'leaving module invalidates pending private excerpts');assert.equal(element('transcript-search-status').textContent,'');
 }
-(async()=>{await reporting();await plans();await transcripts();console.log('Reporting frontend: failure, stale-response, detail race, plan-loading and transcript security checks passed');})().catch(error=>{console.error(error);process.exitCode=1;});
+async function exportRecovery(){
+ const {element,pending,document,observers}=setup('report-exports.js');document.body.dataset.view='reports';
+ element('history-jobs-refresh').onclick();await settle();assert.equal(pending.length,1);
+ pending[0].resolve({jobs:[],recovery:[{job_id:'<img src=x onerror=alert(1)>',state:'quarantined',size:1024}]});await settle();
+ const host=element('history-export-recovery');assert.equal(host.hidden,false);const item=host.children[0].children[2].children[0];assert.match(item.textContent,/<img/);assert.equal(item.innerHTML,'');
+ element('history-jobs-refresh').onclick();await settle();assert.equal(host.hidden,true);assert.equal(host.children.length,0,'new refresh clears old recovery data');pending[1].reject(Error('revoked'));await settle();assert.equal(host.children.length,0);
+ element('history-jobs-refresh').onclick();await settle();document.body.dataset.view='live';observers[0]();pending[2].resolve({jobs:[],recovery:[{job_id:'PRIVATE',state:'quarantined',size:10}]});await settle();assert.equal(host.children.length,0,'late export metadata does not reappear after leaving');assert.equal(element('history-jobs-feedback').textContent,'');
+}
+(async()=>{await reporting();await plans();await transcripts();await exportRecovery();console.log('Reporting frontend: failure, stale-response, detail race, plan-loading and transcript security and export recovery checks passed');})().catch(error=>{console.error(error);process.exitCode=1;});

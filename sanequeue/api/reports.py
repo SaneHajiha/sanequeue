@@ -212,7 +212,12 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     def history_export_jobs():
         owner = export_context()
         if request.method == 'GET':
-            return jsonify(jobs=[export_public(job) for job in export_store.list(owner) if export_permitted(job)])
+            from sanequeue.reporting.export_maintenance import owner_artifacts
+            recovery=[]
+            for item in owner_artifacts(export_store,owner):
+                if export_permitted(export_store.get(item['job_id'],owner)):recovery.append(item)
+            return jsonify(jobs=[export_public(job) for job in export_store.list(owner) if export_permitted(job)],
+                           recovery=recovery,recovery_limit=20)
         export_csrf()
         scope, start, end = context()
         if not scope.queues or not all(can_queue(queue, 'report_export') for queue in scope.queues):
@@ -1027,3 +1032,6 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         app.logger.info('report export user=%r rows=%d', current_user.get_id(), len(result['rows']))
         return Response('\ufeff' + output.getvalue(), mimetype='text/csv; charset=utf-8',
                         headers={'Content-Disposition': 'attachment; filename="sanequeue-visits.csv"'})
+
+    from sanequeue.api.report_builder import install as install_report_builder
+    install_report_builder(app,archive,context=context,role=role,sections=sections,can_queue=can_queue,pbx=pbx)

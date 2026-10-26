@@ -129,13 +129,19 @@ class ExportJobTests(unittest.TestCase):
 
     def test_expired_lease_recovers_from_zero_without_reusing_partial(self):
         self.seed();ident=self.create()
-        claimed=self.store.claim('crashed',now=self.store.get(ident,'alice')['available_at']+1)
+        claimed=self.store.claim('c'*32,now=self.store.get(ident,'alice')['available_at']+1)
         self.assertEqual(claimed['id'],ident)
         with self.store._db(write=True) as db:
             db.execute('UPDATE export_jobs SET lease_until=? WHERE id=?',(time.time()-1,ident))
-        partial=self.store.output_dir/(ident+'.crashed.part');partial.write_bytes(b'private incomplete')
-        self.assertEqual(self.worker().run_once()['state'],'completed')
+        partial=self.store.output_dir/(ident+'.'+'c'*32+'.part');partial.write_bytes(b'private incomplete');os.utime(partial,(0,0))
+        worker=self.worker();self.assertEqual(worker.run_once()['state'],'completed')
+        # Recovery work is bounded per iteration; it can finish on a later idle
+        # cycle without delaying or reusing the newly completed export.
+        for _ in range(10):
+            if not partial.exists():break
+            worker.run_once()
         self.assertFalse(partial.exists())
+        self.assertEqual(next((self.store.output_dir/'quarantine').iterdir()).read_bytes(),b'private incomplete')
         self.assertEqual(self.store.get(ident,'alice')['attempts'],2)
         self.assertEqual(len(self.read(ident)),2)
 

@@ -54,3 +54,9 @@ The new [customer survey slice](CUSTOMER_SURVEYS.en.md) has versioned bounded br
 [Direct bilingual PDFs](PDF_EXPORTS.md) now use the private export worker, immutable snapshots and current authorization, with explicit 1,000-row/100-page/8 MiB limits. Synthetic three-page FA/EN samples were rendered and inspected; live installation acceptance and unrestricted report construction remain separate.
 
 Checkpoint source commit `1a6a7cec72a5d166ced6b6623e969a3538df7c86` passed [exact-source CI](https://github.com/SaneHajiha/sanequeue/actions/runs/40325215028) on Python 3.10/3.11/3.12. Python 3.11 logs show 703 passed and all three actual-script JS harnesses passed. PDF API/MIME/revocation is covered. Server installation, PDF memory acceptance under 128 MiB, real survey phone acceptance and renewed external three-service review remain open; CI does not replace them.
+
+## Next development: report builder and export lifecycle
+
+The [queue-visit builder](REPORT_BUILDER.en.md) adds whitelisted columns, wait/talk filters, bounded grouping, private immutable definitions and agent scope. Preview reads live archive facts; arbitrary SQL, all-CDR construction and custom file export are not claimed.
+
+[Private export artifact reconciliation](EXPORT_RECOVERY.en.md) handles process death followed by cancellation/retry exhaustion. Durable intents, shared database budgets, persistent directory scanning and private quarantine preserve abandoned content. Completed outputs, archives and recordings remain untouched. There is no disk reclamation or quarantine download/automatic restore. Cache headers and view disposal were checked for the builder/export centre.

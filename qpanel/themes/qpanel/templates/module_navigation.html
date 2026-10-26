@@ -12,6 +12,7 @@
 <details class="nav-module" data-module="reporting"><summary>{{t('گزارش‌ها و تحلیل','Reports & analytics')}}</summary><div class="module-items">
 {{item('reports','نمای کلی گزارش‌ها','Report overview')}}
 {{shortcut('reports','history-analysis-section','روندها و تحلیل صف','Queue trends & analysis')}}
+{{shortcut('reports','history-builder-section','گزارش‌ساز','Report builder')}}
 {% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-export-jobs-section','خروجی‌های پس‌زمینه','Background exports')}}{% endif %}
 {% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-plan-section','قالب و زمان‌بندی گزارش','Report plans & schedules')}}{% endif %}
 {{shortcut('reports','history-calls-section','تماس‌ها و فایل صوتی','Calls & recordings')}}

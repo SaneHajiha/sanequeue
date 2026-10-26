@@ -7,6 +7,8 @@ This development branch extends the historical reporting module. It is not a cer
 | Module | Behaviour | Evidence boundary |
 | --- | --- | --- |
 | Large exports | Private CSV/XLSX/PDF jobs, immutable visit-version snapshot, keyset pages of at most 200, cancellation and crash recovery | 100,000 rows, 32 MiB compressed and 64 MiB sheet XML limits for CSV/XLSX; PDF has its own 1,000-row/100-page/8 MiB ceiling; no partial download |
+| Queue-visit builder | Owner-private immutable definition versions, selected columns, duration/outcome filters, up to two grouping fields | 31 days, 100-row keyset pages, 500 groups, 2-second reads; live preview is not a data snapshot or custom export |
+| Export artifact recovery | Bounded private retention of abandoned export files, replayable intents and owner-scoped metadata | No completed-file/source/audio retention deletion or disk reclamation; no quarantine download/restore route |
 | Saved reports | Owner-private versioned plans; manual or selected weekdays at a Tehran time; previous day, seven complete days, previous Gregorian or Persian month | Delivery is inside the authenticated export centre; no automatic messenger/audio transmission or missed-day backfill |
 | Shift adherence | Scheduled intervals compared with observed queue presence; union of overlapping memberships | Unknown observation periods are not absence; no inferred lateness without a covered shift prefix |
 | Traffic | Global CDR segment report, real originating extension, outbound CID, party search, digit length, DID/trunk and hour/weekday filters | Global administrator scope required; segments are not unique conversations; current inventory is not historical proof |
@@ -57,3 +59,5 @@ Transfer and Local-channel labels follow the [official Asterisk CEL specificatio
 ## New bounded slices (2026-10-26)
 
 Direct bilingual [PDF exports](PDF_EXPORTS.md) share immutable snapshots, current grants, private publication, cancellation and recovery with the export worker. Shaped Persian and repeated headers were inspected on synthetic three-page FA/EN samples. [Transcript search](TRANSCRIPT_SEARCH.en.md) is owner-private and rechecks the full recording chain, with shared short-read deadlines and no HTTP indexing or broad text scan fallback. [Customer DTMF surveys](CUSTOMER_SURVEYS.en.md) add versioned bounded branching forms and explicit CSAT; the exact-evidence post-agent-hangup adapter is opt-in, not automatically provisioned or live accepted. These are implemented code slices, not multi-PBX/load certification.
+
+Builder steps and limits: [Persian](REPORT_BUILDER.fa.md), [English](REPORT_BUILDER.en.md). Export artifact lifecycle and operator diagnostics: [Persian](EXPORT_RECOVERY.fa.md), [English](EXPORT_RECOVERY.en.md). Both remain separate from real-server installation, load and browser visual acceptance.

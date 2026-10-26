@@ -16,6 +16,7 @@ from datetime import datetime
 import hashlib
 import io
 import json
+import logging
 import math
 import os
 from pathlib import Path
@@ -36,6 +37,7 @@ from .store import Archive, QueryDeadline
 from . import visit_snapshots
 from . import xlsx_stream
 from . import pdf_stream
+from . import export_maintenance
 
 _ID=re.compile(r'[0-9a-f]{32}\Z')
 _MODES={'full','masked','hidden','pseudonymous'}
@@ -163,14 +165,16 @@ class JobStore:
             for name in ('request_key','request_hash'):
                 if name not in columns:db.execute('ALTER TABLE export_jobs ADD COLUMN '+name+' TEXT')
             db.execute('CREATE UNIQUE INDEX IF NOT EXISTS ej_request ON export_jobs(owner,request_key) WHERE request_key IS NOT NULL')
+            export_maintenance.initialize(db)
 
     @contextmanager
-    def _db(self,*,write=False):
+    def _db(self,*,write=False,timeout=.5,deadline=None):
         if self.path.is_symlink() or self.output_dir.is_symlink():raise ValueError('export_storage_symlink')
-        db=sqlite3.connect(self.path,timeout=.5)
+        db=sqlite3.connect(self.path,timeout=timeout)
         db.row_factory=sqlite3.Row
         try:
             db.execute('PRAGMA trusted_schema=OFF')
+            if deadline is not None:db.set_progress_handler(lambda:int(time.monotonic()>=deadline),100)
             db.execute('PRAGMA synchronous=FULL')
             if write:db.execute('BEGIN IMMEDIATE')
             with db:yield db
@@ -375,11 +379,19 @@ class ExportWorker:
     def run_once(self):
         with _worker_lock(str(self.store.path)+'.worker.lock') as acquired:
             if not acquired:return dict(state='busy')
+            if not hasattr(self,'reconciler'):self.reconciler=export_maintenance.ArtifactReconciler(self.store)
             try:self._gate()
             except _Deferred as error:return dict(state='deferred',error=str(error))
             worker=uuid.uuid4().hex
             job=self.store.claim(worker,lease_seconds=self.limits.lease_seconds)
-            if job is None:return dict(state='idle')
+            maintenance=self.reconciler.run_once(active=(job['id'],worker) if job else None)
+            state=maintenance['state']
+            if state=='unavailable' and getattr(self,'_maintenance_state',None)!=state:
+                logging.getLogger(__name__).warning('export_artifact_recovery_unavailable')
+            elif state=='ready' and getattr(self,'_maintenance_state',None)=='unavailable':
+                logging.getLogger(__name__).info('export_artifact_recovery_resumed')
+            self._maintenance_state=state
+            if job is None:return dict(state='idle',maintenance=maintenance)
             ident=job['id'];spec=job['spec'];part=self.store.output_dir/(ident+'.'+worker+'.part')
             final=self.store.output_dir/(ident+'.'+spec['format']);published=False
             rows_written=0;size=0;digest=hashlib.sha256()
@@ -391,12 +403,11 @@ class ExportWorker:
                     # revoked/stale recovery removes it instead of publishing.
                     published=True;rows_written=job['rows'];size=job['bytes']
                     self._check(spec)
-                    for old in self.store.output_dir.glob(ident+'.*.part'):old.unlink()
                     if not self.store._update(ident,worker,state='completed',rows=rows_written,size=size,checksum=job['checksum']):raise _Cancelled('cancelled')
                     return dict(id=ident,state='completed',rows=rows_written,bytes=size,recovered=True)
                 self._check(spec)
-                # No active worker can own these remnants while this lock is held.
-                for old in self.store.output_dir.glob(ident+'.*.part'):old.unlink()
+                # Prior attempts have unique names. Bounded reconciliation,
+                # rather than an unbounded glob/delete, handles old staging.
                 fd=os.open(part,os.O_WRONLY|os.O_CREAT|os.O_EXCL|getattr(os,'O_NOFOLLOW',0)|getattr(os,'O_BINARY',0),0o600)
                 with os.fdopen(fd,'wb') as output, ExitStack() as cleanup:
                     def write(data):
@@ -499,6 +510,7 @@ def main():
     parser.add_argument('--disabled-file');parser.add_argument('--number-key-file')
     parser.add_argument('--interval',type=float,default=10);parser.add_argument('--once',action='store_true')
     args=parser.parse_args()
+    logging.basicConfig(level=logging.INFO,format='%(message)s')
     if not 1<=args.interval<=300:parser.error('interval must be between 1 and 300')
     store=JobStore(args.jobs_db,args.output_dir);store.initialize()
     state=Path(args.archive).absolute().parent
@@ -507,10 +519,13 @@ def main():
             args.policies or state/'local_queue_policies.json'))
     stopped=threading.Event()
     for signum in (signal.SIGINT,signal.SIGTERM):signal.signal(signum,lambda *_:stopped.set())
-    while not stopped.is_set():
-        result=worker.run_once()
-        if args.once:print(_json(result));return
-        stopped.wait(args.interval)
+    try:
+        while not stopped.is_set():
+            result=worker.run_once()
+            if args.once:print(_json(result));return
+            stopped.wait(args.interval)
+    finally:
+        if hasattr(worker,'reconciler'):worker.reconciler.close()
 
 
 if __name__=='__main__':main()
