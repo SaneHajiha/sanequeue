@@ -1,0 +1,30 @@
+'use strict';
+/* Real chart helper execution; synthetic static values, no browser/network dependency. */
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const observers=[],events={},downloads=[],images=[],urls=[],revoked=[];
+class Element{
+ constructor(tag,ns=null){this.tagName=tag;this.namespaceURI=ns;this.children=[];this.attrs={};this.style={};this.listeners={};this.dataset={};this._text='';this.isConnected=true;this.hidden=false;}
+ append(...children){this.children.push(...children);children.forEach(c=>c.parent=this);}replaceChildren(...children){this.children=[];this._text='';this.append(...children);}set textContent(v){this.children=[];this._text=String(v);}get textContent(){return this._text+this.children.map(c=>c.textContent).join('');}
+ setAttribute(k,v){this.attrs[k]=v;}addEventListener(k,f){this.listeners[k]=f;}closest(){for(let n=this;n;n=n.parent)if(n.hidden)return n;return null;}click(){if(this.tagName==='a')downloads.push(this);else this.listeners.click?.();}remove(){}
+ getContext(){return {drawImage(){}};}toBlob(fn){this.pendingBlob=fn;}
+}
+const body=new Element('body');body.dataset.view='reports';const form=new Element('form');const from={name:'from',type:'date',value:'2026-10-01'},to={name:'to',type:'date',value:'2026-10-02'};form.elements=[from,to];const canvases=[];
+const document={body,documentElement:{lang:'en'},getElementById:id=>id==='history-filters'?form:null,createElement(tag){const n=new Element(tag);if(tag==='canvas')canvases.push(n);return n;},createElementNS:(ns,tag)=>new Element(tag,ns),addEventListener:(k,f)=>events[k]=f};
+const window={};vm.runInNewContext(fs.readFileSync('qpanel/themes/qpanel/static/js/report-charts.js','utf8'),{document,window,Intl,Array,Number,String,Math,JSON,Map,Set,WeakMap,Object,Blob,Image:class{constructor(){images.push(this);}},URL:{createObjectURL(blob){const u='blob:synthetic-'+urls.length;urls.push({u,blob});return u;},revokeObjectURL:u=>revoked.push(u)},XMLSerializer:class{serializeToString(n){return '<svg>'+n.textContent+'</svg>';}},MutationObserver:class{constructor(f){observers.push(f);}observe(){}}});
+const api=window.SaneQueueReportCharts,section=new Element('section'),host=new Element('div');section.append(host);
+const input={title:'<img src=x>',subtitle:'2026-10-01 — queue 8001',unit:'seconds',labels:['Zero','Unknown','Known'],series:[{label:'Wait',values:[0,null,10]}]};
+const nodes=n=>[n,...n.children.flatMap(nodes)],tag=t=>nodes(host).filter(n=>n.tagName===t),click=text=>{const button=tag('button').find(n=>n.textContent===text);assert.ok(button,text);button.click();};
+assert.equal(api.render(host,input),true);assert.ok(host.textContent.includes('<img src=x>'));assert.equal(tag('img').length,0);assert.ok(tag('table')[0].textContent.includes('Unknown'));assert.equal(tag('circle').length,1);assert.equal(tag('svg')[0].namespaceURI,'http://www.w3.org/2000/svg');assert.ok(tag('svg')[0].textContent.includes(input.subtitle));assert.ok(tag('svg')[0].textContent.includes('Wait'));
+input.series[0].values[2]=999;assert.ok(!host.textContent.includes('999'),'rendered snapshot does not retain mutable caller input');click('Download SVG');assert.equal(downloads.length,1);assert.equal(downloads[0].download,'sanequeue-report-chart.svg');assert.equal(revoked.length,1);
+from.value='2026-10-03';click('Download SVG');assert.equal(downloads.length,1);assert.equal(host.textContent,'','changed filter denies export even before observer');from.value='2026-10-01';assert.equal(host.textContent,'','restoring filter cannot restore private dataset');
+api.render(host,input);form.listeners.change();assert.equal(host.textContent,'');api.render(host,input);form.listeners.submit();assert.equal(host.textContent,'');api.render(host,input);events['sanequeue:reports-loaded']();assert.equal(host.textContent,'');
+api.render(host,input);section.hidden=true;observers[0]();assert.equal(host.textContent,'');assert.equal(api.render(host,input),false);section.hidden=false;body.dataset.view='operations';assert.equal(api.render(host,input),false);body.dataset.view='reports';
+const large={...input,labels:Array.from({length:61},(_,i)=>String(i)),series:Array.from({length:5},(_,i)=>({label:'S'+i,values:Array(61).fill(1)}))};assert.equal(api.render(host,large),true);assert.equal(tag('tbody')[0].children.length,60);assert.equal(tag('thead')[0].children[0].children.length,5);assert.ok(host.textContent.includes('first 60 categories and 4 series'));
+for(const value of [-1,Infinity,NaN,'1',undefined,true]){assert.equal(api.render(host,{...input,labels:['x'],series:[{label:'x',values:[value]}]}),false);assert.equal(tag('svg').length,0);}
+assert.equal(api.render(host,{...input,labels:Array(3)}),false);assert.equal(api.render(host,{...input,series:[{label:'x',values:Array(3)}]}),false);assert.equal(api.render(host,{...input,series:[{label:'x',values:[]}]}),false);assert.equal(api.render(host,{...input,maximum:-1}),false);
+api.render(host,input);click('Download PNG');assert.equal(images.length,1);form.listeners.input();images[0].onload();assert.equal(downloads.length,1);assert.ok(revoked.includes(images[0].src));
+api.render(host,input);click('Download PNG');images[1].onload();assert.equal(canvases[1].width,900);api.clear(host);canvases[1].pendingBlob(new Blob(['synthetic']));assert.equal(downloads.length,1,'cleared chart cannot publish pending PNG');
+api.render(host,input);click('Download PNG');images[2].onload();canvases[2].pendingBlob(new Blob(['synthetic']));assert.equal(downloads.length,2);assert.equal(downloads[1].download,'sanequeue-report-chart.png');
+api.render(host,input);host.isConnected=false;observers[0]();assert.equal(host.textContent,'');
+body.dataset.view='reports';section.hidden=false;host.isConnected=true;assert.equal(api.render(host,{title:'Empty',labels:[],series:[{label:'Values',values:[]}]}),true);assert.match(host.textContent,/No recorded data/);assert.equal(tag('svg').length,0);api.clear(null);
+console.log('report charts: values/unknown, bounds/truncation, text safety, SVG/PNG freshness, filter/view/hidden/removal lifecycle passed');

@@ -6,11 +6,11 @@ const vm=require('node:vm');
 const path=require('node:path');
 const root=path.join(__dirname,'..');
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
-function setup(file){
+function setup(file,withCharts=false){
  const nodes=new Map(),events=new Map(),observers=[],pending=[];
  function element(id){
   if(!nodes.has(id))nodes.set(id,{id,value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,open:false,isConnected:true,options:[],attrs:{},listeners:{},children:[],dataset:{},
-   replaceChildren(){this.innerHTML='';this.textContent='';this.children=[];},append(...items){this.children.push(...items);},setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},
+   reportValidity(){return true;},replaceChildren(){this.innerHTML='';this.textContent='';this.children=[];},append(...items){this.children.push(...items);},setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},
    addEventListener(k,v){this.listeners[k]=v;},querySelector(){return element('date-caption');},querySelectorAll(){return [];},
    close(){this.open=false;this.listeners.close?.();},showModal(){this.open=true;}});
   return nodes.get(id);
@@ -21,13 +21,14 @@ function setup(file){
  let serial=0;
  const document={createElement:tag=>element(tag+'-'+(++serial)),documentElement:{lang:'en'},body:{dataset:{view:'live'}},getElementById:element,
   addEventListener(k,v){events.set(k,v);},dispatchEvent(event){events.get(event.type)?.(event);}};
- const context={document,window:{},URLSearchParams,Intl,Date,Number,String,Math,AbortController,
+ const charts=new Map();const chartAPI={clear(host){if(host)charts.delete(host.id);},render(host,value){if(host.id==='history-analysis-chart')assert.equal(element('history-analysis-results').hidden,false,'chart parent must be visible before render');charts.set(host.id,value);}};
+ const context={document,window:withCharts?{SaneQueueReportCharts:chartAPI}:{},URLSearchParams,Intl,Date,Number,String,Math,AbortController,
   FormData:class{constructor(form){this.rows=Object.entries(form.elements||{}).map(([k,v])=>[k,v.value||'']);}[Symbol.iterator](){return this.rows[Symbol.iterator]();}},
   MutationObserver:class{constructor(callback){observers.push(callback);}observe(){}},CustomEvent:class{constructor(type){this.type=type;}},
   fetch(url,options={}){return new Promise((resolve,reject)=>pending.push({url,options,signal:options.signal,resolve:data=>resolve({ok:true,redirected:false,headers:{get:()=> 'application/json'},json:async()=>data}),reject}));},
   console,setTimeout,URL,crypto:require('node:crypto').webcrypto};
  vm.runInNewContext(fs.readFileSync(path.join(root,'qpanel/themes/qpanel/static/js',file),'utf8'),context,{filename:file});
- return {element,fields,document,pending,observers,events};
+ return {element,fields,document,pending,observers,events,charts};
 }
 function data(url){
  if(url.includes('/overview?'))return {queues:[],allowed_queues:['8001'],sources:{}};
@@ -145,4 +146,26 @@ async function customerSegments(){
  pending[5].resolve({});await settle();pending[6].resolve(payload);await retry;
  document.body.dataset.view='live';observers[0]();assert.equal(host.children.length,0);assert.equal(form.hidden,true);
 }
-(async()=>{await reporting();await plans();await transcripts();await exportRecovery();await journey();await customerSegments();console.log('Reporting frontend: failure, stale-response, transcript, export recovery, journey and customer-segment lifecycle checks passed');})().catch(error=>{console.error(error);process.exitCode=1;});
+
+async function chartAdapters(){
+ const prepare=file=>{const s=setup(file,true);s.document.body.dataset.view='reports';s.fields.from.value='2026-10-01';s.fields.to.value='2026-10-02';s.fields.queue.value='8001';return s;};
+ const a=prepare('agent-metrics-reports.js');
+ const metrics={agents:[{agent:'100',answered_queue_segments:3,unique_queue_talk_seconds:20,on_duty_seconds:60,acw_seconds:null,aht_seconds:null,occupancy_percent:null,coverage:{complete:false,reasons:['explicit_acw_unavailable']}}],totals:{agents:1}};
+ let action=a.element('history-agent-metrics-run').onclick();a.pending[0].resolve(metrics);await action;
+ assert.deepEqual(Array.from(a.charts.get('history-agent-answer-chart').series[0].values),[3]);assert.deepEqual(Array.from(a.charts.get('history-agent-aht-chart').series[0].values),[null]);
+ action=a.element('history-agent-metrics-run').onclick();assert.equal(a.charts.size,0,'new request clears old chart');a.pending[1].reject(Error('denied'));await action;assert.equal(a.charts.size,0);
+ action=a.element('history-agent-metrics-run').onclick();a.document.body.dataset.view='live';a.observers.forEach(f=>f());a.document.body.dataset.view='reports';a.pending[2].resolve(metrics);await action;assert.equal(a.charts.size,0,'late response cannot restore chart after leave and reentry');
+ const c=prepare('cdr-reports.js');action=c.element('history-cdr-filters').onsubmit({preventDefault(){}});c.pending[0].resolve({rows:[],next:null,can_search_numbers:true});c.pending[1].resolve({totals:{segments_started:10,answered_segments:6,unanswered_segments:4,known_billsec_sum:120},trunk_traffic:[{trunk:'trunk A',did:'line1',direction:'inbound',segments_started:10,answered_segments:6,known_billsec_sum:120}]});await settle();
+ assert.deepEqual(Array.from(c.charts.get('history-trunk-chart').series[0].values),[10],'chart uses complete aggregate, not empty page rows');c.element('history-cdr-filters').listeners.change();assert.equal(c.charts.size,0);
+ c.element('history-cdr-filters').onsubmit({preventDefault(){}});c.element('history-cdr-filters').listeners.input();c.pending[2].resolve({rows:[],next:null});c.pending[3].resolve({totals:{},trunk_traffic:[]});await settle();assert.equal(c.charts.size,0,'typing local filter invalidates pending chart before blur');
+ const v=prepare('customer-segments.js');const vf=v.element('segments-vip-form');vf.elements={queue:v.element('vip-queue'),number:v.element('vip-number'),enabled:v.element('vip-enabled'),period:v.element('vip-period')};v.observers[0]();
+ const vip={vip:[{queue:'8001',classification:'vip',visits:3,answered:2,abandoned:1,sla_denominator:2,sla_percent:50}],blocks:[],observations:[],labels:[],queues:['8001'],can_manage:false,sla_seconds:20};
+ v.element('segments-sla').listeners.input();v.pending[0].resolve(vip);await settle();assert.equal(v.charts.size,0,'changed SLA invalidates old response');
+ v.element('segments-refresh').listeners.click();v.pending[1].resolve(vip);await settle();assert.equal(v.charts.get('history-vip-sla-chart').maximum,100);assert.deepEqual(Array.from(v.charts.get('history-vip-sla-chart').series[0].values),[50]);
+ v.element('segments-refresh').listeners.click();v.fields.from.value='2026-10-03';v.element('history-filters').listeners.input();v.pending[2].resolve(vip);await settle();assert.equal(v.charts.size,0,'typing central date invalidates old VIP payload');
+ const s=prepare('shift-reports.js');action=s.element('history-shifts-run').onclick();s.pending[0].resolve({agents:[{agent:'100',scheduled_seconds:120,on_duty_seconds:60,uncovered_seconds:null}],shifts:[],schedule_configured:true});await action;
+ assert.equal(s.charts.get('history-shift-chart').unit,'Minutes');assert.deepEqual(Array.from(s.charts.get('history-shift-chart').series[0].values),[2]);assert.deepEqual(Array.from(s.charts.get('history-shift-chart').series[2].values),[null]);
+ const t=prepare('report-analytics.js');action=t.element('history-analysis-run').onclick();t.pending[0].resolve({totals:{visits:4,answered:3,abandoned:1,sla_percent:100},trends:[{bucket:'2026-10-01',visits:4,answered:3,abandoned:1,average_wait_seconds:2,sla_percent:100,incomplete:0}],queues:[{queue:'8001',asa_seconds:2,wait_percentiles:{p50_seconds:2,p90_seconds:4,p95_seconds:5},longest_wait_seconds:5,abandon_percent:25,sla_numerator:3,sla_denominator:3,unknown_wait:0}],heatmap:[]});await action;
+ assert.deepEqual(Array.from(t.charts.get('history-analysis-chart').series[0].values),[3]);assert.deepEqual(Array.from(t.charts.get('history-queue-wait-chart').series[2].values),[4]);t.element('history-filters').listeners.change();assert.equal(t.charts.size,0);
+}
+(async()=>{await chartAdapters();await reporting();await plans();await transcripts();await exportRecovery();await journey();await customerSegments();console.log('Reporting frontend: failure, stale-response, transcript, export recovery, journey and customer-segment lifecycle checks passed');})().catch(error=>{console.error(error);process.exitCode=1;});

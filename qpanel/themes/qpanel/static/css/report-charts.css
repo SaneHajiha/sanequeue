@@ -1,0 +1,11 @@
+/* Static report charts: no motion; tokens inherit the surrounding report theme. */
+.sq-report-chart{margin:1rem 0;padding:1rem;border:1px solid var(--border-color,#94a3b8);border-radius:12px;background:var(--card-bg,transparent);color:inherit;min-width:0}
+.sq-report-chart figcaption{display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:baseline;margin-bottom:.5rem;overflow-wrap:anywhere}
+.sq-report-chart figcaption strong{font-size:1.05rem}.sq-report-chart figcaption span,.sq-chart-note{font-size:.9rem}
+.sq-chart-legend,.sq-chart-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem 1.2rem}.sq-chart-legend{list-style:none;padding:0;margin:.7rem 0}.sq-chart-legend li{display:flex;gap:.4rem;align-items:center}.sq-chart-swatch{width:.8rem;height:.8rem;display:inline-block;border-radius:3px;border:1px solid currentColor}
+.sq-chart-viewport{overflow:auto;max-height:38rem;border:1px solid #cbd5e1;border-radius:6px;background:#fff;direction:ltr}.sq-chart-viewport svg{display:block;width:100%;min-width:780px;height:auto}
+.sq-report-chart details{margin:.7rem 0;overflow:auto}.sq-report-chart summary{cursor:pointer;padding:.35rem 0}.sq-chart-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}.sq-chart-table caption{text-align:start;padding:.6rem}.sq-chart-table th,.sq-chart-table td{padding:.5rem;border:1px solid var(--border-color,#94a3b8);text-align:start;white-space:normal;overflow-wrap:anywhere}.sq-chart-table thead th{font-weight:700}
+.sq-chart-actions button{min-height:2.5rem;padding:.4rem .9rem;border:1px solid currentColor;border-radius:6px;background:transparent;color:inherit;cursor:pointer}.sq-chart-actions button:focus-visible,.sq-report-chart summary:focus-visible{outline:3px solid #2563eb;outline-offset:3px}.sq-chart-actions button:disabled{opacity:.55;cursor:wait}.sq-chart-warning{border-inline-start:4px solid #b45309;padding-inline-start:.6rem;font-weight:600}
+@media print{.sq-chart-actions{display:none}.sq-chart-viewport{max-height:none;overflow:visible}.sq-chart-viewport svg{min-width:0}}
+
+.sq-chart-viewport{background:var(--card,#fff)}.sq-chart-viewport svg>.sq-chart-background{fill:var(--card,#fff)}.sq-chart-viewport .sq-chart-label{fill:var(--ink,#172033)}
