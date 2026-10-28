@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from qpanel.local_accounts import read_accounts,set_account
 from sanequeue.realtime.local_inventory import snapshot
+from scripts.module_control import allowed_start_units,collector_acceptance_required
 
 BEGIN='; BEGIN SANEQUEUE MANAGED ACCESS'
 END='; END SANEQUEUE MANAGED ACCESS'
@@ -14,6 +15,14 @@ REPORTING_UNITS=('sanequeue-reporting.service','sanequeue-reporting-export.servi
 
 
 def manager_block(original,collector_secret,control_secret):
+    # Never replace an ambiguous or partially edited managed access block.
+    starts=[match.start() for match in re.finditer(re.escape(BEGIN),original)]
+    ends=[match.start() for match in re.finditer(re.escape(END),original)]
+    if (len(starts)!=len(ends) or len(starts)>1 or
+            (starts and (starts[0]>=ends[0] or
+             not re.search(r'(?m)^'+re.escape(BEGIN)+r'\r?$',original) or
+             not re.search(r'(?m)^'+re.escape(END)+r'\r?$',original)))):
+        raise ValueError('ambiguous_managed_ami_block')
     block=BEGIN+'\n'
     for name,secret,write in (('sanequeue_collector_auto',collector_secret,'reporting'),('sanequeue_control_auto',control_secret,'agent,call,originate,reporting')):
         read='system,call,agent,reporting'+(',dialplan' if name=='sanequeue_collector_auto' else '')
@@ -58,6 +67,26 @@ def validate_origin(value):
         raise ValueError('invalid_public_origin')
     if parsed.port is not None and not 1<=parsed.port<=65535:raise ValueError('invalid_public_origin')
     return value.rstrip('/')
+
+
+def activate_telephony(run,state_dir=Path('/var/lib/sanequeue')):
+    """Final, separately reported stage; busy PBX leaves its idle-guarded timer pending.
+
+    This does not certify that dialplan changes have been applied. The existing
+    adapter owns its idle check, PBX-file rollback and /run/sanequeue/pbx-status.json.
+    """
+    if (Path(state_dir)/'module.disabled').exists():return {'state':'pending','reason':'global_module_disabled'}
+    result={'state':'pending','reason':'check_pbx_adapter_status','timer_started':False,'apply_command_succeeded':False}
+    try:run(['systemctl','enable','--now','sanequeue-pbx-apply.timer']);result['timer_started']=True
+    except Exception:return result
+    try:run(['systemctl','start','sanequeue-pbx-apply.service']);result['apply_command_succeeded']=True
+    except Exception:pass
+    # On an upgrade this is a no-op for an already-running FastAGI process; do
+    # not interrupt it merely because the web/worker source release changed.
+    try:run(['systemctl','enable','--now','sanequeue-fastagi.service'])
+    except Exception:pass
+    if result['apply_command_succeeded']:result.update(state='apply_command_succeeded',reason='verify_pbx_adapter_status')
+    return result
 
 
 def main():
@@ -108,7 +137,7 @@ def main():
     created_control_link=False
     changed=[]
     try:
-        for unit in ('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer','sanequeue-fastagi.service','sanequeue-pbx-apply.timer','sanequeue-pbx-apply.service')+REPORTING_UNITS:
+        for unit in ('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer','sanequeue-pbx-apply.timer','sanequeue-pbx-apply.service')+REPORTING_UNITS:
             if active[unit] or (Path('/etc/systemd/system')/unit).exists():
                 run(['systemctl','stop',unit])
         if etc.exists():shutil.copytree(etc,backup/'etc')
@@ -147,6 +176,8 @@ def main():
         if not existing:set_account(state/'local_accounts.json',username,'admin',phone,password)
         accounts=read_accounts(state/'local_accounts.json');cfg['users']={u:a['password_hash'] for u,a in accounts.items()};cfg['roles']={u:a['role'] for u,a in accounts.items()}
         if not cfg.has_section('sanequeue'):cfg.add_section('sanequeue')
+        # Keep the legacy per-HTTP queue_log importer off. The installed ASGI
+        # app mounts bounded historical APIs on STATE/history.sqlite3 instead.
         cfg['sanequeue'].update(queue_log_path='/var/log/asterisk/queue_log',report_database=str(state/'reports.sqlite3'),reports_enabled='false')
         import io
         output=io.StringIO();cfg.write(output);private(etc/'config.ini',output.getvalue())
@@ -207,19 +238,19 @@ MediaJobs(s).initialize()
         redis_unit=f'[Unit]\nDescription=SaneQueue private Redis cache\nAfter=network.target\n[Service]\nUser=sanequeue\nGroup=sanequeue\nExecStart={redis} /etc/sanequeue/redis.conf\nRestart=on-failure\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=strict\nProtectHome=true\n[Install]\nWantedBy=multi-user.target\n'
         Path('/etc/systemd/system/sanequeue-redis.service').write_text(redis_unit)
         run(['systemctl','daemon-reload']);run(['systemctl','restart','sanequeue-redis'])
-        run(['systemctl','start','sanequeue-inventory.service'])
+        if allowed_start_units(('sanequeue-inventory.service',),etc):run(['systemctl','start','sanequeue-inventory.service'])
         (Path('/var/lib/asterisk/sounds/custom')).mkdir(parents=True,exist_ok=True)
-        run(['systemctl','start','sanequeue-pbx-apply.service'])
-        run(['systemctl','enable','--now','sanequeue-inventory.timer','sanequeue-collector.service','sanequeue.service','sanequeue-redis.service','sanequeue-pbx-apply.timer','sanequeue-fastagi.service'])
-        run(['systemctl','enable','--now','sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-media.service'])
-        if (etc/'reporting-ai.enabled').is_file() and (etc/'reporting-ai.env').is_file():
+        run(['systemctl','enable','--now',*allowed_start_units(('sanequeue-inventory.timer','sanequeue-collector.service','sanequeue.service','sanequeue-redis.service'),etc)])
+        reporting_start=allowed_start_units(('sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-media.service'),etc)
+        if reporting_start:run(['systemctl','enable','--now',*reporting_start])
+        if (etc/'reporting-ai.enabled').is_file() and (etc/'reporting-ai.env').is_file() and allowed_start_units(('sanequeue-reporting-ai.service',),etc):
             run(['systemctl','enable','--now','sanequeue-reporting-ai.service'])
-        if (etc/'generative.enabled').is_file() and (etc/'generative.json').is_file():
+        if (etc/'generative.enabled').is_file() and (etc/'generative.json').is_file() and allowed_start_units(('sanequeue-generative.service',),etc):
             run(['systemctl','enable','--now','sanequeue-generative.service'])
         from redis import Redis
         cache=Redis(host='127.0.0.1',port=16379,password=redis_secret,socket_timeout=3)
-        maintenance=(state/'module.disabled').exists()
-        ready=maintenance
+        # Disabled monitoring is an intentional install state, not a live-health pass.
+        ready=not collector_acceptance_required(state,etc)
         for _ in range(30):
             if ready:break
             raw=cache.get('sanequeue:{primary}:health')
@@ -239,14 +270,18 @@ MediaJobs(s).initialize()
             if gateway_ready:break
             time.sleep(1)
         if not gateway_ready:raise RuntimeError('gateway_acceptance_failed')
+        (backup/'result.json').write_text(json.dumps({'release':str(release),'previous_source':old_link,'origin':origin,'succeeded':True,'telephony_apply':'pending_separate_stage'}))
+        telephony=activate_telephony(run,state)
         print('SaneQueue installed. Open '+origin+'/operations')
+        print('Telephone integration: '+json.dumps(telephony)+'; verify PBX adapter status. Busy calls defer dialplan changes; the timer retries when idle.')
         print('Queues and internal phones are discovered automatically. No default administrator password exists.')
         print('Private rollback backup: '+str(backup))
-        (backup/'result.json').write_text(json.dumps({'release':str(release),'previous_source':old_link,'origin':origin,'succeeded':True}))
     except Exception:
         if created_control_link:
             control_link.unlink(missing_ok=True)
-        for unit in units:subprocess.run(['systemctl','stop',unit],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        for unit in units:
+            if unit=='sanequeue-fastagi.service' and active[unit]:continue
+            subprocess.run(['systemctl','stop',unit],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         if link.is_symlink():link.unlink()
         if old_physical and old_physical.exists():old_physical.rename(link)
         elif old_link:link.symlink_to(old_link,target_is_directory=True)

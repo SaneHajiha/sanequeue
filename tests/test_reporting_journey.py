@@ -347,7 +347,8 @@ class JourneyTests(unittest.TestCase):
             self.assertEqual(tuple(target),('',None))
             edges=db.execute('SELECT relation FROM evidence_edges WHERE event_id=?',(event_id,)).fetchall()
             self.assertEqual([row[0] for row in edges],['transfer_second_channel'])
-            self.assertEqual(db.execute('SELECT version FROM report_projection_version').fetchone()[0],9)
+            from sanequeue.reporting.facts import PROJECTION_VERSION
+            self.assertEqual(db.execute('SELECT version FROM report_projection_version').fetchone()[0],PROJECTION_VERSION)
 
     def test_second_initiator_graph_is_not_transfer_target_or_audio_permission(self):
         self.seed(*self.visit('private-root-uid'),*self.visit('private-peer-uid',stamp=102),

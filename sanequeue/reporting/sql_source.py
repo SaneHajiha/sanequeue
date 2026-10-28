@@ -18,7 +18,7 @@ from .sources import sql_event
 FIELDS={
  'cdr':('calldate','clid','src','dst','dcontext','channel','dstchannel','lastapp','lastdata',
         'duration','billsec','disposition','uniqueid','linkedid','sequence','did','recordingfile','outbound_cnum','outbound_cid'),
- 'cel':('id','eventtype','eventtime','channame','uniqueid','linkedid','peer','eventextra','context','appname','appdata')}
+ 'cel':('id','eventtype','eventtime','channame','uniqueid','linkedid','peer','eventextra','context','appname','appdata','userdeftype')}
 
 
 def identifier(value):
@@ -96,8 +96,11 @@ class SQLSource:
         return event
 
     @staticmethod
-    def _anchor(event):
-        return hashlib.sha256(json.dumps(event.payload,sort_keys=True,ensure_ascii=False,allow_nan=False).encode()).hexdigest()
+    def _anchor(event,*,legacy=False):
+        # The pre-v2 SQL field set omitted userdeftype. Validate that old
+        # contract once, then pin the complete current payload in a v2 anchor.
+        payload={key:value for key,value in event.payload.items() if not legacy or key!='userdeftype'}
+        return hashlib.sha256(json.dumps(payload,sort_keys=True,ensure_ascii=False,allow_nan=False).encode()).hexdigest()
 
     def ingest(self,archive,*,limit=250,now=None):
         limit=max(1,min(500,int(limit)));now=time.time() if now is None else float(now)
@@ -111,10 +114,14 @@ class SQLSource:
                 cursor.execute('SET SESSION max_statement_time=1' if 'mariadb' in version.lower() else 'SET SESSION max_execution_time=1000')
                 self._columns(cursor,'cdr')
                 columns=self._columns(cursor,'cel');after=int(checkpoint.get('after_id',0))
+                anchor_event=None
                 if after:
                     cursor.execute('SELECT '+columns+' FROM '+self._table('cel')+' WHERE `id`=%s',(after,))
                     anchor=cursor.fetchone()
-                    if anchor is None or self._anchor(self._event('cel',anchor))!=checkpoint.get('anchor'):
+                    anchor_version=checkpoint.get('anchor_version',1)
+                    if anchor_version not in (1,2) or anchor is None:raise ValueError('cel_source_reset_requires_new_generation')
+                    anchor_event=self._event('cel',anchor)
+                    if self._anchor(anchor_event,legacy=anchor_version==1)!=checkpoint.get('anchor'):
                         raise ValueError('cel_source_reset_requires_new_generation')
                 # Drain independently of the next CEL batch. A full queue must
                 # not prevent the work which frees its own capacity. Verify
@@ -136,8 +143,8 @@ class SQLSource:
                             count+=1
                         db.execute('''INSERT INTO sql_cdr_pending VALUES(?,?,?,?,?) ON CONFLICT(pbx,uid)
                           DO UPDATE SET due=MIN(due,excluded.due)''',(archive.pbx,uid,now+2,0,now))
-                value=dict(after_id=int(rows[-1]['id']) if rows else after,
-                           anchor=self._anchor(events[-1]) if events else checkpoint.get('anchor'),observed=now)
+                value=dict(after_id=int(rows[-1]['id']) if rows else after,anchor_version=2,
+                           anchor=self._anchor(events[-1]) if events else self._anchor(anchor_event) if anchor_event else checkpoint.get('anchor'),observed=now)
                 inserted=archive.append(events,checkpoint_source=name,checkpoint=value,update_state=enqueue)
                 result=dict(cel_inserted=inserted,cel_rows=len(rows),cel_caught_up=len(rows)<limit)
                 result.update(pending_result)

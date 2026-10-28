@@ -29,10 +29,14 @@
    const overview=nav.querySelector('button[data-view="reports"]');
    const destinations=[...(overview?[{target:'history-summary-section',button:overview}]:[]),
     ...[...nav.querySelectorAll('[data-module-view="reports"]')].map(button=>({target:button.dataset.moduleTarget,button}))];
+   const reportGroups=new Map(),fa=document.documentElement.lang==='fa';
    for(const destination of destinations){
     if(!report.querySelector('#'+destination.target))continue;
     const option=document.createElement('option');option.value=destination.target;
-    option.textContent=destination.button.textContent.trim();reportPicker.append(option);
+    option.textContent=destination.button.textContent.trim();
+    const family=destination.button.closest('[data-report-family]')?.dataset.reportFamily||'contact-center';
+    if(!reportGroups.has(family)){const group=document.createElement('optgroup');group.label=({pbx:fa?'مرکز تلفن':'PBX','contact-center':fa?'کال‌سنتر و صف':'Contact center & queues',shared:fa?'ابزارهای مشترک':'Shared tools'})[family]||family;reportGroups.set(family,group);reportPicker.append(group);}
+    reportGroups.get(family).append(option);
    }
    reportPicker.addEventListener('change',()=>{
     const destination=destinations.find(item=>item.target===reportPicker.value);

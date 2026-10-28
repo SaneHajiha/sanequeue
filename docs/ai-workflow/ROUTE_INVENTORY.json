@@ -1,0 +1,1016 @@
+[
+  {
+    "file": "qpanel/app.py",
+    "line": 180,
+    "path": "/login",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "login"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 214,
+    "path": "/login_external",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "login_external"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 367,
+    "path": "/",
+    "methods": [
+      "GET"
+    ],
+    "handler": "home"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 379,
+    "path": "/queue/<name>",
+    "methods": [
+      "GET"
+    ],
+    "handler": "queue"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 389,
+    "path": "/all_queues",
+    "methods": [
+      "GET"
+    ],
+    "handler": "all_queues"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 401,
+    "path": "/queue/<name>.json",
+    "methods": [
+      "GET"
+    ],
+    "handler": "queue_json"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 409,
+    "path": "/queues",
+    "methods": [
+      "GET"
+    ],
+    "handler": "queues"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 416,
+    "path": "/lang",
+    "methods": [
+      "GET"
+    ],
+    "handler": "language"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 417,
+    "path": "/lang/<language>",
+    "methods": [
+      "GET"
+    ],
+    "handler": "language"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 427,
+    "path": "/check_new_version",
+    "methods": [
+      "GET"
+    ],
+    "handler": "check_new_version"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 440,
+    "path": "/logout",
+    "methods": [
+      "GET"
+    ],
+    "handler": "logout"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 449,
+    "path": "/spy",
+    "methods": [
+      "POST"
+    ],
+    "handler": "spy"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 458,
+    "path": "/whisper",
+    "methods": [
+      "POST"
+    ],
+    "handler": "whisper"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 467,
+    "path": "/barge",
+    "methods": [
+      "POST"
+    ],
+    "handler": "barge"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 476,
+    "path": "/hangup",
+    "methods": [
+      "POST"
+    ],
+    "handler": "hangup_call"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 484,
+    "path": "/stats/<from_date>/<to_date>/<name>.json",
+    "methods": [
+      "GET"
+    ],
+    "handler": "stats_json"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 496,
+    "path": "/stats",
+    "methods": [
+      "GET"
+    ],
+    "handler": "stats"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 498,
+    "path": "/stats/<name>/<from_date>/<to_date>",
+    "methods": [
+      "GET"
+    ],
+    "handler": "stats"
+  },
+  {
+    "file": "qpanel/app.py",
+    "line": 514,
+    "path": "/remove_from_queue",
+    "methods": [
+      "POST"
+    ],
+    "handler": "remove_from_queue"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 169,
+    "path": "/operations",
+    "methods": [
+      "GET"
+    ],
+    "handler": "ops_home"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 192,
+    "path": "/api/notifications",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "ops_notifications"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 205,
+    "path": "/api/notifications/test",
+    "methods": [
+      "POST"
+    ],
+    "handler": "ops_notifications_test"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 222,
+    "path": "/api/notifications/destinations",
+    "methods": [
+      "POST"
+    ],
+    "handler": "ops_notification_destinations"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 238,
+    "path": "/api/operations",
+    "methods": [
+      "GET"
+    ],
+    "handler": "ops_data"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 321,
+    "path": "/api/members/pause",
+    "methods": [
+      "POST"
+    ],
+    "handler": "pause_member"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 392,
+    "path": "/api/profile/dial",
+    "methods": [
+      "POST"
+    ],
+    "handler": "ops_control"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 393,
+    "path": "/api/control",
+    "methods": [
+      "POST"
+    ],
+    "handler": "ops_control"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 536,
+    "path": "/api/audit",
+    "methods": [
+      "GET"
+    ],
+    "handler": "ops_audit"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 558,
+    "path": "/api/commands/<ident>",
+    "methods": [
+      "GET"
+    ],
+    "handler": "command_state"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 567,
+    "path": "/api/control/options",
+    "methods": [
+      "GET"
+    ],
+    "handler": "control_options"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 603,
+    "path": "/api/quality",
+    "methods": [
+      "GET"
+    ],
+    "handler": "media_quality"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 625,
+    "path": "/api/queue/summary",
+    "methods": [
+      "GET"
+    ],
+    "handler": "ops_queue_summary"
+  },
+  {
+    "file": "qpanel/operations.py",
+    "line": 636,
+    "path": "/api/reports",
+    "methods": [
+      "GET"
+    ],
+    "handler": "ops_reports"
+  },
+  {
+    "file": "qpanel/theme_support.py",
+    "line": 13,
+    "path": "/_themes/<theme_name>/<path:filename>",
+    "methods": [
+      "GET"
+    ],
+    "handler": "theme_assets"
+  },
+  {
+    "file": "qpanel/theme_support.py",
+    "line": 19,
+    "path": "/assets/<path:filename>",
+    "methods": [
+      "GET"
+    ],
+    "handler": "sanequeue_assets"
+  },
+  {
+    "file": "sanequeue/api/activity.py",
+    "line": 38,
+    "path": "/api/activity/daily",
+    "methods": [
+      "GET"
+    ],
+    "handler": "activity_daily"
+  },
+  {
+    "file": "sanequeue/api/activity.py",
+    "line": 39,
+    "path": "/api/profile/activity",
+    "methods": [
+      "GET"
+    ],
+    "handler": "activity_daily"
+  },
+  {
+    "file": "sanequeue/api/customer_segments.py",
+    "line": 36,
+    "path": "/api/history/customer-segments",
+    "methods": [
+      "GET"
+    ],
+    "handler": "segments_report"
+  },
+  {
+    "file": "sanequeue/api/customer_segments.py",
+    "line": 48,
+    "path": "/api/history/customer-segments/vip",
+    "methods": [
+      "POST"
+    ],
+    "handler": "segments_vip"
+  },
+  {
+    "file": "sanequeue/api/diagnostics.py",
+    "line": 138,
+    "path": "/api/diagnostics/source-health",
+    "methods": [
+      "GET"
+    ],
+    "handler": "diagnostics_source_health"
+  },
+  {
+    "file": "sanequeue/api/diagnostics.py",
+    "line": 151,
+    "path": "/api/diagnostics/incidents",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "diagnostics_incidents"
+  },
+  {
+    "file": "sanequeue/api/diagnostics.py",
+    "line": 215,
+    "path": "/api/diagnostics/incidents/<ident>",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "diagnostics_incident"
+  },
+  {
+    "file": "sanequeue/api/generative.py",
+    "line": 65,
+    "path": "/api/history/generative-jobs",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "generative_jobs"
+  },
+  {
+    "file": "sanequeue/api/generative.py",
+    "line": 84,
+    "path": "/api/history/generative-jobs/<ident>",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "generative_job"
+  },
+  {
+    "file": "sanequeue/api/report_builder.py",
+    "line": 59,
+    "path": "/api/history/builder/templates",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "builder_templates"
+  },
+  {
+    "file": "sanequeue/api/report_builder.py",
+    "line": 69,
+    "path": "/api/history/builder/templates/<ident>",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "builder_template"
+  },
+  {
+    "file": "sanequeue/api/report_builder.py",
+    "line": 81,
+    "path": "/api/history/builder/preview",
+    "methods": [
+      "POST"
+    ],
+    "handler": "builder_preview"
+  },
+  {
+    "file": "sanequeue/api/report_builder.py",
+    "line": 95,
+    "path": "/api/history/builder/export.csv",
+    "methods": [
+      "POST"
+    ],
+    "handler": "builder_export"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 212,
+    "path": "/api/history/export-jobs",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "history_export_jobs"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 249,
+    "path": "/api/history/export-jobs/<ident>/cancel",
+    "methods": [
+      "POST"
+    ],
+    "handler": "history_export_cancel"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 263,
+    "path": "/api/history/export-jobs/<ident>/download",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_export_download"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 309,
+    "path": "/api/history/plans",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "history_plans"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 338,
+    "path": "/api/history/plans/<ident>/archive",
+    "methods": [
+      "POST"
+    ],
+    "handler": "history_plan_archive"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 345,
+    "path": "/api/history/plans/<ident>/run",
+    "methods": [
+      "POST"
+    ],
+    "handler": "history_plan_run"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 379,
+    "path": "/api/history/plans/<ident>/runs",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_plan_runs"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 392,
+    "path": "/api/history/overview",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_overview"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 406,
+    "path": "/api/history/agent-rankings",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_agent_rankings"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 419,
+    "path": "/api/history/visits",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_visits"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 430,
+    "path": "/api/history/analytics",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_analytics"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 443,
+    "path": "/api/history/adherence",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_adherence"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 456,
+    "path": "/api/history/followup",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_followup"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 486,
+    "path": "/api/history/cdr",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_cdr"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 504,
+    "path": "/api/history/cdr/summary",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_cdr_summary"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 544,
+    "path": "/api/history/work-sessions",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "history_work_sessions"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 576,
+    "path": "/api/history/work-sessions/<ident>/close",
+    "methods": [
+      "POST"
+    ],
+    "handler": "history_work_close"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 590,
+    "path": "/api/history/work-sessions/<ident>/summary",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_work_summary"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 598,
+    "path": "/api/history/work-sessions/<ident>/calls",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_work_calls"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 616,
+    "path": "/api/history/work-sessions/<ident>/calls/<recording_id>/recording",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_work_recording"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 636,
+    "path": "/api/history/outbound-pauses/summary",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_outbound_summary"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 647,
+    "path": "/api/history/agents",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_agents"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 654,
+    "path": "/api/history/agent-metrics",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_agent_metrics"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 661,
+    "path": "/api/history/activity",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_activity"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 670,
+    "path": "/api/history/activity/intervals",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_activity_intervals"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 680,
+    "path": "/api/history/outbound-pauses",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_outbound_pauses"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 699,
+    "path": "/api/history/outbound-pauses/<recording_id>/recording",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_outbound_recording"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 757,
+    "path": "/api/history/visits/<visit_id>/recordings/<recording_id>/ai",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "history_ai_recording"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 776,
+    "path": "/api/history/transcripts/search",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_transcript_search"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 799,
+    "path": "/api/history/ai-jobs/<ident>",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "history_ai_job"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 815,
+    "path": "/api/history/quality/forms",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "history_quality_forms"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 830,
+    "path": "/api/history/quality/summary",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_quality_summary"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 837,
+    "path": "/api/history/visits/<visit_id>/reviews",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "history_quality_reviews"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 895,
+    "path": "/api/history/visits/<visit_id>/recordings/<recording_id>/access",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_recording_access"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 908,
+    "path": "/api/history/outbound-pauses/<recording_id>/access",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_outbound_access"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 924,
+    "path": "/api/history/visits/<visit_id>/journey",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_journey"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 939,
+    "path": "/api/history/visits/<visit_id>",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_detail"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 964,
+    "path": "/api/history/visits/<visit_id>/recordings/<recording_id>",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_recording"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 1039,
+    "path": "/api/history/export.csv",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_export"
+  },
+  {
+    "file": "sanequeue/api/reports.py",
+    "line": 1040,
+    "path": "/api/history/export.xlsx",
+    "methods": [
+      "GET"
+    ],
+    "handler": "history_export"
+  },
+  {
+    "file": "sanequeue/api/ring_attempts.py",
+    "line": 34,
+    "path": "/api/history/ring-attempts.csv",
+    "methods": [
+      "GET"
+    ],
+    "handler": "ring_attempts_report"
+  },
+  {
+    "file": "sanequeue/api/ring_attempts.py",
+    "line": 35,
+    "path": "/api/history/ring-attempts",
+    "methods": [
+      "GET"
+    ],
+    "handler": "ring_attempts_report"
+  },
+  {
+    "file": "sanequeue/pbx/features.py",
+    "line": 163,
+    "path": "/api/pbx/features",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "feature_settings"
+  },
+  {
+    "file": "sanequeue/pbx/features.py",
+    "line": 179,
+    "path": "/api/pbx/features/audio",
+    "methods": [
+      "POST"
+    ],
+    "handler": "upload_prompt"
+  },
+  {
+    "file": "sanequeue/pbx/features.py",
+    "line": 187,
+    "path": "/api/pbx/features/audio/<slot>",
+    "methods": [
+      "GET"
+    ],
+    "handler": "play_prompt"
+  },
+  {
+    "file": "sanequeue/pbx/features.py",
+    "line": 197,
+    "path": "/api/pbx/features/preview",
+    "methods": [
+      "POST"
+    ],
+    "handler": "preview_number"
+  },
+  {
+    "file": "sanequeue/pbx/incidents.py",
+    "line": 241,
+    "path": "/api/pbx/incidents",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "incident_notices"
+  },
+  {
+    "file": "sanequeue/pbx/incidents.py",
+    "line": 255,
+    "path": "/api/pbx/incidents/audio",
+    "methods": [
+      "POST"
+    ],
+    "handler": "incident_upload"
+  },
+  {
+    "file": "sanequeue/pbx/incidents.py",
+    "line": 275,
+    "path": "/api/pbx/incidents/media/<ident>",
+    "methods": [
+      "GET"
+    ],
+    "handler": "incident_media_status"
+  },
+  {
+    "file": "sanequeue/pbx/incidents.py",
+    "line": 289,
+    "path": "/api/pbx/incidents/audio/<ident>",
+    "methods": [
+      "GET"
+    ],
+    "handler": "incident_audio"
+  },
+  {
+    "file": "sanequeue/security/organization.py",
+    "line": 68,
+    "path": "/organization/logo",
+    "methods": [
+      "GET"
+    ],
+    "handler": "organization_logo"
+  },
+  {
+    "file": "sanequeue/security/organization.py",
+    "line": 75,
+    "path": "/api/organization",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "organization_settings"
+  },
+  {
+    "file": "sanequeue/security/organization.py",
+    "line": 91,
+    "path": "/api/module",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "module_settings"
+  },
+  {
+    "file": "sanequeue/security/profile.py",
+    "line": 43,
+    "path": "/api/profile",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "sq_profile"
+  },
+  {
+    "file": "sanequeue/security/profile.py",
+    "line": 111,
+    "path": "/api/profile/avatar",
+    "methods": [
+      "GET"
+    ],
+    "handler": "sq_profile_avatar"
+  },
+  {
+    "file": "sanequeue/surveys/api.py",
+    "line": 61,
+    "path": "/api/surveys/forms",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "survey_forms"
+  },
+  {
+    "file": "sanequeue/surveys/api.py",
+    "line": 81,
+    "path": "/api/surveys/report",
+    "methods": [
+      "GET"
+    ],
+    "handler": "survey_report"
+  },
+  {
+    "file": "sanequeue/surveys/api.py",
+    "line": 95,
+    "path": "/api/surveys/sessions/<ident>",
+    "methods": [
+      "GET"
+    ],
+    "handler": "survey_detail"
+  },
+  {
+    "file": "sanequeue/surveys/voice_feedback_api.py",
+    "line": 70,
+    "path": "/api/voice-feedback",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "voice_feedback_collection"
+  },
+  {
+    "file": "sanequeue/surveys/voice_feedback_api.py",
+    "line": 96,
+    "path": "/api/voice-feedback/<ident>",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "handler": "voice_feedback_detail"
+  },
+  {
+    "file": "sanequeue/surveys/voice_feedback_api.py",
+    "line": 111,
+    "path": "/api/voice-feedback/<ident>/audio/<action>",
+    "methods": [
+      "GET"
+    ],
+    "handler": "voice_feedback_audio"
+  },
+  {
+    "file": "sanequeue/surveys/voice_feedback_api.py",
+    "line": 120,
+    "path": "/api/voice-feedback/<ident>/audit",
+    "methods": [
+      "GET"
+    ],
+    "handler": "voice_feedback_audit"
+  }
+]

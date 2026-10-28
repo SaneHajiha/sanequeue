@@ -1,0 +1,284 @@
+[
+  [
+    "live",
+    "مرکز عملیات",
+    "Overview",
+    ""
+  ],
+  [
+    "queues",
+    "وضعیت صف‌ها",
+    "Queue status",
+    ""
+  ],
+  [
+    "calls",
+    "تماس‌های جاری",
+    "Active calls",
+    "calls-count"
+  ],
+  [
+    "waiting",
+    "تماس‌های منتظر",
+    "Waiting calls",
+    "waiting-nav-count"
+  ],
+  [
+    "wallboard",
+    "دیوار نمایش",
+    "Wallboard",
+    ""
+  ],
+  [
+    "reports",
+    "نمای کلی گزارش‌ها",
+    "Report overview",
+    ""
+  ],
+  [
+    "reports",
+    "history-cdr-section",
+    "ترافیک خطوط و CDR",
+    "Trunk traffic & CDR"
+  ],
+  [
+    "reports",
+    "history-calls-section",
+    "تماس‌ها و فایل صوتی",
+    "Calls & recordings"
+  ],
+  [
+    "reports",
+    "history-analysis-section",
+    "روندها و تحلیل صف",
+    "Queue trends & analysis"
+  ],
+  [
+    "reports",
+    "history-agents-section",
+    "عملکرد کارشناسان",
+    "Agent performance"
+  ],
+  [
+    "reports",
+    "history-agent-rankings-section",
+    "مقایسه و رتبه‌بندی کارشناس",
+    "Agent comparison & rankings"
+  ],
+  [
+    "reports",
+    "history-ring-attempts-section",
+    "زنگ داخلی بدون پاسخ",
+    "Unanswered ring attempts"
+  ],
+  [
+    "reports",
+    "history-agent-metrics-section",
+    "زمان رسیدگی و اشغال",
+    "Handling & occupancy evidence"
+  ],
+  [
+    "reports",
+    "history-shifts-section",
+    "پایبندی و تأخیر شیفت",
+    "Shift adherence & lateness"
+  ],
+  [
+    "reports",
+    "history-activity-section",
+    "حضور و علت توقف",
+    "Duty & pause reasons"
+  ],
+  [
+    "reports",
+    "history-intervals-section",
+    "ریز تغییر وضعیت",
+    "State intervals"
+  ],
+  [
+    "reports",
+    "history-outbound-section",
+    "تماس حین توقف",
+    "Calls during pauses"
+  ],
+  [
+    "reports",
+    "history-work-section",
+    "هپی‌کال و نظرسنجی",
+    "Happy calls & surveys"
+  ],
+  [
+    "reports",
+    "history-followup-section",
+    "مراجعه پس از رهاشدن",
+    "Contact after abandonment"
+  ],
+  [
+    "reports",
+    "history-customer-segments-section",
+    "مشتریان مهم و مسدودی",
+    "VIP & blocked observations"
+  ],
+  [
+    "reports",
+    "history-builder-section",
+    "گزارش‌ساز",
+    "Report builder"
+  ],
+  [
+    "reports",
+    "history-export-jobs-section",
+    "خروجی‌های پس‌زمینه",
+    "Background exports"
+  ],
+  [
+    "reports",
+    "history-plan-section",
+    "قالب و زمان‌بندی گزارش",
+    "Report plans & schedules"
+  ],
+  [
+    "reports",
+    "history-transcript-section",
+    "جست‌وجوی متن مکالمه",
+    "Transcript search"
+  ],
+  [
+    "reports",
+    "history-quality-section",
+    "کنترل کیفیت مکالمه",
+    "Call quality reviews"
+  ],
+  [
+    "surveys",
+    "نظرسنجی کلیدی مشتری",
+    "Customer DTMF surveys",
+    ""
+  ],
+  [
+    "surveys",
+    "survey-design",
+    "طراحی فرم نظرسنجی",
+    "Survey form design"
+  ],
+  [
+    "surveys",
+    "survey-results",
+    "پاسخ‌ها و شاخص رضایت",
+    "Responses & satisfaction"
+  ],
+  [
+    "agents",
+    "کارشناسان و عضویت صف",
+    "Agents & membership",
+    "agent-count"
+  ],
+  [
+    "presence",
+    "داخلی‌ها و حضور",
+    "Extensions & presence",
+    ""
+  ],
+  [
+    "shifts",
+    "برنامه شیفت",
+    "Shift planning",
+    ""
+  ],
+  [
+    "control",
+    "کنترل تماس",
+    "Call controls",
+    ""
+  ],
+  [
+    "directory",
+    "دفترچه تلفن",
+    "Directory",
+    ""
+  ],
+  [
+    "telephony",
+    "تنظیمات ماژول‌های تلفنی",
+    "Telephone module settings",
+    ""
+  ],
+  [
+    "telephony",
+    "telephony-waiting",
+    "انتظار داخلی و کال‌بک",
+    "Extension waiting & callback"
+  ],
+  [
+    "telephony",
+    "telephony-callerid",
+    "اصلاح شماره تماس‌گیرنده",
+    "Caller ID formatting"
+  ],
+  [
+    "telephony",
+    "pbx-audio-slots",
+    "پیام‌های صوتی",
+    "Voice prompts"
+  ],
+  [
+    "telephony",
+    "callback-jobs",
+    "درخواست‌های کال‌بک",
+    "Callback requests"
+  ],
+  [
+    "telephony",
+    "incident-notices",
+    "پیام وضعیت ورودی",
+    "Inbound status notice"
+  ],
+  [
+    "alerts",
+    "هشدارهای فعال",
+    "Active alerts",
+    "alerts-nav-count"
+  ],
+  [
+    "pbx",
+    "سلامت مرکز تلفن",
+    "PBX health",
+    ""
+  ],
+  [
+    "audit",
+    "ثبت عملیات",
+    "Audit trail",
+    ""
+  ],
+  [
+    "policies",
+    "قوانین و آستانه صف‌ها",
+    "Queue rules & thresholds",
+    ""
+  ],
+  [
+    "users",
+    "کاربران و دسترسی‌ها",
+    "Users & permissions",
+    ""
+  ],
+  [
+    "settings",
+    "سازمان و سرویس",
+    "Organization & service",
+    ""
+  ],
+  [
+    "settings",
+    "notification-settings",
+    "تلگرام و بله",
+    "Telegram & Bale"
+  ],
+  [
+    "features",
+    "وضعیت قابلیت‌ها",
+    "Capability status",
+    ""
+  ]
+]

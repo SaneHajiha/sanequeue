@@ -1,4 +1,4 @@
-# نصب خودکار · beta.23
+# نصب خودکار · beta.27 pilot
 
 [English](INSTALL.md) · [راهنمای تصویری](USER_GUIDE.fa.md) · [شواهد آزمون](AUDIT_BETA23.md)
 
@@ -7,7 +7,7 @@
 روی خود سرور PBX، با کاربر root یا sudo اجرا کنید. Linux دارای systemd، Asterisk محلی، AMI فعال روی 127.0.0.1:5038، اینترنت HTTPS و مخزن بستهٔ سالم لازم است. پیش از اجرا متن اسکریپت را بررسی کنید:
 
 ```bash
-curl -fL https://raw.githubusercontent.com/SaneHajiha/sanequeue/v2.1.0-beta.24/scripts/install.sh -o /tmp/sanequeue-install.sh
+curl -fL https://raw.githubusercontent.com/SaneHajiha/sanequeue/feature/reporting-phase2/scripts/install.sh -o /tmp/sanequeue-install.sh
 sudo bash /tmp/sanequeue-install.sh
 ```
 

@@ -12,7 +12,7 @@
 
 ## محدودیت منابع و شواهد
 
-هیچ AMI، SQL مرکز تلفن یا DDL در درخواست وب اجرا نمی‌شود. خواندن از شاخص زمانی موجود آرشیو است. سقف: ۵ ثانیه یا مهلت کمتر آرشیو، ۱۰هزار رویداد منبع در کل بازه (حتی غیر RINGNOANSWER)، ۴MiB payload مرتبط، ۴KiB برای هر payload، ۱۰۰۰ گروه، ۱۰۰۰ مراجعه برای هر هویت و ۱۰هزار کاندید انتساب در کل گزارش. عبور از سقف خطای صریح می‌دهد و جمع ناقص تحویل نمی‌دهد. در آرشیو شلوغ باید بازه را کوتاه‌تر کرد؛ این مسیر به‌عنوان گزارش نامحدودِ میلیون‌ها رویداد تأیید نشده است.
+هیچ AMI، SQL مرکز تلفن یا DDL در درخواست وب اجرا نمی‌شود. در آرشیو دارای ایندکس جزئی event_ring_time، فقط رخدادهای queue_log با نوع RINGNOANSWER (از جمله نسخه‌های قدیمی پیش از حذف از شمارش) وارد بودجهٔ خواندن می‌شوند. آرشیو فاقد ایندکس از مسیر زمانی قدیمی با سقف همهٔ رخدادهای منبع، حتی غیرمرتبط، استفاده می‌کند. سقف: ۵ ثانیه یا مهلت کمتر آرشیو، ۱۰هزار ردیف در مسیر انتخاب‌شده، ۴MiB payload مرتبط، ۴KiB برای هر payload، ۱۰۰۰ گروه، ۱۰۰۰ مراجعه برای هر هویت و ۱۰هزار کاندید انتساب در کل گزارش. عبور از سقف خطای صریح می‌دهد و جمع ناقص تحویل نمی‌دهد. در آرشیو شلوغ باید بازه را کوتاه‌تر کرد؛ این مسیر به‌عنوان گزارش نامحدودِ میلیون‌ها رویداد تأیید نشده است.
 
 API: `GET /api/history/ring-attempts?from=YYYY-MM-DD&to=YYYY-MM-DD&queue=8001`؛ همان مجوز و تاریخ تهران گزارش اصلی. نسخه‌های اصلاح‌شدهٔ منبع دوبار شمرده نمی‌شوند. نبود رویداد یا سلامت فعلی منبع، پوشش کامل گذشته را اثبات نمی‌کند. صفحه‌بندی، snapshot خروجی ثابت نیست؛ دادهٔ تازه می‌تواند نتیجهٔ بازخوانی را تغییر دهد.
 
@@ -22,3 +22,5 @@ API: `GET /api/history/ring-attempts?from=YYYY-MM-DD&to=YYYY-MM-DD&queue=8001`؛
 
 
 CSV summary: /api/history/ring-attempts.csv uses the same complete filtered groups (not the visible detail page), at most 1000 groups/512 KiB, with a fresh report_export grant on every selected queue. A denied export does not remove permitted viewing. Unknown numeric values are blank; spreadsheet formulas are neutralized. The UI hides stale export controls on filter/view changes. CSV is recomputed at download time, not a pinned asynchronous export snapshot. Standard queue-visit Excel/CSV controls now live inside the queue-visit report, so another report is not accidentally exported as visits.
+
+ایندکس فقط در Archive.initialize توسط مسیر راه‌اندازی/worker ساخته می‌شود؛ درخواست وب DDL ندارد. روی آرشیو موجود، اولین ساخت می‌تواند دادهٔ گذشته را اسکن کند و باید با اولویت و سهم CPU/IO کنترل‌شده و اندازه‌گیری انجام شود. این مرحله فقط ایندکس آرشیو ساختگی تازه را روی سرور آزمایشی ساخت؛ آرشیو اصلی تغییر نکرد.

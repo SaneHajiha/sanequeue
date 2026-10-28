@@ -5,14 +5,14 @@ set -euo pipefail
 command -v systemctl >/dev/null || { echo 'A systemd Linux host is required.'; exit 1; }
 command -v asterisk >/dev/null || { echo 'Install on the PBX host.'; exit 1; }
 SOURCE=$(cd -- "$(dirname -- "$0")/.." && pwd)
-REF=${SANEQUEUE_REF:-v2.1.0-beta.26}
-[[ "$REF" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'Invalid release reference.'; exit 1; }
+REF=${SANEQUEUE_REF:-feature/reporting-phase2}
+[[ "$REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$ && "$REF" != *..* && "$REF" != */ && "$REF" != *//* ]] || { echo 'Invalid release reference.'; exit 1; }
 STAGE=$(mktemp -d /tmp/sanequeue-install.XXXXXXXX)
 cleanup() { case "$STAGE" in /tmp/sanequeue-install.*) rm -rf -- "$STAGE" ;; esac; }
 trap cleanup EXIT
 if [[ ! -f "$SOURCE/requirements/modern.txt" ]]; then
   command -v curl >/dev/null || { echo 'curl is required.'; exit 1; }
-  curl --fail --location --proto '=https' --tlsv1.2 "https://github.com/SaneHajiha/sanequeue/archive/refs/tags/$REF.tar.gz" -o "$STAGE/source.tar.gz"
+  curl --fail --location --retry 2 --connect-timeout 15 --max-time 180 --proto '=https' --tlsv1.2 "https://github.com/SaneHajiha/sanequeue/archive/$REF.tar.gz" -o "$STAGE/source.tar.gz"
   mkdir "$STAGE/source"
   tar -xzf "$STAGE/source.tar.gz" -C "$STAGE/source" --strip-components=1
   SOURCE="$STAGE/source"
@@ -44,7 +44,7 @@ VERSION=$("$PYTHON" -c "import sys;sys.path.insert(0,sys.argv[1]);import qpanel;
 [[ "$VERSION" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'Invalid package version.'; exit 1; }
 RELEASE="/opt/sanequeue-releases/${VERSION}-$(date +%Y%m%d%H%M%S)"
 install -d -m 755 "$RELEASE"
-tar -C "$SOURCE" --exclude=.git --exclude=.venv --exclude=__pycache__ --exclude=var --exclude=logs --exclude=outputs --exclude=work --exclude=config.ini --exclude='*.sqlite*' --exclude='local_*.json' --exclude=session.key --exclude='.env' -cf - . | tar -C "$RELEASE" -xf -
+tar -C "$SOURCE" --exclude=.git --exclude=.venv --exclude=__pycache__ --exclude=var --exclude=logs --exclude=output --exclude=outputs --exclude=tmp --exclude=work --exclude=.agents --exclude=node_modules --exclude=tools/ui-workbench --exclude=config.ini --exclude='*.sqlite*' --exclude='local_*.json' --exclude='ssh_*' --exclude='*.key' --exclude='*.pem' --exclude=session.key --exclude='.env' --exclude='.env.*' -cf - . | tar -C "$RELEASE" -xf -
 "$PYTHON" -m venv "$RELEASE/.venv"
 nice -n 10 "$RELEASE/.venv/bin/python" -m pip install --disable-pip-version-check --timeout 120 -r "$RELEASE/requirements/modern.txt" -r "$RELEASE/requirements/reporting.txt"
 "$RELEASE/.venv/bin/pybabel" compile -d "$RELEASE/qpanel/translations"

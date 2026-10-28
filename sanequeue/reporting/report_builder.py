@@ -1,6 +1,10 @@
 """Bounded queue-visit builder. Definitions are data, never caller-provided SQL."""
 import base64
+import csv
+import hashlib
 from contextlib import contextmanager
+from datetime import datetime
+import io
 import json
 import math
 import os
@@ -10,6 +14,7 @@ import sqlite3
 import stat
 import time
 import uuid
+from zoneinfo import ZoneInfo
 
 from .queries import Scope,_where
 from .privacy import display_number
@@ -19,6 +24,8 @@ COLUMNS=('queue','caller','agent','outcome','entered','answered','ended','wait_s
 GROUPS=('queue','agent','outcome')
 OUTCOMES=('answered','abandoned','waiting','connected','transferred','exitwithtimeout','exitempty','exitwithkey','unknown','reentered_without_end')
 DEFAULT=dict(dataset='queue_visits',columns=['queue','caller','agent','outcome','entered','wait_seconds','talk_seconds'],group_by=[],filters={})
+EXPORT_MAX_ROWS=500
+EXPORT_MAX_BYTES=4*1024*1024
 class BuilderConflict(RuntimeError):pass
 class BuilderUnavailable(RuntimeError):pass
 
@@ -122,7 +129,7 @@ class Templates:
         with self._db() as db:return [self._row(row) for row in db.execute('''SELECT t.* FROM builder_templates t WHERE pbx=? AND owner=? AND version=(SELECT MAX(v.version) FROM builder_templates v WHERE v.pbx=t.pbx AND v.id=t.id) ORDER BY created DESC,id LIMIT 100''',(self.pbx,_text(owner,128)))]
 
 
-def preview(archive,scope,start,end,spec,*,number_modes,number_key=None,before=None,limit=50):
+def preview(archive,scope,start,end,spec,*,number_modes,number_key=None,before=None,limit=50,_export=False):
     spec=definition(spec)
     if end-start>31*86400:raise ValueError('builder_range_limit')
     if not set(spec['queues']).issubset(scope.queues):raise PermissionError('builder_scope_revoked')
@@ -143,14 +150,17 @@ def preview(archive,scope,start,end,spec,*,number_modes,number_key=None,before=N
         group=','.join(_bounded(c) for c in spec['group_by'])
         selected=','.join(_bounded(c)+' AS '+c for c in spec['group_by'])
         with bounded.reader() as db:
+            projection=db.execute('SELECT after_id,updated FROM report_projection WHERE pbx=?',(archive.pbx,)).fetchone() if _export else None
             rows=[dict(row) for row in db.execute('SELECT '+selected+',MAX('+_oversized(spec['group_by'])+''') _oversized,COUNT(*) visits,COUNT(answered) answered_known,
                 SUM(outcome='abandoned') abandoned,COUNT(wait_seconds) wait_known,AVG(wait_seconds) average_wait_seconds,
                 COUNT(talk_seconds) talk_known,AVG(talk_seconds) average_queue_talk_seconds,SUM(talk_seconds) queue_talk_seconds
                 FROM report_visits WHERE '''+clause+' GROUP BY '+group+' ORDER BY '+group+' LIMIT 501',args)]
         if len(rows)>500:raise ValueError('builder_group_limit')
         if any(row.pop('_oversized') for row in rows):raise ValueError('builder_field_limit')
-        return dict(mode='aggregate',columns=spec['group_by']+['visits','answered_known','abandoned','wait_known','average_wait_seconds','talk_known','average_queue_talk_seconds','queue_talk_seconds'],rows=rows,next=None,contract=contract)
-    if isinstance(limit,bool) or not isinstance(limit,int) or not 1<=limit<=100:raise ValueError('invalid_builder_limit')
+        result=dict(mode='aggregate',columns=spec['group_by']+['visits','answered_known','abandoned','wait_known','average_wait_seconds','talk_known','average_queue_talk_seconds','queue_talk_seconds'],rows=rows,next=None,contract=contract)
+        if _export:result['projection']=dict(projection) if projection else None
+        return result
+    if isinstance(limit,bool) or not isinstance(limit,int) or not 1<=limit<=(EXPORT_MAX_ROWS if _export else 100):raise ValueError('invalid_builder_limit')
     if before:
         try:
             if not isinstance(before,str) or len(before)>256:raise ValueError()
@@ -162,10 +172,55 @@ def preview(archive,scope,start,end,spec,*,number_modes,number_key=None,before=N
     text_columns=[c for c in selected if c not in ('entered','answered','ended','wait_seconds','talk_seconds')]
     expressions=[(_bounded(c)+' AS '+c) if c in text_columns else c for c in selected]
     with bounded.reader() as db:
+        projection=db.execute('SELECT after_id,updated FROM report_projection WHERE pbx=?',(archive.pbx,)).fetchone() if _export else None
         rows=[dict(row) for row in db.execute('SELECT '+','.join(expressions)+','+_oversized(text_columns)+' AS _oversized FROM report_visits WHERE '+clause+' ORDER BY entered DESC,id DESC LIMIT ?',[*args,limit+1])]
     if any(row.pop('_oversized') for row in rows):raise ValueError('builder_field_limit')
     more=len(rows)>limit;rows=rows[:limit]
     cursor=base64.urlsafe_b64encode(_json([rows[-1]['entered'],rows[-1]['id']]).encode()).decode() if rows and more else None
     for row in rows:
         if 'caller' in row:row['caller']=display_number(row['caller'],mode=number_modes[row['queue']],secret=number_key,tenant='default',pbx=archive.pbx,version='1')
-    return dict(mode='table',columns=spec['columns'],rows=[{column:row[column] for column in spec['columns']} for row in rows],next=cursor,contract=contract)
+    result=dict(mode='table',columns=spec['columns'],rows=[{column:row[column] for column in spec['columns']} for row in rows],next=cursor,contract=contract)
+    if _export:result['projection']=dict(projection) if projection else None
+    return result
+
+
+def export_csv(archive,scope,start,end,spec,*,number_modes,number_key=None,language='en'):
+    """Complete bounded definition, not the visible page and never truncated.
+
+    The exact preview query and projection watermark share one short SQLite
+    read transaction. The transaction is closed before CSV encoding/download.
+    Large definitions require a narrower period/filter, not a pinned WAL reader.
+    """
+    if language not in ('fa','en'):raise ValueError('invalid_builder_language')
+    deadline=time.monotonic()+3
+    result=preview(archive,scope,start,end,spec,number_modes=number_modes,number_key=number_key,
+        limit=EXPORT_MAX_ROWS,_export=True)
+    if result['next']:raise ValueError('builder_export_row_limit')
+    fa=language=='fa'
+    titles=dict(zip(COLUMNS,['صف','شماره تماس‌گیرنده','کارشناس','نتیجه','ورود (تهران)','پاسخ (تهران)','پایان بخش صف (تهران)','انتظار (ثانیه)','مکالمه صف (ثانیه)','قطع‌کننده بخش صف','پوشش شواهد','شناسه مراجعه']))
+    titles.update(visits='تعداد مراجعه',answered_known='پاسخ دارای زمان معتبر',abandoned='رهاشده',wait_known='تعداد انتظار معلوم',talk_known='تعداد مکالمه معلوم',average_wait_seconds='میانگین انتظار معلوم (ثانیه)',average_queue_talk_seconds='میانگین مکالمه صف معلوم (ثانیه)',queue_talk_seconds='مجموع مکالمه صف معلوم (ثانیه)')
+    values=dict(answered='پاسخ‌داده',abandoned='رهاشده',transferred='منتقل‌شده',waiting='منتظر',connected='متصل',exitwithtimeout='پایان مهلت',exitempty='صف خالی',exitwithkey='خروج با کلید',reentered_without_end='ورود دوباره با پایان نامعلوم',unknown='نامعلوم',caller='تماس‌گیرنده',agent='کارشناس',observed='ثبت‌شده',missing_entry='شروع گمشده',missing_end='پایان گمشده')
+    def cell(key,value):
+        if value is None:return ''
+        if key in ('entered','answered','ended'):
+            from .exports import persian_date
+            local=datetime.fromtimestamp(value,ZoneInfo('Asia/Tehran'))
+            value=(persian_date(local.date()) if fa else local.date().isoformat())+local.strftime(' %H:%M:%S')
+        elif isinstance(value,(int,float)):
+            if not math.isfinite(value):raise ValueError('builder_field_limit')
+            return format(value,'.15g')
+        elif fa and key in ('outcome','segment_ended_by','coverage'):value=values.get(value,value)
+        value=str(value)
+        # A leading apostrophe prevents formulas and preserves numeric identities
+        # (leading zeroes, long IDs) when users open CSV directly in Excel.
+        if key in ('queue','caller','agent','id') or value.lstrip().startswith(('=','+','-','@')) or value.startswith(('\t','\r','\n')):value="'"+value
+        return value
+    output=io.BytesIO();output.write(b'\xef\xbb\xbf')
+    def write(row):
+        if time.monotonic()>deadline:raise QueryDeadline('builder_export_deadline')
+        text=io.StringIO(newline='');csv.writer(text).writerow(row);data=text.getvalue().encode('utf-8')
+        if output.tell()+len(data)>EXPORT_MAX_BYTES:raise ValueError('builder_export_byte_limit')
+        output.write(data)
+    write([titles[column] if fa else column for column in result['columns']])
+    for row in result['rows']:write([cell(column,row[column]) for column in result['columns']])
+    return output.getvalue(),dict(rows=len(result['rows']),columns=result['columns'],projection=result['projection'],unit='queue_visit',start=float(start),end=float(end),definition_sha256=hashlib.sha256(_json(definition(spec)).encode()).hexdigest())

@@ -5,10 +5,14 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{ organization.name }} | {{ t('مرکز عملیات تماس', 'Contact center') }}</title>
 <link rel="stylesheet" href="{{ theme_static('css/operations.css') }}?v={{ current_version() }}">
+<link rel="stylesheet" href="{{ theme_static('css/module-catalog.css') }}?v=20261028-1">
 <link rel="stylesheet" href="{{ theme_static('css/accessibility.css') }}?v={{ current_version() }}">
 <link rel="stylesheet" href="{{ theme_static('css/overview.css') }}?v={{ current_version() }}">
-<link rel="stylesheet" href="{{ theme_static('css/reports.css') }}?v={{ current_version() }}"><link rel="stylesheet" href="{{ theme_static('css/navigation.css') }}?v={{ current_version() }}"><link rel="stylesheet" href="{{ theme_static('css/context-help.css') }}?v=20261026-1"></head>
-<link rel="stylesheet" href="{{ theme_static('css/report-charts.css') }}?v=20261026-1">
+<link rel="stylesheet" href="{{ theme_static('css/reports.css') }}?v={{ current_version() }}"><link rel="stylesheet" href="{{ theme_static('css/navigation.css') }}?v={{ current_version() }}"><link rel="stylesheet" href="{{ theme_static('css/context-help.css') }}?v=20261026-1">
+<link rel="stylesheet" href="{{ theme_static('css/report-charts.css') }}?v=20261028-2">
+<link rel="stylesheet" href="{{ theme_static('css/date-picker.css') }}?v=20261028-1">
+<link rel="stylesheet" href="{{ theme_static('css/report-date-range.css') }}?v=20261028-1">
+</head>
 <body data-view="live">
 <a class="skip" href="#main">{{ t('رفتن به محتوا','Skip to content') }}</a>
 <aside class="sidebar">
@@ -141,10 +145,10 @@
 <section id="features-view" class="view" hidden>
   <div class="detail-hero detail-hero--features" data-detail-view="features">
     <div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol" aria-hidden="true">✦</span><div><span class="hero-kicker">SANEQUEUE / LIVE OPERATIONS</span><h2>{{ t('نقشه قابلیت‌های محصول','Product capability map') }}</h2><p>{{ t('تفکیک روشن عملکرد آماده آزمایش از امکاناتی که هنوز پیاده‌سازی نشده‌اند','Transparent separation of built and planned capabilities') }}</p></div></div><span class="source-pill" data-source-label>{{ t('در حال بررسی داده','Checking source') }}</span></div>
-    <div class="detail-hero-kpis" aria-live="polite"><div class="page-metric"><small>{{ t('گروه امکانات','Modules') }}</small><strong id="features-score-0">—</strong></div><div class="page-metric"><small>{{ t('آماده آزمایش','Available') }}</small><strong id="features-score-1">—</strong></div><div class="page-metric"><small>{{ t('در حال آزمایش','Beta') }}</small><strong id="features-score-2">—</strong></div><div class="page-metric"><small>{{ t('در برنامه','Planned') }}</small><strong id="features-score-3">—</strong></div></div>
+    <div class="detail-hero-kpis" aria-live="polite"><div class="page-metric"><small>{{ t('گروه امکانات','Modules') }}</small><strong id="features-score-0">—</strong></div><div class="page-metric"><small>{{ t('کد موجود','Built') }}</small><strong id="features-score-1">—</strong></div><div class="page-metric"><small>{{ t('بخشی پیاده‌شده','Partial') }}</small><strong id="features-score-2">—</strong></div><div class="page-metric"><small>{{ t('در برنامه','Planned') }}</small><strong id="features-score-3">—</strong></div></div>
   </div>
 
-  <div class="panel feature-panel"><div class="panel-heading"><div><h2>{{ t('نقشه امکانات مرکز تماس حرفه‌ای','Professional call center capabilities') }}</h2><p>{{ t('مقایسه با OpDesk، FOP2 و ویپینگ؛ وضعیت واقعی هر امکان مشخص است.','Feature scope inspired by OpDesk, FOP2 and VoiPing, with honest implementation status.') }}</p></div><span class="tag">ROADMAP</span></div><div class="feature-catalog" id="feature-catalog"></div><p class="muted">{{ t('نصب روی محیط مشتری و تماس عملیاتی تا زمان تکمیل احراز هویت، تست امنیت و پذیرش نسخه پایدار مجاز نیست.','Not production-ready. No customer deployments before real multiuser authentication, security review and a verified release.') }}</p></div>
+  <div class="panel feature-panel"><div class="panel-heading"><div><h2>{{ t('نقشه امکانات مرکز تماس حرفه‌ای','Professional call center capabilities') }}</h2><p>{{ t('گروه‌ها، زیرقابلیت‌ها و مرز پذیرش هر ماژول؛ برنامهٔ توسعه با کد موجود متفاوت است.','Groups, subfeatures and acceptance boundaries; planned scope is distinct from implemented code.') }}</p></div><span class="tag">{{ t('وضعیت کد','Code inventory') }}</span></div><div id="feature-catalog"></div><p class="muted">{{ t('وجود کد به معنی فعال‌بودن روی این سرور یا تأیید نصب زیر بار نیست. محدودهٔ پایلوت و آزمون‌های باقی‌مانده را پیش از نصب بررسی کنید.','Code availability does not establish host activation or production-load acceptance. Review pilot scope and remaining tests before installation.') }}</p></div>
 </section>
 
 <section id="control-view" class="view" hidden>
@@ -443,6 +447,7 @@
  </main></div>
 <script id="ops-config" type="application/json">{{ ops_config|tojson }}</script>
 <script src="{{ theme_static('js/context-help.js') }}?v=20261026-1" defer></script>
+<script src="{{ theme_static('js/module-catalog.js') }}?v=20261028-1" defer></script>
 <script src="{{ theme_static('js/operations.js') }}?v={{ current_version() }}&help=1" defer></script>
 <dialog id="activity-dialog" class="activity-dialog" aria-labelledby="activity-title"><div class="summary-dialog-head"><h2 id="activity-title">{{ t('کارکرد روزانهٔ عضویت صف','Daily queue membership activity') }}</h2><button id="activity-close" type="button" aria-label="{{ t('بستن','Close') }}">×</button></div><p class="report-note">{{ t('هر عضویت صف مستقل است؛ زمان صف‌های هم‌زمان با هم جمع نمی‌شود. فقط بازه‌هایی که شنودگر متصل بوده ثبت می‌شوند. نگهداری تا ۹۰ روز و حداکثر ۵۰۰هزار تغییر وضعیت.','Each queue membership is independent; concurrent queues are not combined as work hours. Only collector-observed intervals are recorded. Retention is up to 90 days and 500,000 transitions.') }}</p><div class="report-filters"><label>{{ t('تاریخ (شمسی)','Date (Gregorian)') }}<select id="activity-day"></select></label><label>{{ t('صف','Queue') }}<select id="activity-queue"><option value="">—</option></select></label><button id="activity-refresh" type="button">↻ {{ t('بازخوانی','Refresh') }}</button></div><p id="activity-feedback" class="report-note" role="status"></p><div id="activity-results" class="activity-results"></div></dialog>
 <script src="{{ theme_static('js/activity.js') }}?v={{ current_version() }}" defer></script>
@@ -450,10 +455,14 @@
 <script src="{{ theme_static('js/organization.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/telephony.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/incident-notices.js') }}?v={{ current_version() }}" defer></script>
+<script src="{{ theme_static('js/date-picker.js') }}?v=20261028-1" defer></script>
+<script src="{{ theme_static('js/report-periods.js') }}?v=20261028-1" defer></script>
+<script src="{{ theme_static('js/report-date-range.js') }}?v=20261028-1" defer></script>
 <script src="{{ theme_static('js/surveys.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/voice-feedback.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/reports.js') }}?v={{ current_version() }}&help=1" defer></script>
-<script src="{{ theme_static('js/report-charts.js') }}?v=20261026-1" defer></script>
+<script src="{{ theme_static('js/report-charts.js') }}?v=20261028-2" defer></script>
+<script src="{{ theme_static('js/agent-rankings.js') }}?v=20261028-1" defer></script>
 <script src="{{ theme_static('js/report-analytics.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/report-exports.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/recording-audit.js') }}?v=20261026-1" defer></script>

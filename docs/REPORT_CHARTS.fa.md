@@ -24,9 +24,9 @@ SaneQueueReportCharts.render(host, {
 
 ## معنای داده
 
-- `labels` و `series` آرایه‌اند؛ هر سری دقیقاً به تعداد دسته‌های ورودی مقدار دارد. متن عنوان حداکثر ۱۶۰، زیرعنوان ۱۰۰۰، دسته/نام سری ۱۲۰ و واحد ۴۰ نویسه است.
+- `labels` و `series` آرایه‌اند؛ هر سری دقیقاً به تعداد دسته‌های ورودی مقدار دارد. متن عنوان حداکثر ۱۶۰، زیرعنوان ۱۰۰۰، دسته ۵۱۲ و نام سری ۱۲۰ و واحد ۴۰ نویسه است.
 - فقط عدد متناهیِ نامنفی تا `1e12` یا `null` معتبر است؛ رشته، `undefined`، خانهٔ خالی آرایه، مقدار منفی و `NaN` رد می‌شوند. `null` با خط تیره/«نامعلوم» و صفر با نشان صفر نمایش داده می‌شود. نامعلوم هرگز صفر یا فاصلهٔ تخمینی نیست.
-- فقط ۶۰ دسته و ۴ سری نخست نمایش داده می‌شوند؛ اگر بیشتر باشد اعلان محدودسازی در صفحه و خود SVG می‌آید. این برش، رتبه‌بندی یا نمونهٔ آماری نیست. مصرف‌کننده باید ترتیب و عنوان دقیق را از گزارش بدهد.
+- ورودی تا ۱۰۰۰ دسته محدود است. میله‌ها در صفحه‌های ۱۲ دسته‌ای و خطوط در صفحه‌های ۶۰ نقطه‌ای نمایش داده می‌شوند؛ محدوده و دکمه‌های صفحه‌بندی مشخص‌اند. فقط چهار سری نخست با اعلان محدودیت نمایش داده می‌شود. `type` پیش‌فرض `bar` است؛ `line` مختصات عددی افزایشی `x` و فاصله‌های صریح `gaps` را می‌پذیرد. مقدار null خط را قطع می‌کند و صفر نقطهٔ واقعی است. این صفحه‌بندی رتبه‌بندی یا نمونه‌گیری نیست.
 - `maximum` اختیاری و نامنفی است؛ کمتر از بزرگ‌ترین مقدار واقعی، محور را کوچک نمی‌کند. در نبود مقدار مثبت، مقیاس ۰ تا ۱ صرفاً برای رسم است، نه دادهٔ تولیدشده.
 - جدول در «نمایش جدول مقادیر قابل‌دسترسی» همیشه موجود است و متن کامل دسته‌ها را دارد. برچسب بلندِ شکل برای خوانایی کوتاه می‌شود. نمایش تا دو رقم اعشار گرد می‌شود؛ محاسبهٔ آماری یا تغییر واحد انجام نمی‌شود.
 - مخرج SLA، نمونه‌های دارای مدت معلوم، تعریف AHT/ASA و پوشش باید از backend و زیرعنوان گزارش مشخص شوند. نمودار هیچ مخرج یا آمار گمشده‌ای نمی‌سازد. عنوان و زیرعنوان باید دوره، timezone، فیلتر و جزئی/کامل بودن نتیجه را صریح بگویند. شماره‌ها باید قبلاً سمت سرور پوشانده شده باشند.
@@ -42,4 +42,7 @@ SaneQueueReportCharts.render(host, {
 آزمون کد واقعی: `node tests/report_charts_frontend.cjs`، دادهٔ مصنوعی و بدون سرور. این آزمون پیکسل یا ظاهر مرورگر واقعی را تأیید نمی‌کند؛ چیدمان صفحهٔ یکپارچه باید جدا بازبینی شود.
 
 
-Integrated reports: answered/abandoned trends, queue ASA/wait percentiles, agent queue-segment answer counts and AHT (separate units), CDR trunk/DID aggregate traffic, elapsed shift evidence, full-period pause-call outcomes and temporal VIP volume/SLA. Null denominators/unknown durations remain unknown. These use the same response as the corresponding tables and introduce no extra HTTP/AMI queries. Input/change/submit, local CDR filters and the VIP SLA threshold invalidate pending charts. The screen inherits theme colors; image exports use explicit white backgrounds for portable slides. Empty scope displays no-data text and no image-export controls. Category labels allow up to 512 characters; the original table retains complete names.
+Integrated reports: answered/abandoned trends, queue ASA/wait percentiles, agent queue-segment answer counts and AHT (separate units), CDR trunk/DID aggregate traffic, elapsed shift evidence, full-period pause-call outcomes and temporal VIP volume/SLA. Null denominators/unknown durations remain unknown. These use the same response as the corresponding tables and introduce no extra HTTP/AMI queries. Input/change/submit, local CDR filters and the VIP SLA threshold invalidate pending charts. The screen inherits theme colors; image exports freeze the current theme background and colors. Empty scope displays no-data text and no image-export controls. Category labels allow up to 512 characters; the original table retains complete names.
+
+
+2026-10-28: shared browser resize/theme lifecycle, keyboard inspection, Persian calendar integration and real image-download QA are documented in REPORTING_VISUAL_QA_20261028.fa.md. Existing synthetic node tests validate logic; the separate Chromium suite validates browser behavior. These do not certify every installed product page.

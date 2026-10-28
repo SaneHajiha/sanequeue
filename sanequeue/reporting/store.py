@@ -58,6 +58,8 @@ class Archive:
                 CREATE INDEX IF NOT EXISTS event_source ON events(pbx,source,source_key);
                 CREATE INDEX IF NOT EXISTS event_time ON events(pbx,ts,id);
                 CREATE INDEX IF NOT EXISTS event_cursor ON events(pbx,id);
+                CREATE INDEX IF NOT EXISTS event_ring_time ON events(pbx,ts,id)
+                  WHERE UPPER(kind)='RINGNOANSWER';
                 CREATE TABLE IF NOT EXISTS source_items(
                   pbx TEXT,source TEXT,source_key TEXT,event_id INTEGER,
                   PRIMARY KEY(pbx,source,source_key));

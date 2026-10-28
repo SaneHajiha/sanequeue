@@ -1,0 +1,23 @@
+{
+  "scope": "Local working-tree Diagnostics foundation; not a release commit or deployed PBX manifest",
+  "date": "2026-10-28",
+  "sha256": {
+    "qpanel/themes/qpanel/static/data/module-catalog.json": "9b6d2302b1ba084d7f1787bed0592b1dfa9cac3d229e437fefd37c90b86df80c",
+    "sanequeue/api/diagnostics.py": "e61f076210503d32900d95f7642349fcd9c9b3386081ee04dd386bbe8025c809",
+    "sanequeue/api/reports.py": "346f8222c9653059eaa76f97565f99f0416bb69bdba416b068b77896793eb015",
+    "sanequeue/diagnostics/__init__.py": "12f4b9d7cff94f03898865ec604ea2d6226b4edddc916dfbcf23e56cc2aeee15",
+    "sanequeue/diagnostics/health.py": "7babeeaf4b093499e6eb9d50ac745e931e7f939666cab5c8a3fdbe1db4dffd61",
+    "sanequeue/diagnostics/rules.py": "e35e464cfcea2c63575b7b953814090f3fa45468a30bd4445f20fd531106d7b2",
+    "sanequeue/diagnostics/store.py": "6b2806ca8277f93d2a6629bd3c7e532df4111b96683598c6bb1c151784cf8742",
+    "sanequeue/diagnostics/worker.py": "786a20b41500f15d100710a975f29db152e4782550e5acb84001351508bf6e5b",
+    "sanequeue/reporting/correlate.py": "b0ae756188de53b6dfcdffb05be9666fa78a10e9f03ab3d63b2988b9b4a4f748",
+    "sanequeue/reporting/facts.py": "526c1dee4fc4027497ee164a94385aa97ff1ee27386751f757eb9e601358dbdf",
+    "sanequeue/reporting/sql_source.py": "a910b917290c329b150858130e292c8ff1111e514eeb6a0eb663794727e931a2",
+    "tests/test_diagnostics_api.py": "42ba45401914700995a38316923fd55d6397ed701dff934546046a13e5cefd6f",
+    "tests/test_diagnostics_health_rules.py": "850c3eb09b434627342e178ac22dc162c4f87b0f7320aaedcc5dfe5ea566a703",
+    "tests/test_diagnostics_store.py": "445d8f9d84398fed40f7dd47cbe9147b4f314f68e9c0adf893ea0cb2a3061453",
+    "tests/test_diagnostics_worker.py": "d4f3cd2b93402fdc21ee427bce9f5d07fcdf3c91b1d3c83b1e2a3212992f0f0e",
+    "tests/test_reporting_diagnostics_ingestion.py": "f5642833db474850230d1bf2786b7f8f10577da69f81a5ebe2e1d27d4435f618",
+    "tests/test_reporting_queue_corrections.py": "da0f5b3736e58e9b485075f63f31b9cd7ed3de5d9a326c3ecc0ae6af25d1442c"
+  }
+}

@@ -4,6 +4,7 @@ Edges preserve provenance. Sharing a bridge or linkedid is not an instruction
 to merge consultations, conferences and customers into one flat call.
 """
 import json
+import re
 
 
 def project(db, pbx, event_id, event):
@@ -52,6 +53,14 @@ def project(db, pbx, event_id, event):
         extra = {}
     if kind in ('LOCAL_OPTIMIZE', 'LOCAL_OPTIMIZE_BEGIN'):
         edge(kind.lower(), 'channel', extra.get('local_two'), {'primary_channel': channel})
+    if kind=='LOCAL_OPTIMIZE_END':
+        # Only an explicitly named, valid Local half supplies a relation.
+        # Optimization completion itself does not establish ownership, final
+        # hangup causality or the identity of an inferred replacement channel.
+        target=extra.get('local_two')
+        if (isinstance(target,str) and len(target)<=512 and target!=channel
+            and re.fullmatch(r'Local/[A-Za-z0-9_.+@/-]+;[12]',target)):
+            edge('local_optimize_end','channel',target,{'primary_channel':channel})
     if kind in ('BRIDGE_ENTER', 'BRIDGE_EXIT'):
         edge(kind.lower(), 'bridge', extra.get('bridge_id'))
     if kind in ('ATTENDEDTRANSFER', 'BLINDTRANSFER'):

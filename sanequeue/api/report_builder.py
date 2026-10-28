@@ -3,14 +3,16 @@ import hashlib
 import hmac
 import json
 import sqlite3
-from flask import abort,jsonify,request,session
+import threading
+from flask import abort,jsonify,request,session,Response
 from flask_login import current_user,login_required
-from sanequeue.reporting.report_builder import Templates,BuilderConflict,BuilderUnavailable,definition,preview,COLUMNS,GROUPS
+from sanequeue.reporting.report_builder import Templates,BuilderConflict,BuilderUnavailable,definition,preview,export_csv,COLUMNS,GROUPS
 from sanequeue.reporting.store import QueryDeadline
 
 
 def install(app,archive,*,context,role,sections,can_queue,pbx='primary'):
     store=Templates(archive.path.parent/'report-builder.sqlite3',pbx=pbx)
+    export_slots=threading.BoundedSemaphore(1)
     try:store.initialize();ready=True
     except (OSError,sqlite3.Error,ValueError,BuilderUnavailable):ready=False
     @app.after_request
@@ -50,7 +52,7 @@ def install(app,archive,*,context,role,sections,can_queue,pbx='primary'):
             except QueryDeadline:return jsonify(error='builder_query_deadline'),422
             except ValueError as error:
                 code=str(error)
-                public={'builder_range_limit','builder_group_limit','builder_field_limit','invalid_builder_threshold','invalid_builder_cursor','invalid_builder_limit'}
+                public={'builder_range_limit','builder_group_limit','builder_field_limit','invalid_builder_threshold','invalid_builder_cursor','invalid_builder_limit','builder_export_row_limit','builder_export_byte_limit'}
                 return jsonify(error=code if code in public else 'invalid_builder_request'),400
             except (TypeError,OverflowError):return jsonify(error='invalid_builder_request'),400
         return call
@@ -90,3 +92,37 @@ def install(app,archive,*,context,role,sections,can_queue,pbx='primary'):
         modes={q:'full' if can_queue(q,'caller_details') else 'masked' for q in spec['queues']}
         secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
         return jsonify(preview(archive,scope,start,end,spec,number_modes=modes,number_key=secret,before=body.get('before'),limit=body.get('limit',50)))
+    @app.post('/api/history/builder/export.csv')
+    @login_required
+    @safe
+    def builder_export():
+        owner=actor()
+        if role() not in ('admin','supervisor'):abort(403)
+        scope,start,end=context(restrict_queue=False);body=payload()
+        if body.get('template_id'):
+            saved=store.get(body['template_id'],owner)
+            if saved is None:abort(404)
+            spec=saved['definition']
+        else:spec=definition(body.get('definition'))
+        allowed(spec,scope)
+        if not all(can_queue(q,'report_export') for q in spec['queues']):abort(403)
+        modes={q:'full' if can_queue(q,'caller_details') else 'masked' for q in spec['queues']}
+        secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+        if not export_slots.acquire(blocking=False):return jsonify(error='builder_export_busy'),429
+        try:
+            content,meta=export_csv(archive,scope,start,end,spec,number_modes=modes,number_key=secret,language=body.get('language','en'))
+            # Never publish content under stale role, agent/cutoff or queue grants.
+            if actor()!=owner or role() not in ('admin','supervisor'):abort(403)
+            current,_,_=context(restrict_queue=False);allowed(spec,current)
+            if (current.agents,current.self_only,current.not_before)!=(scope.agents,scope.self_only,scope.not_before):abort(403)
+            if not all(can_queue(q,'report_export') and (modes[q]!='full' or can_queue(q,'caller_details')) for q in spec['queues']):abort(403)
+            response=Response(content,content_type='text/csv; charset=utf-8')
+            response.headers['Content-Disposition']='attachment; filename="sanequeue-custom-'+str(int(start))+'-'+str(int(end))+'.csv"'
+            response.headers['X-SaneQueue-Export-Rows']=str(meta['rows'])
+            response.headers['X-SaneQueue-Definition-SHA256']=meta['definition_sha256']
+            response.headers['X-SaneQueue-Projection']=str(meta['projection']['after_id']) if meta['projection'] else 'unknown'
+            response.headers['X-SaneQueue-Period-Start']=str(start);response.headers['X-SaneQueue-Period-End']=str(end)
+            response.headers['X-SaneQueue-Unit']=meta['unit']
+            app.logger.info('bounded custom report export user=%r rows=%d definition=%s',owner,meta['rows'],meta['definition_sha256'])
+            return response
+        finally:export_slots.release()

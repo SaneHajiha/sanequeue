@@ -38,6 +38,7 @@ from . import visit_snapshots
 from . import xlsx_stream
 from . import pdf_stream
 from . import export_maintenance
+from . import builder_exports
 
 _ID=re.compile(r'[0-9a-f]{32}\Z')
 _MODES={'full','masked','hidden','pseudonymous'}
@@ -181,7 +182,7 @@ class JobStore:
         finally:db.close()
 
     def create(self,owner,scope,start,end,*,watermark,pbx='primary',number_modes,
-               language='en',outcome=None,format='csv',snapshot=None,request_key=None):
+               language='en',outcome=None,format='csv',snapshot=None,request_key=None,builder_definition=None):
         if not isinstance(owner,str) or not 1<=len(owner)<=128:raise ValueError('invalid_export_owner')
         _where(pbx,scope,start,end)
         if not scope.queues:raise ValueError('empty_export_scope')
@@ -200,6 +201,11 @@ class JobStore:
                   number_modes=dict(number_modes),language=language,outcome=outcome,format=format,
                   unit='queue_visit',number_policy_version='1')
         if snapshot is not None:spec['snapshot']=dict(snapshot)
+        if builder_definition is not None:
+            from .report_builder import definition
+            spec['builder_definition']=definition(builder_definition)
+            builder_exports.validate(spec)
+            spec['row_unit']='group' if spec['builder_definition']['group_by'] else 'queue_visit'
         if request_key is not None and (not isinstance(request_key,str) or not re.fullmatch('[A-Za-z0-9_.:-]{1,128}',request_key)):
             raise ValueError('invalid_export_request_key')
         core={key:value for key,value in spec.items() if key not in ('watermark','snapshot')}
@@ -326,6 +332,7 @@ class ExportWorker:
     def _check(self,spec):
         if not self.authorize(spec):raise ExportFailure('export_access_revoked')
         if spec['pbx']!=self.archive.pbx:raise ExportFailure('export_pbx_mismatch')
+        if spec.get('builder_definition') is not None:builder_exports.validate(spec)
         if 'pseudonymous' in spec['number_modes'].values() and (not isinstance(self.number_key,bytes) or len(self.number_key)<32):
             raise ExportFailure('export_number_key_unavailable')
         if spec.get('snapshot') is not None:
@@ -339,6 +346,10 @@ class ExportWorker:
     def _page(self,spec,before,deadline):
         remaining=deadline-time.monotonic()
         if remaining<=0:raise ExportFailure('export_time_limit')
+        if spec.get('builder_definition') is not None:
+            bounded=Archive(self.archive.path,pbx=self.archive.pbx,read_seconds=min(2,remaining))
+            try:return builder_exports.page(bounded,spec,before,limit=self.limits.page_size)
+            except visit_snapshots.SnapshotUnavailable as error:raise ExportFailure(str(error)) from None
         scope=Scope(**{**spec['scope'],'queues':tuple(spec['scope']['queues']),'agents':tuple(spec['scope']['agents'])})
         clause,args=_where(self.archive.pbx,scope,spec['start'],spec['end'])
         if spec['outcome']:
@@ -406,6 +417,8 @@ class ExportWorker:
                     if not self.store._update(ident,worker,state='completed',rows=rows_written,size=size,checksum=job['checksum']):raise _Cancelled('cancelled')
                     return dict(id=ident,state='completed',rows=rows_written,bytes=size,recovered=True)
                 self._check(spec)
+                builder=builder_exports.validate(spec) if spec.get('builder_definition') is not None else None
+                groups=builder_exports.Groups(builder) if builder and builder['group_by'] else None
                 # Prior attempts have unique names. Bounded reconciliation,
                 # rather than an unbounded glob/delete, handles old staging.
                 fd=os.open(part,os.O_WRONLY|os.O_CREAT|os.O_EXCL|getattr(os,'O_NOFOLLOW',0)|getattr(os,'O_BINARY',0),0o600)
@@ -422,7 +435,8 @@ class ExportWorker:
                     if spec['format']=='xlsx':
                         zone=ZoneInfo('Asia/Tehran')
                         period=datetime.fromtimestamp(spec['start'],zone).isoformat()+' .. '+datetime.fromtimestamp(spec['end'],zone).isoformat()+' [end exclusive]'
-                        workbook=xlsx_stream.Workbook(output,spec['language'],period=period,max_bytes=self.limits.max_bytes)
+                        workbook=(builder_exports.Workbook(output,spec['language'],headers=builder_exports.headers(builder,spec['language']),period=period,max_bytes=self.limits.max_bytes)
+                                  if builder else xlsx_stream.Workbook(output,spec['language'],period=period,max_bytes=self.limits.max_bytes))
                         cleanup.callback(workbook.abort)
                     elif spec['format']=='pdf':
                         def pdf_check():
@@ -434,18 +448,28 @@ class ExportWorker:
                             max_rows=min(self.limits.max_rows,pdf_stream.MAX_ROWS),max_bytes=min(self.limits.max_bytes,pdf_stream.MAX_BYTES))
                         cleanup.callback(document.abort)
                     else:
-                        write(b'\xef\xbb\xbf');headers,_=table([],spec['language']);line(headers)
-                    before=None
+                        write(b'\xef\xbb\xbf')
+                        if builder:headers=builder_exports.headers(builder,spec['language'])
+                        else:headers,_=table([],spec['language'])
+                        line(headers)
+                    before=None;rows_scanned=0
                     while True:
                         self._gate(deadline);self._check(spec)
                         if not self.store._update(ident,worker,rows=rows_written,size=size,lease_seconds=self.limits.lease_seconds):raise _Cancelled('cancelled')
                         rows=self._page(spec,before,deadline)
                         if not rows:break
-                        if rows_written+len(rows)>self.limits.max_rows:raise ExportFailure('export_row_limit')
-                        for row in rows:
-                            row['caller']=display_number(row['caller'],spec['number_modes'][row['queue']],
-                                secret=self.number_key,tenant='default',pbx=spec['pbx'],version=spec['number_policy_version'])
-                        _,body=table(rows,spec['language'])
+                        if rows_scanned+len(rows)>self.limits.max_rows:raise ExportFailure('export_row_limit')
+                        rows_scanned+=len(rows)
+                        before=(rows[-1]['entered'],rows[-1]['id'])
+                        if groups:
+                            groups.add(rows)
+                            continue
+                        if builder:body=builder_exports.body(rows,builder,spec,self.number_key)
+                        else:
+                            for row in rows:
+                                row['caller']=display_number(row['caller'],spec['number_modes'][row['queue']],
+                                    secret=self.number_key,tenant='default',pbx=spec['pbx'],version=spec['number_policy_version'])
+                            _,body=table(rows,spec['language'])
                         if workbook:
                             workbook.append(body);size=output.tell()
                         elif document:
@@ -453,10 +477,19 @@ class ExportWorker:
                         else:
                             for values in body:line(values)
                         rows_written+=len(rows)
-                        before=(rows[-1]['entered'],rows[-1]['id'])
                         self._check(spec)
                         if not self.store._update(ident,worker,rows=rows_written,size=size,lease_seconds=self.limits.lease_seconds):raise _Cancelled('cancelled')
                     self._gate(deadline);self._check(spec)
+                    if groups:
+                        aggregate=groups.rows()
+                        for offset in range(0,len(aggregate),self.limits.page_size):
+                            self._gate(deadline);self._check(spec)
+                            body=builder_exports.body(aggregate[offset:offset+self.limits.page_size],builder,spec,self.number_key)
+                            if workbook:workbook.append(body);size=output.tell()
+                            else:
+                                for values in body:line(values)
+                            rows_written+=len(body)
+                            if not self.store._update(ident,worker,rows=rows_written,size=size,lease_seconds=self.limits.lease_seconds):raise _Cancelled('cancelled')
                     if workbook:workbook.close();size=output.tell()
                     if document:document.close();size=output.tell()
                     output.flush();os.fsync(output.fileno())
@@ -481,7 +514,7 @@ class ExportWorker:
             except _Cancelled:
                 return dict(id=ident,state='cancelled')
             except Exception as error:
-                reason=str(error) if isinstance(error,(ExportFailure,xlsx_stream.SizeLimit,pdf_stream.PdfFailure)) else 'export_query_deadline' if isinstance(error,QueryDeadline) else 'export_failed'
+                reason=str(error) if isinstance(error,(ExportFailure,xlsx_stream.SizeLimit,pdf_stream.PdfFailure,builder_exports.BuilderFailure)) else 'export_query_deadline' if isinstance(error,QueryDeadline) else 'export_failed'
                 self.store._update(ident,worker,state='failed',rows=rows_written,size=0,error=reason)
                 return dict(id=ident,state='failed',error=reason)
             finally:

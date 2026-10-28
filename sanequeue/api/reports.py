@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import hashlib
 import hmac
 import io
+import json
 import os
 import re
 from pathlib import Path
@@ -26,6 +27,8 @@ from sanequeue.reporting.export_jobs import JobStore, ExportFailure, projection_
 from sanequeue.reporting.access_audit import AuditStore, AuditUnavailable
 from sanequeue.reporting import work_sessions
 from sanequeue.reporting import visit_snapshots
+from sanequeue.reporting import builder_exports
+from sanequeue.reporting.report_builder import definition as builder_definition
 from sanequeue.reporting import adherence, adherence_source
 from sanequeue.reporting import cdr_queries
 from sanequeue.reporting import journey
@@ -130,7 +133,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         def wrapped(*args, **kwargs):
             try:
                 response = app.make_response(function(*args, **kwargs))
-            except (ValueError, TypeError, OverflowError):
+            except (ValueError, TypeError, OverflowError, RecursionError):
                 response = app.make_response((jsonify(error='invalid_report_request'), 400))
             except QueryDeadline:
                 response = app.make_response((jsonify(error='report_query_deadline'), 422))
@@ -219,14 +222,27 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             return jsonify(jobs=[export_public(job) for job in export_store.list(owner) if export_permitted(job)],
                            recovery=recovery,recovery_limit=20)
         export_csrf()
-        scope, start, end = context()
+        custom=None
+        if request.is_json:
+            if request.content_length is not None and request.content_length>16384:abort(413)
+            raw=request.stream.read(16385)
+            if len(raw)>16384:abort(413)
+            body=json.loads(raw)
+            if not isinstance(body,dict):raise ValueError('invalid_report_request')
+            if 'builder_definition' in body:custom=builder_definition(body['builder_definition'])
+        scope, start, end = context(restrict_queue=custom is None)
+        if custom is not None:
+            if not set(custom['queues']).issubset(scope.queues):abort(403)
+            scope=queries.Scope(tuple(custom['queues']),scope.agents,scope.self_only,scope.not_before)
         if not scope.queues or not all(can_queue(queue, 'report_export') for queue in scope.queues):
             abort(403)
         modes = {queue: 'full' if can_queue(queue, 'caller_details') else 'masked' for queue in scope.queues}
-        ident = export_store.create(owner, scope, start, end, watermark=projection_watermark(archive), pbx=pbx,
+        pinned=builder_exports.capture(archive) if custom is not None else dict(watermark=projection_watermark(archive),snapshot=visit_snapshots.capture(archive))
+        ident = export_store.create(owner, scope, start, end, watermark=pinned['watermark'], pbx=pbx,
                                     number_modes=modes, language=request.args.get('lang', 'en'),
                                     outcome=request.args.get('outcome'), format=request.args.get('format', 'csv'),
-                                    snapshot=visit_snapshots.capture(archive))
+                                    snapshot=pinned['snapshot'],
+                                    **({'builder_definition':custom} if custom is not None else {}))
         app.logger.info('report export queued user=%r job=%s', owner, ident)
         return jsonify(export_public(export_store.get(ident, owner))), 202
 
@@ -281,7 +297,9 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         return plan is not None and all(can_queue(queue,cap) for queue in plan['queues'] for cap in ('view','report_export'))
 
     def plan_context(ident=None):
-        owner=export_context();scope,start,end=context()
+        # Plans carry their own explicit queue selection; the display filter
+        # must not silently narrow a frozen multi-queue definition.
+        owner=export_context();scope,start,end=context(restrict_queue=False)
         if not plans_ready:raise PlanUnavailable('report_plans_unavailable')
         plan=plans_store.get(ident,owner) if ident else None
         if ident and plan is None:abort(404)
@@ -294,7 +312,12 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     def history_plans():
         owner,scope,_=plan_context()
         if request.method=='GET':return jsonify(plans=[plan for plan in plans_store.list(owner) if plan_permitted(plan)])
-        export_csrf();body=request.get_json(silent=True)
+        export_csrf()
+        if not request.is_json:abort(415)
+        if request.content_length is not None and request.content_length>16384:abort(413)
+        raw=request.stream.read(16385)
+        if len(raw)>16384:abort(413)
+        body=json.loads(raw)
         if not isinstance(body,dict):raise ValueError('invalid_report_plan')
         queues=body.get('queues')
         if not isinstance(queues,list) or not queues or not set(queues).issubset(scope.queues):abort(403)
@@ -303,9 +326,13 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             previous=plans_store.get(body['id'],owner)
             if previous is None:abort(404)
             if not plan_permitted(previous):abort(403)
+            if previous.get('builder_definition') is not None:
+                if 'builder_definition' not in body:body['builder_definition']=previous['builder_definition']
+                elif body['builder_definition'] is None:raise ValueError('invalid_report_plan')
         plan=plans_store.save(owner,body.get('name'),queues,outcome=body.get('outcome'),format=body.get('format','xlsx'),
             language=body.get('language','fa'),period=body.get('period','yesterday'),at=body.get('at','08:00'),
-            weekdays=body.get('weekdays'),enabled=body.get('enabled',False),ident=body.get('id'))
+            weekdays=body.get('weekdays'),enabled=body.get('enabled',False),ident=body.get('id'),
+            **({'builder_definition':body['builder_definition']} if 'builder_definition' in body else {}))
         return jsonify(plan=plan),201
 
     @app.post('/api/history/plans/<ident>/archive')
@@ -333,10 +360,12 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             return jsonify(job=export_public(previous)),202
         period=period_bounds(time.time(),plan['period'])
         modes={queue:'full' if can_queue(queue,'caller_details') else 'masked' for queue in plan['queues']}
+        pinned=builder_exports.capture(archive) if plan.get('builder_definition') is not None else dict(watermark=projection_watermark(archive),snapshot=visit_snapshots.capture(archive))
         try:
             job_id=export_store.create(owner,queries.Scope(tuple(plan['queues'])),period['start'],period['end'],
-                watermark=projection_watermark(archive),pbx=pbx,number_modes=modes,format=plan['format'],language=plan['language'],
-                outcome=plan['outcome'],snapshot=visit_snapshots.capture(archive),request_key=request_key)
+                watermark=pinned['watermark'],pbx=pbx,number_modes=modes,format=plan['format'],language=plan['language'],
+                outcome=plan['outcome'],snapshot=pinned['snapshot'],request_key=request_key,
+                **({'builder_definition':plan['builder_definition']} if plan.get('builder_definition') is not None else {}))
         except ExportFailure as error:
             # Another request may have won the unique key after our lookup,
             # including on the other side of midnight. It remains the original.
@@ -372,6 +401,19 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         result['archive'] = archive.status()
         # Checkpoints can identify private source paths; expose only safe fields.
         result['archive'].pop('checkpoints', None)
+        return jsonify(result)
+
+    @app.get('/api/history/agent-rankings')
+    @login_required
+    @safe
+    def history_agent_rankings():
+        from sanequeue.reporting.agent_rankings import rank_agents
+        owner=str(current_user.get_id());scope,start,end=context()
+        result=rank_agents(archive,scope,start,end,metric=request.args.get('metric','answered_count'),
+            min_samples=int(request.args.get('min_samples','5')),top=int(request.args.get('top','10')))
+        current,_,_=context()
+        if str(current_user.get_id())!=owner or current!=scope:abort(403)
+        result.update(start=start,end=end,timezone='Asia/Tehran',allowed_queues=list(scope.queues))
         return jsonify(result)
 
     @app.get('/api/history/visits')
@@ -1035,6 +1077,9 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
 
     from sanequeue.api.report_builder import install as install_report_builder
     install_report_builder(app,archive,context=context,role=role,sections=sections,can_queue=can_queue,pbx=pbx)
+
+    from sanequeue.api.diagnostics import install as install_diagnostics
+    install_diagnostics(app,archive,context=context,role=role,sections=sections,can_queue=can_queue,pbx=pbx)
 
     from sanequeue.api.customer_segments import install as install_customer_segments
     install_customer_segments(app,archive,context=context,role=role,sections=sections,can_queue=can_queue,pbx=pbx)

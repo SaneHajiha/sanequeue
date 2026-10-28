@@ -157,7 +157,7 @@
    alerts:[fmt(alerts.length),fmt(congested),fmt(waitAbove),fmt(noReady)],
    audit:[roleLabel,cfg.test_controls_enabled?t('دارای مجوز','Authorized'):t('قفل','Locked'),cfg.control_mode==='rbac'?t('صف‌های مجاز','Authorized queues'):(armedQueue||'—'),lastSuccess?new Date(lastSuccess).toLocaleTimeString(fa?'fa-IR':'en-GB'):'—'],
    settings:[sourceText, lastSuccess?(cfg.realtime_push?'WebSocket':t('در حال دریافت','Polling')):t('نامشخص','Unknown'),cfg.control_mode==='rbac'?t('کشف خودکار','Automatic discovery'):esc($('ami-queue').value||'8001'), cfg.test_controls_enabled?t('دارای مجوز','Authorized'):t('قفل','Locked')],
-   features:[fmt(capabilitiesCount()),...['ready','beta','planned'].map(state=>fmt(capabilities.filter(item=>item[3]===state).length))]
+   features:[fmt(capabilitiesCount()),...['built','partial','planned'].map(state=>fmt((cfg.module_catalog?.modules||[]).filter(item=>item.implementation===state).length))]
   };
   for(const [key,items] of Object.entries(model))items.forEach((value,i)=>{const el=$(key+'-score-'+i);if(el)el.textContent=value;});
   // Relative bars: never claim to show historical queue volume or extrapolated demand.
@@ -622,22 +622,8 @@ $('test-controls-disable').onclick=async()=>{
  catch(error){alert(error.message);}
 };
 
- const capabilities=[
-  ['monitor', t('مانیتورینگ لحظه‌ای صف','Live queue monitoring'),t('دریافت صف، اعضا، SLA و انتظار از AMI','Queue members, SLA and waiting via AMI'),'beta'],
-  ['staff',t('Pause، Penalty و عضویت پویا','Pause, penalty and dynamic members'),t('آزمایشی؛ فقط با گیت کنترل و تماس تست','Staged: test queue and control gate only'),'beta'],
-  ['supervision',t('شنود، نجوا و ورود به مکالمه','Listen, whisper, barge'),t('اتصال و دریافت صدای کارشناس آزموده شده؛ تأیید کامل مسیر صدا لازم است','Connection and agent audio tested; full audio acceptance still required'),'beta'],
-  ['dashboard',t('داشبورد، هشدار، Wallboard و نمودار زنده','Dashboard, alerts, wallboard, live charts'),t('نمودار بر اساس نمونه‌های همین مرورگر','Charts from current browser samples only'),'ready'],
-  ['pbx',t('کانال‌های فعال، PJSIP و ParkedCalls','Channels, PJSIP and parked calls'),t('فقط خواندنی؛ با مجوز AMI مناسب','Read-only, optional AMI privileges'),'beta'],
-  ['transfer',t('انتقال Blind / Attended و Pickup','Blind/attended transfer and pickup'),t('هدف دقیق و مقصد داخلی مجاز؛ نیازمند فعال‌سازی روی PBX','Exact target and internal allowlist; PBX activation required'),'beta'],
-  ['park',t('پارک و بازگردانی تماس','Park and retrieve calls'),t('پارک در Bridge دوطرفه و بازیابی روی تلفن اختصاصی','Two-party bridge parking and retrieval on assigned phone'),'beta'],
-  ['trunks',t('سلامت ترانک‌های SIP و کیفیت RTP','SIP trunk and RTP quality'),t('آداپتور محلی ترانک و دریافت RTCP؛ بدون داده، کیفیت نامشخص است','Local trunk adapter and RTCP observations; missing media reports remain unknown'),'beta'],
-  ['softphone',t('WebRTC Softphone و موبایل','WebRTC & mobile softphone'),t('نیازمند WSS/TLS، SIP.js و تنظیمات PBX','Requires WSS/TLS, SIP.js and PBX config'),'planned'],
-  ['contacts',t('دفترچه تلفن صف','Queue directory'),t('نام تماس‌گیرنده از دفترچه و شماره‌گیری با تلفن اختصاصی کاربر','Queue-scoped contact names and permissioned callback dialing'),'beta'],
-  ['shifts',t('برنامه شیفت','Shift planning'),t('ثبت شیفت و جلوگیری از تداخل؛ بدون تغییر وضعیت PBX','Schedules with overlap validation; no PBX state changes'),'beta'],
-  ['roles',t('احراز هویت چندکاربره و تفکیک سازمانی','Multiuser RBAC and tenants'),t('ورود محلی و RBAC آزمایشی موجود؛ نیازمند سخت‌سازی تولیدی','Local login and scoped RBAC; production hardening pending'),'beta'],
-  ['ai',t('AI Copilot فارسی، هشدار هوشمند و STT','Persian AI copilot and STT'),t('نیازمند مدل محلی و سیاست حریم خصوصی','Needs local model and privacy policy'),'planned']
- ];
- $('feature-catalog').innerHTML=capabilities.map(([id,label,desc,state])=>`<article class="cap-card"><span class="cap-icon">${id==='monitor'?'◉':id==='softphone'?'☎':id==='ai'?'✦':'◫'}</span><div><b>${esc(label)}</b><p>${esc(desc)}</p></div><span class="cap-pill ${state}">${state==='ready'?t('آماده آزمایش','Available'):state==='beta'?t('بتا','Beta'):t('برنامه توسعه','Planned')}</span></article>`).join('');
+ const capabilities=(cfg.module_catalog?.modules||[]).map(m=>[m.id,m[fa?'fa':'en'],m.note[fa?'fa':'en'],m.state]);
+ if(window.SaneQueueCatalog)window.SaneQueueCatalog.mount($('feature-catalog'),cfg.module_catalog,{fa});
  document.querySelectorAll('[data-pbx-check]').forEach(button=>button.onclick=async()=>{
   const kind=button.dataset.pbxCheck;const resultBox=$('pbx-health-results');const info=$('pbx-health-status');
   info.textContent=t('در حال دریافت اطلاعات فقط خواندنی از AMI...','Requesting read-only AMI data...');button.disabled=true;

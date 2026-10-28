@@ -8,7 +8,7 @@ function setup(view='surveys'){
  for(const key of ['surveys-view','ops-config','survey-queue','survey-status','survey-summary','survey-rows','survey-from','survey-to','survey-filter','survey-more','survey-refresh','survey-detail','survey-detail-close','survey-detail-content'])nodes[key]=make();
  nodes['ops-config'].textContent='{"csrf":"test"}';const body={dataset:{view}};
  const document={body,documentElement:{lang:'en'},getElementById:key=>nodes[key]||null,createElement:make};
- vm.runInNewContext(source,{document,Intl,Date,URLSearchParams,Object,JSON,Option:function(text,value){this.textContent=text;this.value=value;},MutationObserver:class{constructor(callback){observers.push(callback);}observe(){}},fetch:(url,options)=>new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}))});
+ vm.runInNewContext(source,{window:{},document,Intl,Date,URLSearchParams,Object,JSON,Option:function(text,value){this.textContent=text;this.value=value;},MutationObserver:class{constructor(callback){observers.push(callback);}observe(){}},fetch:(url,options)=>new Promise((resolve,reject)=>requests.push({url,options,resolve,reject}))});
  return {nodes,requests,move(value){body.dataset.view=value;observers.forEach(fn=>fn());},observe(){observers.forEach(fn=>fn());}};
 }
 const response=value=>({redirected:false,ok:true,headers:{get:()=> 'application/json'},json:async()=>value});

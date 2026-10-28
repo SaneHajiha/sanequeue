@@ -26,6 +26,13 @@ class InstallerConfigurationTests(unittest.TestCase):
             with self.subTest(value=value),self.assertRaises(ValueError):self.module.validate_origin(value)
         self.assertEqual(self.module.validate_origin('http://192.168.2.2:5000/'),'http://192.168.2.2:5000')
 
+    def test_ambiguous_or_partial_managed_ami_markers_fail_before_replacement(self):
+        begin,end=self.module.BEGIN,self.module.END
+        for text in (begin, end, end+'\n'+begin, begin+'\n'+end+'\n'+begin+'\n'+end,
+                     'prefix '+begin+'\n'+end,begin+'\n'+end+' trailing'):
+            with self.subTest(text=text),self.assertRaisesRegex(ValueError,'ambiguous_managed_ami_block'):
+                self.module.manager_block(text,'a'*64,'b'*64)
+
     def test_private_permissions_use_descriptor_and_refuse_links(self):
         import tempfile,stat
         from unittest.mock import patch

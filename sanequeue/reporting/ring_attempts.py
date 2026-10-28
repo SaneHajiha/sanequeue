@@ -1,8 +1,9 @@
 """Bounded archival queue-member RINGNOANSWER attempts, never unique callers.
 
-No AMI, source import, schema write or PBX query. The existing event_time index
-bounds every inspected source row, including unrelated event kinds. Large
-windows fail explicitly rather than yielding misleading partial aggregates.
+No AMI, source import, schema write or PBX query. New archives use the partial
+ring-event index; old archives retain the event_time path, whose budget includes
+unrelated source rows. Both paths fail explicitly rather than yield partial
+aggregates when their respective source-row budgets are exceeded.
 """
 import base64
 import hashlib
@@ -26,6 +27,13 @@ EVENT_SQL='''SELECT e.id,e.ts,e.event_key,e.source,
  FROM events e INDEXED BY event_time LEFT JOIN source_items s
  ON s.pbx=e.pbx AND s.source=e.source AND s.source_key=e.source_key
  WHERE e.pbx=? AND e.ts>=? AND e.ts<? ORDER BY e.ts,e.id LIMIT ?'''
+RING_EVENT_SQL='''SELECT e.id,e.ts,e.event_key,e.source,
+ CASE WHEN length(CAST(e.payload AS BLOB))<=4096 THEN e.payload ELSE '' END payload,
+ s.event_id=e.id current_version
+ FROM events e INDEXED BY event_ring_time LEFT JOIN source_items s
+ ON s.pbx=e.pbx AND s.source=e.source AND s.source_key=e.source_key
+ WHERE e.pbx=? AND e.ts>=? AND e.ts<? AND UPPER(e.kind)='RINGNOANSWER'
+ AND e.source LIKE 'queue_log%' ORDER BY e.ts,e.id LIMIT ?'''
 
 
 def _finite(value):
@@ -99,7 +107,10 @@ def report(archive,scope,start,end,*,before=None,limit=100,now=None):
                 if not isinstance(item,list) or len(item)!=2 or not all(_finite(v) for v in item) or item[1]<item[0]:gap=True;break
                 if first<=item[1] and last>=item[0]:gap=True
         if source.get('last_rotation_detected') and not gaps:gap=True
-        raw=db.execute(EVENT_SQL,(archive.pbx,first,last,MAX_EVENTS+1)).fetchall() if allowed and first<last else []
+        # Detect the optional index read-only. HTTP must never build/migrate an
+        # index on a large archive or silently fall back to an unbounded scan.
+        indexed=db.execute("SELECT 1 FROM sqlite_master WHERE type='index' AND name='event_ring_time' AND tbl_name='events'").fetchone() is not None
+        raw=db.execute(RING_EVENT_SQL if indexed else EVENT_SQL,(archive.pbx,first,last,MAX_EVENTS+1)).fetchall() if allowed and first<last else []
         if len(raw)>MAX_EVENTS:raise QueryDeadline('ring_attempt_source_event_limit')
         for event in raw:
             check()
@@ -160,4 +171,5 @@ def report(archive,scope,start,end,*,before=None,limit=100,now=None):
             queue_log=dict(ok=health.get('ok') is True,checked=checked if _finite(checked) else None,fresh=fresh,
                 caught_up=progress.get('caught_up') is True,source_time=source.get('source_time') if _finite(source.get('source_time')) else None),
             source_gap=gap,unknown_agent_attempts=sum(r['agent'] is None for r in rows),
-            source_event_limit=MAX_EVENTS,group_limit=MAX_GROUPS,retention='no_automatic_deletion'))
+            source_event_limit=MAX_EVENTS,source_event_budget='matching_ring_attempt_rows' if indexed else 'all_source_rows',
+            reader_index='event_ring_time' if indexed else 'event_time',group_limit=MAX_GROUPS,retention='no_automatic_deletion'))

@@ -14,6 +14,7 @@ from .report_plans import SavedReports
 from .queries import Scope
 from .store import Archive
 from .visit_snapshots import capture,SnapshotUnavailable
+from . import builder_exports
 
 
 def current_modes(owner,queues,accounts_path,policy_path):
@@ -71,6 +72,7 @@ class PlanWorker:
                 or scope.get('queues')!=spec['queues'] or scope.get('agents')!=[]
                 or scope.get('self_only') is not False or scope.get('not_before')!=0
                 or any(original.get(key)!=spec[key] for key in ('start','end','outcome','format','language'))
+                or original.get('builder_definition')!=spec.get('builder_definition')
                 or set(original.get('number_modes',{}))!=set(spec['queues'])):
             raise ExportFailure('export_request_conflict')
 
@@ -91,15 +93,19 @@ class PlanWorker:
                     self._validate_prior(prior,spec)
                     export_id=prior['id']
                 else:
-                    watermark=projection_watermark(self.archive);snapshot=capture(self.archive)
+                    if spec.get('builder_definition') is not None:
+                        frozen=builder_exports.capture(self.archive)
+                        watermark,snapshot=frozen['watermark'],frozen['snapshot']
+                    else:watermark=projection_watermark(self.archive);snapshot=capture(self.archive)
                     # Snapshot reads can race a plan/account change. Refresh
                     # grants and the active lease immediately before dispatch.
                     modes,stopped=self._preflight(occurrence,worker)
                     if stopped:return stopped
+                    builder={'builder_definition':spec['builder_definition']} if spec.get('builder_definition') is not None else {}
                     export_id=self.jobs.create(spec['owner'],Scope(tuple(spec['queues'])),spec['start'],spec['end'],
                         watermark=watermark,pbx=self.archive.pbx,number_modes=modes,
                         format=spec['format'],language=spec['language'],outcome=spec['outcome'],
-                        snapshot=snapshot,request_key=key)
+                        snapshot=snapshot,request_key=key,**builder)
                     prior=self.jobs.get(export_id,spec['owner'])
                     self._validate_prior(prior,spec)
                 _,stopped=self._preflight(occurrence,worker,export_id=export_id,number_modes=prior['spec']['number_modes'])

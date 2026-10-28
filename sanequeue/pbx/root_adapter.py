@@ -26,13 +26,56 @@ def digest(content):return hashlib.sha256(content).hexdigest()
 
 
 def patch_macro(original):
-    if MARKER in original:return original.replace('sanequeue-caller-name,s,1(${NODEST}))','sanequeue-caller-name,s,1(${NODEST},${SANEQUEUE_CALLBACK}))')
-    pattern=r'(?ms)^###CallWaiting And CallBack\s*\n.*?(?=^exten\s*=>\s*s,n\(dial\),)'
-    updated,count=re.subn(pattern,MARKER+'\nexten => s,n(godial),Gosub(sanequeue-busy-menu,s,1(${DEXTEN}))\n\n',original,count=1)
-    if count!=1:raise ValueError('unsupported_dial_one_adapter')
-    needle='exten => s,n(dial),'
-    updated=updated.replace(needle,'exten => s,n(dial),Gosub(sanequeue-caller-name,s,1(${NODEST},${SANEQUEUE_CALLBACK}))\nexten => s,n,',1)
-    return updated
+    """Migrate only the known legacy menu, never infer a stock-PBX adapter.
+
+    The file may contain other contexts with their own ``dial`` labels. A
+    generic managed comment is not evidence that the two expected hooks exist.
+    Ambiguous contexts, labels or partially edited hooks require inspection.
+    """
+    fail='unsupported_dial_one_adapter'
+    if not isinstance(original,str):raise ValueError(fail)
+    contexts=list(re.finditer(r'(?m)^[ \t]*\[([^\]\r\n]+)\][^\r\n]*(?:\r?\n|$)',original))
+    targets=[(index,row) for index,row in enumerate(contexts) if row[1]=='macro-dial-one']
+    if len(targets)!=1:raise ValueError(fail)
+    index,context=targets[0]
+    if not re.fullmatch(r'[ \t]*\[macro-dial-one\][ \t]*(?:;[^\r\n]*)?(?:\r?\n|$)',context[0]):raise ValueError(fail)
+    end=contexts[index+1].start() if index+1<len(contexts) else len(original)
+    body=original[context.end():end]
+    # Count flexible label spellings too, then accept only the supported exact
+    # spelling. This refuses an ambiguous duplicate rather than patching one.
+    label=r'(?m)^[ \t]*(?:exten[ \t]*=>[ \t]*s[ \t]*,|same[ \t]*=>[ \t]*)n[ \t]*\([ \t]*dial[ \t]*\)[ \t]*,'
+    if len(re.findall(label,body))!=1:raise ValueError(fail)
+    dial_rows=list(re.finditer(r'(?m)^exten => s,n\(dial\),([^\r\n]+)(\r?\n|$)',body))
+    if len(dial_rows)!=1:raise ValueError(fail)
+    dial_row=dial_rows[0]
+    newline='\r\n' if '\r\n' in body else '\n'
+    busy='exten => s,n(godial),Gosub(sanequeue-busy-menu,s,1(${DEXTEN}))'
+    old_name='exten => s,n(dial),Gosub(sanequeue-caller-name,s,1(${NODEST}))'
+    name='exten => s,n(dial),Gosub(sanequeue-caller-name,s,1(${NODEST},${SANEQUEUE_CALLBACK}))'
+    # The observed managed lab context preserves this exact inbound transfer
+    # guard before Dial. It is optional; arbitrary intervening commands are not.
+    inbound_guard='exten => s,n,ExecIf($["${DIRECTION}" = "INBOUND"]?Set(D_OPTIONS=${STRREPLACE(D_OPTIONS,T)}))'
+    legacy='###CallWaiting And CallBack'
+    if MARKER in body:
+        if body.count(MARKER)!=1 or legacy in body:raise ValueError(fail)
+        if body.count('sanequeue-busy-menu')!=1 or body.count('sanequeue-caller-name')!=1:raise ValueError(fail)
+        if len(re.findall(r'(?m)^[ \t]*(?:exten[ \t]*=>[ \t]*s[ \t]*,|same[ \t]*=>[ \t]*)n[ \t]*\([ \t]*godial[ \t]*\)[ \t]*,',body))!=1:raise ValueError(fail)
+        managed=re.escape(MARKER)+r'\r?\n'+re.escape(busy)+r'\r?\n\r?\n(?:'+re.escape(name)+'|'+re.escape(old_name)+r')\r?\n(?:'+re.escape(inbound_guard)+r'\r?\n)?exten => s,n,Dial\([^\r\n]+\)(?:\r?\n|$)'
+        rows=list(re.finditer('(?m)^'+managed,body))
+        if len(rows)!=1:raise ValueError(fail)
+        # An exact historical managed signature can receive the callback flag.
+        updated=body.replace(old_name,name,1)
+    else:
+        markers=list(re.finditer(r'(?m)^'+re.escape(legacy)+r'[ \t]*(?:\r?\n|$)',body))
+        if len(markers)!=1 or body.count(legacy)!=1:raise ValueError(fail)
+        marker=markers[0]
+        if marker.end()>dial_row.start() or not re.fullmatch(r'Dial\([^\r\n]+\)',dial_row[1]):raise ValueError(fail)
+        if 'sanequeue-busy-menu' in body or 'sanequeue-caller-name' in body:raise ValueError(fail)
+        remainder=body[:marker.start()]+body[dial_row.start():]
+        if re.search(r'(?m)^[ \t]*(?:exten[ \t]*=>[ \t]*s[ \t]*,|same[ \t]*=>[ \t]*)n[ \t]*\([ \t]*godial[ \t]*\)[ \t]*,',remainder):raise ValueError(fail)
+        replacement=MARKER+newline+busy+newline+newline+name+newline+'exten => s,n,'+dial_row[1]+dial_row[2]
+        updated=body[:marker.start()]+replacement+body[dial_row.end():]
+    return original[:context.end()]+updated+original[end:]
 
 
 def dialplan(token):

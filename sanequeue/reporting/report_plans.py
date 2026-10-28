@@ -158,7 +158,7 @@ class SavedReports:
         if worker:value.update(worker=row['worker'],lease_until=row['lease_until'])
         return value
 
-    def save(self,owner,name,queues,outcome=None,format='xlsx',language='fa',period='yesterday',at='08:00',weekdays=None,enabled=False,ident=None):
+    def save(self,owner,name,queues,outcome=None,format='xlsx',language='fa',period='yesterday',at='08:00',weekdays=None,enabled=False,ident=None,*,builder_definition=None):
         owner=_text(owner,128,'owner');name=_text(name,120,'name')
         if not isinstance(queues,(list,tuple,set)) or not 1<=len(queues)<=256:raise ValueError('invalid_report_plan_queues')
         queues=sorted({_text(queue,128,'queue') for queue in queues})
@@ -171,6 +171,15 @@ class SavedReports:
         spec=dict(name=name,queues=queues,outcome=outcome,format=format,language=language,period=period,
                   at=at,weekdays=sorted(set(weekdays)),destination='in_app',timezone='Asia/Tehran',
                   calendar='persian' if period=='previous_persian_month' else 'gregorian',enabled=enabled,archived=False)
+        if builder_definition is not None:
+            from .report_builder import definition
+            frozen=definition(builder_definition)
+            if frozen['queues']!=queues:raise ValueError('report_plan_builder_scope_mismatch')
+            if outcome is not None:raise ValueError('report_plan_builder_outcome_in_definition')
+            if format not in ('csv','xlsx'):raise ValueError('report_plan_builder_format_unsupported')
+            # Store the complete canonical definition, never a pointer to a
+            # mutable template's latest version. Occurrences freeze this JSON.
+            spec['builder_definition']=frozen
         if ident is not None:_id(ident)
         now=time.time()
         with self._db(write=True) as db:

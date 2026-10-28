@@ -56,12 +56,51 @@ class RingAttemptTests(unittest.TestCase):
     def test_projection_lag_prevents_visit_link_but_preserves_archived_attempt(self):
         self.event('ENTERQUEUE',90);self.project();self.event('RINGNOANSWER',110,values=['1000']);result=self.report()
         self.assertEqual(result['totals']['attempts'],1);self.assertIsNone(result['rows'][0]['visit_id']);self.assertFalse(result['coverage']['projection_caught_up'])
-    def test_existing_event_index_and_cap_counts_unrelated_rows(self):
+    def test_legacy_event_index_and_cap_counts_unrelated_rows(self):
+        with self.archive.writer() as db:db.execute('DROP INDEX event_ring_time')
         self.archive.append([Event('cel',str(i),110+i,'SYNTHETIC',{}) for i in range(4)])
         with self.archive.reader() as db:
             plan=' '.join(row[3] for row in db.execute('EXPLAIN QUERY PLAN '+module.EVENT_SQL,('primary',100,200,10)))
         self.assertIn('event_time (pbx=? AND ts>? AND ts<?)',plan);self.assertNotIn('SCAN e',plan)
         with patch.object(module,'MAX_EVENTS',3),self.assertRaisesRegex(QueryDeadline,'source_event_limit'):self.report()
+    def test_partial_index_reads_sparse_attempts_among_19300_unrelated_events(self):
+        for first in range(0,19300,1000):
+            self.archive.append([Event('cel',str(i),110+i/1000,'SYNTHETIC',{}) for i in range(first,min(first+1000,19300))])
+        self.event('RINGNOANSWER',130,values=['1000']);self.event('ringnoanswer',140,values=['2000'])
+        with self.archive.reader() as db:
+            plan=' '.join(row[3] for row in db.execute('EXPLAIN QUERY PLAN '+module.RING_EVENT_SQL,('primary',100,200,10)))
+        self.assertIn('event_ring_time (pbx=? AND ts>? AND ts<?)',plan);self.assertNotIn('SCAN e',plan)
+        with patch.object(module,'MAX_EVENTS',3):result=self.report()
+        self.assertEqual(result['totals']['attempts'],2);self.assertEqual(result['totals']['known_ring_seconds'],3)
+        self.assertEqual(result['coverage']['source_event_budget'],'matching_ring_attempt_rows')
+        self.assertEqual(result['coverage']['reader_index'],'event_ring_time')
+    def test_indexed_matching_attempt_budget_still_fails_without_partial_totals(self):
+        for i in range(4):self.event('RINGNOANSWER',110+i,values=['1000'])
+        with patch.object(module,'MAX_EVENTS',3),self.assertRaisesRegex(QueryDeadline,'source_event_limit'):self.report()
+    def test_indexed_current_versions_mixed_case_source_and_queue_scope_are_preserved(self):
+        self.event('ringnoanswer',110,values=['1000'])
+        self.event('RiNgNoAnSwEr',120,values=['2000'],key='corrected')
+        self.event('RINGCANCELED',121,values=['2000'],key='corrected')
+        self.event('RINGNOANSWER',130,queue='8002',values=['3000'])
+        self.archive.append([Event('cel','not-queue-log',140,'RINGNOANSWER',dict(queue='8001',callid='private-foreign',agent='200',values=['4000']))])
+        self.project();result=self.report()
+        self.assertEqual(result['totals']['attempts'],1);self.assertEqual(result['totals']['known_ring_seconds'],1)
+        serialized=json.dumps(result)
+        for value in ('8002','private-foreign','synthetic-private-call','PJSIP/'):
+            self.assertNotIn(value,serialized)
+    def test_legacy_fallback_is_read_only_and_does_not_create_the_missing_index(self):
+        with self.archive.writer() as db:db.execute('DROP INDEX event_ring_time')
+        self.event('RINGNOANSWER',110,values=['1000']);self.project()
+        commands=[]
+        import sqlite3
+        original=sqlite3.connect
+        def connect(*args,**kwargs):
+            db=original(*args,**kwargs);db.set_trace_callback(commands.append);return db
+        with patch('sanequeue.reporting.store.sqlite3.connect',connect):result=self.report()
+        self.assertEqual(result['coverage']['reader_index'],'event_time')
+        self.assertEqual(result['coverage']['source_event_budget'],'all_source_rows')
+        self.assertFalse(any(q.lstrip().upper().startswith(('CREATE','ALTER','INSERT','UPDATE','DELETE')) for q in commands))
+        with self.archive.reader() as db:self.assertIsNone(db.execute("SELECT name FROM sqlite_master WHERE name='event_ring_time'").fetchone())
     def test_payload_groups_and_global_correlation_caps_fail_explicit(self):
         self.event('RINGNOANSWER',110,values=['1','x'*5000])
         with self.assertRaisesRegex(QueryDeadline,'payload_limit'):self.report()

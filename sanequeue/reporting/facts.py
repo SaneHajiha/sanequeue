@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS report_cdr_parties(
  pbx TEXT,source_key TEXT,agent TEXT,direction TEXT,inventory_observed REAL,
  PRIMARY KEY(pbx,source_key));
 '''
-PROJECTION_VERSION = 9
+PROJECTION_VERSION = 10
 
 
 def number(value):
@@ -132,12 +132,22 @@ def _endpoint(value):
     return match.group(1) if match else None
 
 
-def _rebuild_visits(db, pbx, queue, callid):
-    events = db.execute('''SELECT event_id,ts,kind,agent,data FROM report_queue_events
-      WHERE pbx=? AND queue=? AND callid=? ORDER BY ts,event_id LIMIT 10001''',
-                        (pbx, queue, callid)).fetchall()
-    if len(events) > 10000:
+def _rebuild_visits(db, pbx, queue, callid, through_event_id):
+    # Keep the raw evidence cap even when most versions have been superseded.
+    # Filtering first could hide unbounded replay/query work behind few facts.
+    raw_count = db.execute('''SELECT COUNT(*) FROM (
+      SELECT 1 FROM report_queue_events WHERE pbx=? AND queue=? AND callid=? LIMIT 10001)''',
+                           (pbx, queue, callid)).fetchone()[0]
+    if raw_count > 10000:
         raise ValueError('queue_call_evidence_limit')
+    events = db.execute('''SELECT r.event_id,r.ts,r.kind,r.agent,r.data
+      FROM report_queue_events r INDEXED BY rq_call JOIN events e ON e.pbx=r.pbx AND e.id=r.event_id
+      WHERE r.pbx=? AND r.queue=? AND r.callid=? AND r.event_id<=?
+        AND NOT EXISTS (SELECT 1 FROM events newer
+          WHERE newer.pbx=e.pbx AND newer.source=e.source AND newer.source_key=e.source_key
+            AND newer.id>e.id AND newer.id<=?)
+      ORDER BY r.ts,r.event_id LIMIT 10001''',
+                        (pbx, queue, callid, through_event_id, through_event_id)).fetchall()
     # Only derived facts are replaced. No source history is removed.
     existing = {row[1]:tuple(row) for row in db.execute(
         'SELECT * FROM report_visits WHERE pbx=? AND queue=? AND callid=?', (pbx,queue,callid))}
@@ -239,6 +249,7 @@ def project_batch(archive, *, limit=500, inventory=None):
                        (archive.pbx, PROJECTION_VERSION))
         events = db.execute('''SELECT id,source,source_key,ts,kind,payload FROM events
             WHERE pbx=? AND id>? ORDER BY id LIMIT ?''', (archive.pbx, after, limit)).fetchall()
+        through_event_id = events[-1][0] if events else after
         dirty = set()
         for event_id, source, key, ts, kind, payload in events:
             row = json.loads(payload)
@@ -315,7 +326,19 @@ def project_batch(archive, *, limit=500, inventory=None):
                 for identity in identities:
                     dirty.update(db.execute('SELECT DISTINCT queue,callid FROM report_queue_events WHERE pbx=? AND callid=?',
                                             (archive.pbx, identity)).fetchall())
-            elif source.startswith('queue_log') and row.get('queue') and row.get('callid'):
+            elif source.startswith('queue_log'):
+                # A corrected source item can move queue/call identity, lose
+                # valid fields, or change kind. Rebuild its previous identities
+                # as well; retained raw versions are not separate call events.
+                prior = db.execute('''SELECT r.queue,r.callid FROM events e
+                  JOIN report_queue_events r ON r.pbx=e.pbx AND r.event_id=e.id
+                  WHERE e.pbx=? AND e.source=? AND e.source_key=? LIMIT 10001''',
+                                   (archive.pbx, source, key)).fetchall()
+                if len(prior) > 10000:
+                    raise ValueError('queue_call_evidence_limit')
+                dirty.update(prior)
+                if not row.get('queue') or not row.get('callid'):
+                    continue
                 if kind.upper()=='CONNECT':
                     from .correlate import project as project_relations
                     from .store import Event
@@ -328,7 +351,7 @@ def project_batch(archive, *, limit=500, inventory=None):
                             kind.upper(), json.dumps(row.get('values') or [], ensure_ascii=False)))
                 dirty.add((queue, callid))
         for queue, callid in dirty:
-            _rebuild_visits(db, archive.pbx, queue, callid)
+            _rebuild_visits(db, archive.pbx, queue, callid, through_event_id)
         cursor = events[-1][0] if events else after
         db.execute('INSERT OR REPLACE INTO report_projection VALUES(?,?,?)', (archive.pbx, cursor, time.time()))
         bootstrap_snapshots(db, archive.pbx, limit=limit)
