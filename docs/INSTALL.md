@@ -1,3 +1,5 @@
+Current release and module controls: [beta.27 pilot](PILOT_BETA27.en.md). Pin REF to the full reviewed commit for reproducible installs.
+
 # Automatic installation · beta.27 pilot
 
 [فارسی](INSTALL.fa.md) · [User guide](USER_GUIDE.en.md) · [Validation](AUDIT_BETA23.md)

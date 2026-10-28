@@ -1,3 +1,7 @@
+# beta.27 installed pilot acceptance — 2026-10-28
+
+Full local regression checkpoint:1010passed,20skipped,334subtests in287.31s. Later installer/control changes receive separate targeted/Linux checks; no claim that this full run tested code written afterward. Existing30Chromium tests remain valid for unchanged shared frontend. Actual installed login/chart/calendar/API passed with no pageerrors; light/mobile had no horizontal overflow. Real UI downloads:CSV81272bytes(491data rows),XLSX58838bytes(491data+4header/metadata rows),PDF179182bytes(50pages; file signature/page structure checked, not all-page visual approval). Actual plans disable→restartblocked(ConditionResult=no)→enablepassed. Raw projection migration17603before/after,version10,cursor17603,10.7157swall/2.6754sCPU/23260KiBRSS. Corrected monthlyCLI scanned146790rows,validated endpointcounts/means and unionedpresence in53.3994swall/13.3087sCPU/32296KiBRSS atCPUQuota25%,MemoryMax256M. Initial repeatedidentityscan hit120s deadline; interval coalescing fixed the measured quadratic path without raising budgets. Existing-source installer failed safely and rollback was observed before legacy-alias/private-output fixes; mainlab installation then passed. Private recordings/data/screenshots/credentials remain outside source. No concurrent-call/RTP certification or host reboot.
+
 # شواهد راه‌اندازی ابزارها — ۲۰۲۶/۱۰/۲۸
 
 ## مبنا و محدوده

@@ -1,3 +1,5 @@
+راهنمای نسخهٔ جاری و کنترل ماژول‌ها: [پایلوت beta.27](PILOT_BETA27.fa.md). برای نصب تکرارپذیر، REF را SHA کامل نسخه قرار دهید.
+
 # نصب خودکار · beta.27 pilot
 
 [English](INSTALL.md) · [راهنمای تصویری](USER_GUIDE.fa.md) · [شواهد آزمون](AUDIT_BETA23.md)

@@ -32,3 +32,6 @@ Every completed capability needs a panel path, permission, source, unit/denomina
 ## 2026-10-28 bounded custom CSV update
 
 Exact custom queue CSV now preserves column order/filters/grouping and a single archive snapshot, with current all-queue export/number permissions rechecked. Hard limits: 500 rows/groups, 4 MiB, 2-second reader, one slot per web process. Over-cap requests fail without partial exports. This paragraph describes the earlier immediate-CSV checkpoint. The later background export/schedule implementation is documented in REPORTING_CUSTOM_EXPORTS_AND_RANKINGS.en.md; the CDR builder dataset remains separate development. Callback history no longer auto-deletes after 30 days; pending expiry still prevents dialing.
+
+
+2026-10-28 beta.27: installed pilot/API/calendar/charts and real CSV/XLSX/PDF downloads passed; see PILOT_BETA27.en.md. Private sealed-backup monthly agent aggregation now passed the full synthetic month (53.4s wall,13.3sCPU,~32MiB RSS at25%onecore). Current-permission background job/API integration remains development; interactive limits were not raised.

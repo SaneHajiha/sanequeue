@@ -1,3 +1,5 @@
+Current installed pilot: **beta.27**. See [pilot acceptance](PILOT_BETA27.en.md); the reporting branch is published and the explicit completion gaps remain open.
+
 Current completion checklist (2026-10-28): [فارسی](REPORTING_COMPLETION_CHECKLIST.fa.md) · [English](REPORTING_COMPLETION_CHECKLIST.en.md). Historical checkpoints below do not override this current scope.
 
 # SaneQueue development handoff

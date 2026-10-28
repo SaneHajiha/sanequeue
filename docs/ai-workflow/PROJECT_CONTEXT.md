@@ -1,3 +1,7 @@
+# Current lab release — 2026-10-28
+
+Current pilot is beta.27 on5000;18897 is read-only preview of the same source/archive. Main /opt/sanequeue source is a versioned release; state uses the existing validated physical directory and original accounts. One historical worker set, optional AI/survey/generative off without explicit configuration. Older deployment notes below are historical. Read ../PILOT_BETA27.fa.md and the completion checklist before expanding claims.
+
 # زمینهٔ پروژه
 
 پس از تأیید کاربر در ۲۰۲۶/۱۰/۲۸، AGENTS.md و اسناد گردش کار ثبت و ابزارهای توسعهٔ محلی نصب شدند. کد عملیاتی و سرور تلفنی در این مرحله تغییر نکردند؛ Push انجام نشده است.

@@ -1,3 +1,5 @@
+نسخهٔ پایلوت **beta.27**: [نصب و شواهد آزمون](docs/PILOT_BETA27.fa.md) · [فعال/غیرفعال‌کردن سرویس‌ها](docs/SERVICE_MODULE_CONTROL.md) · [محدوده و توسعهٔ باز](docs/REPORTING_COMPLETION_CHECKLIST.fa.md).
+
 # صانع · SaneQueue
 
 مانیتورینگ زندهٔ صف برای مراکز تماس مبتنی بر Asterisk، با مجوز MIT.

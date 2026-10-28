@@ -1,3 +1,5 @@
+**beta.27 pilot**: [installation and acceptance](docs/PILOT_BETA27.en.md) · [independent service controls](docs/SERVICE_MODULE_CONTROL.md) · [remaining reporting scope](docs/REPORTING_COMPLETION_CHECKLIST.en.md).
+
 <p align="center"><img src="docs/images/banner.jpg" alt="SaneHajiha — Open-source VoIP & Contact Center Tools" /></p>
 
 # SaneQueue

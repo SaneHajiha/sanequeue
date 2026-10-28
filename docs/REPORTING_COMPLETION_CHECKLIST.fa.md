@@ -32,3 +32,6 @@
 رتبه‌بندی دوشاخصی کارشناسان با نمونهٔ معتبر، نمودار/جدول، هویت تاریخی چندصفی و رتبهٔ مساوی اضافه شد؛ امتیاز کیفیت یا اثبات برتری مطلق نیست. fixture مستقل۱۵۰مراجعه روی سرور آزمایشی با انتظارهای عددی تطبیق داده شد؛ وارد دادهٔ اصلی/پنل جاری نشده است.
 
 آزمون ماهانهٔ سرور:۳۰هزار شناسه/۳۳۳۳۰مراجعه/۱۹۳۵۰۰رویداد؛۶۵بررسی اصلی و۶۰رتبه‌بندی روزانه موفق. خروجی کاملCSV/XLSXتطبیق داشت. محدودیت ماهانهٔ رتبه‌بندی/حضور هنوز توسعهٔ باز است، نه صرفاً تست. مرجع: REPORTING_MONTHLY_VALIDATION.fa.md.
+
+
+2026-10-28 beta.27: installed pilot/API/calendar/charts and real CSV/XLSX/PDF downloads passed; see PILOT_BETA27.fa.md. Private sealed-backup monthly agent aggregation now passed the full synthetic month (53.4s wall,13.3sCPU,~32MiB RSS at25%onecore). Current-permission background job/API integration remains development; interactive limits were not raised.

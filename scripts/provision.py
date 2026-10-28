@@ -11,7 +11,7 @@ from scripts.module_control import allowed_start_units,collector_acceptance_requ
 
 BEGIN='; BEGIN SANEQUEUE MANAGED ACCESS'
 END='; END SANEQUEUE MANAGED ACCESS'
-REPORTING_UNITS=('sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-reporting-ai.service','sanequeue-media.service','sanequeue-generative.service')
+REPORTING_UNITS=('sanequeue-reporting.service','sanequeue-reporting-export.service','sanequeue-reporting-plans.service','sanequeue-reporting-ai.service','sanequeue-media.service','sanequeue-generative.service','sanequeue-surveys.service')
 
 
 def manager_block(original,collector_secret,control_secret):
@@ -59,6 +59,17 @@ def origin_default():
             if address.version==4 and address.is_private and not address.is_loopback:return 'http://'+str(address)+':5000'
         except ValueError:pass
     return 'http://127.0.0.1:5000'
+
+
+def prepare_state_permissions(root,uid,gid):
+    root=Path(root)
+    for directory,dirs,files in os.walk(root):
+        current=Path(directory)
+        if current.is_symlink() or any((current/name).is_symlink() for name in dirs+files):
+            raise ValueError('symlink_in_private_state_refused')
+        # Export/media stores deliberately require owner-only subdirectories.
+        private_permissions(current,uid,gid,0o750 if current==root else 0o700)
+        for name in files:private_permissions(current/name,uid,gid,0o600)
 
 
 def validate_origin(value):
@@ -186,12 +197,7 @@ def main():
         if not (etc/'inventory.ini').exists():private(etc/'inventory.ini','[inventory]\ninternal_contexts=from-internal\n')
         private(etc/'gateway.env',f'SANEQUEUE_PUBLIC_ORIGINS={origin},http://127.0.0.1:5000\nSANEQUEUE_HTTPS={int(parsed.scheme=="https")}\nSANEQUEUE_CONTROL_MODE=rbac\nSANEQUEUE_ADVANCED_ACTIONS=transfer,attended_transfer,cancel_transfer,park,retrieve,pickup,dial,hangup_active\nSANEQUEUE_TRANSFER_CONTEXT=from-internal\nSANEQUEUE_PARKING_LOT=default\nSANEQUEUE_AUTO_EXTENSIONS=1\n')
         private(etc/'redis.conf',f'bind 127.0.0.1\nport 16379\nprotected-mode yes\nrequirepass {redis_secret}\nsave ""\nappendonly no\nmaxmemory 128mb\nmaxmemory-policy noeviction\ndaemonize no\n')
-        for root,dirs,files in os.walk(resolved_state):
-            if Path(root).is_symlink() or any((Path(root)/name).is_symlink() for name in dirs+files):raise ValueError('symlink_in_private_state_refused')
-            private_permissions(root,owner.pw_uid,group.gr_gid,0o750)
-            for name in files:
-                path=Path(root)/name
-                private_permissions(path,owner.pw_uid,group.gr_gid,0o600)
+        prepare_state_permissions(resolved_state,owner.pw_uid,group.gr_gid)
         if link.exists() and not link.is_symlink():
             if not link.resolve().is_relative_to(Path('/opt')):raise ValueError('unsafe_existing_source')
             old_physical=Path('/opt')/('sanequeue-before-'+stamp);link.rename(old_physical)
@@ -205,10 +211,13 @@ def main():
             control_link.symlink_to('/opt/sanequeue/scripts/sanequeuectl');created_control_link=True
         for source,destination in (('sanequeue-asgi.service','sanequeue.service'),('sanequeue-collector.service','sanequeue-collector.service'),('sanequeue-inventory.service','sanequeue-inventory.service'),('sanequeue-inventory.timer','sanequeue-inventory.timer'),('sanequeue-fastagi.service','sanequeue-fastagi.service'),('sanequeue-pbx-apply.service','sanequeue-pbx-apply.service'),('sanequeue-pbx-apply.timer','sanequeue-pbx-apply.timer')):
             text=(release/'deploy'/source).read_text()
+            # Old releases may have a validated /var/lib/sanequeue alias.
+            # Private stores require the real directory, not a symlink root.
+            text=text.replace('/var/lib/sanequeue',str(resolved_state))
             if destination=='sanequeue.service':text=text.replace('--host 127.0.0.1 --port 5000','--host '+bind+' --port '+str(web_port))
             (Path('/etc/systemd/system')/destination).write_text(text)
         for unit in REPORTING_UNITS:
-            (Path('/etc/systemd/system')/unit).write_text((release/'deploy'/unit).read_text())
+            (Path('/etc/systemd/system')/unit).write_text((release/'deploy'/unit).read_text().replace('/var/lib/sanequeue',str(resolved_state)))
         if not (etc/'reporting.env').exists():
             # Reuse only an explicitly provisioned read-only SQL configuration.
             # Do not copy privileged PBX database credentials into the web app.
@@ -224,7 +233,7 @@ from sanequeue.reporting.quality import QualityStore
 from sanequeue.reporting.ai_jobs import AIJobs
 from sanequeue.reporting.report_plans import SavedReports
 from sanequeue.pbx.incident_media import MediaJobs
-s=Path('/var/lib/sanequeue')
+s=Path('/var/lib/sanequeue').resolve()
 Archive(s/'history.sqlite3').initialize()
 JobStore(s/'export-jobs.sqlite3',s/'private-exports').initialize()
 AuditStore(s/'recording-access.sqlite3').initialize()
@@ -247,6 +256,9 @@ MediaJobs(s).initialize()
             run(['systemctl','enable','--now','sanequeue-reporting-ai.service'])
         if (etc/'generative.enabled').is_file() and (etc/'generative.json').is_file() and allowed_start_units(('sanequeue-generative.service',),etc):
             run(['systemctl','enable','--now','sanequeue-generative.service'])
+        survey_files=(etc/'surveys.enabled',etc/'survey-bindings.json')
+        if all(path.is_file() and not path.is_symlink() for path in survey_files) and allowed_start_units(('sanequeue-surveys.service',),etc):
+            run(['systemctl','enable','--now','sanequeue-surveys.service'])
         from redis import Redis
         cache=Redis(host='127.0.0.1',port=16379,password=redis_secret,socket_timeout=3)
         # Disabled monitoring is an intentional install state, not a live-health pass.

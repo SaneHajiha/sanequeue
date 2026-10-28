@@ -1,3 +1,5 @@
+نسخهٔ پایلوت جاری: **beta.27**؛ نصب و شواهد واقعی در [راهنمای پایلوت](PILOT_BETA27.fa.md). شاخهٔ گزارش‌گیری به‌روزرسانی شده است؛ موارد باز سند تکمیل همچنان معتبرند.
+
 Current completion checklist (2026-10-28): [فارسی](REPORTING_COMPLETION_CHECKLIST.fa.md) · [English](REPORTING_COMPLETION_CHECKLIST.en.md). Historical checkpoints below do not override this current scope.
 
 # وضعیت توسعهٔ SaneQueue

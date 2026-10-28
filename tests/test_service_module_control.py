@@ -2,11 +2,14 @@
 import ast
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch,Mock
 from scripts.module_control import (SERVICE_MODULES,DROPIN,control_service,
     enabled_units,allowed_start_units,module_disabled,service_status,
-    collector_acceptance_required,global_enable)
+    collector_acceptance_required,global_enable,_global_action)
 
 
 class Systemd:
@@ -141,6 +144,23 @@ class ServiceModuleControlTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'disabled_state_preserved'):global_enable(runner,flag,(unit,))
         self.assertEqual(flag.read_bytes(),b'original administrator stop\n');self.assertFalse(self.systemd.active[unit]);self.assertFalse(self.systemd.enabled[unit])
 
+    def test_failed_global_resume_preserves_new_fastagi_and_disables_new_feature_dispatch(self):
+        flag=self.state/'module.disabled';flag.write_bytes(b'original stop\n');spool=self.root/'resume-spool';spool.mkdir();(spool/'disabled').touch()
+        worker='sanequeue-reporting.service';fastagi='sanequeue-fastagi.service'
+        for unit in (worker,fastagi):self.systemd.active[unit]=False;self.systemd.enabled[unit]=False
+        def runner(*command):
+            if command[1:3]==('start','sanequeue-pbx-apply.service'):(spool/'disabled').unlink()
+            if command[1:3]==('enable','--now'):
+                for unit in (worker,fastagi):self.systemd.active[unit]=True;self.systemd.enabled[unit]=True
+                return subprocess.CompletedProcess(command,1)
+            return self.systemd(*command)
+        adapter=SimpleNamespace(atomic=lambda path,value,*args:path.write_bytes(value))
+        with patch.dict(sys.modules,{'sanequeue.pbx.root_adapter':adapter,'pwd':SimpleNamespace(getpwnam=lambda name:SimpleNamespace(pw_gid=0))}):
+            with self.assertRaisesRegex(RuntimeError,'disabled_state_preserved'):global_enable(runner,flag,(worker,fastagi),spool=spool)
+        self.assertEqual(flag.read_bytes(),b'original stop\n');self.assertEqual((spool/'disabled').read_bytes(),b'disabled\n')
+        self.assertTrue(self.systemd.active[fastagi]);self.assertFalse(self.systemd.active[worker])
+        self.assertFalse(any(cmd[1] in ('stop','disable') and cmd[-1]==fastagi for cmd in self.systemd.commands))
+
     def test_rollback_failure_is_not_claimed_restored(self):
         def runner(*command):
             if command[1]=='daemon-reload':return subprocess.CompletedProcess(command,1)
@@ -181,5 +201,52 @@ class ServiceModuleControlTests(unittest.TestCase):
         source=ast.get_source_segment((Path(__file__).parents[1]/'scripts/provision.py').read_text(),main)
         self.assertIn("if unit=='sanequeue-fastagi.service' and active[unit]:continue",source)
 
+    def global_action(self,action,adapter):
+        spool=self.root/'spool';spool.mkdir(exist_ok=True)
+        parser=SimpleNamespace(error=lambda message:(_ for _ in ()).throw(ValueError(message)))
+        with patch.dict(sys.modules,{'sanequeue.pbx.root_adapter':adapter,'pwd':SimpleNamespace(getpwnam=lambda name:SimpleNamespace(pw_gid=0))}),patch('builtins.print'):
+            return _global_action(SimpleNamespace(action=action,yes=True),self.systemd,parser,self.state/'module.disabled',
+                spool=spool,unit_dir=self.units,backup_root=self.root/'backups',manager=self.root/'manager.conf')
+
+    def test_global_disable_preserves_shared_fastagi_and_sets_both_disable_flags(self):
+        self.systemd.active['sanequeue-fastagi.service']=True;self.systemd.enabled['sanequeue-fastagi.service']=True
+        adapter=SimpleNamespace(atomic=lambda path,value,*args:path.write_bytes(value))
+        self.global_action('disable',adapter)
+        self.assertTrue((self.state/'module.disabled').exists());self.assertEqual((self.root/'spool/disabled').read_bytes(),b'disabled\n')
+        self.assertTrue(self.systemd.active['sanequeue-fastagi.service']);self.assertTrue(self.systemd.enabled['sanequeue-fastagi.service'])
+        self.assertFalse(any(cmd[1] in ('stop','disable') and cmd[-1]=='sanequeue-fastagi.service' for cmd in self.systemd.commands))
+        self.assertFalse(any('asterisk.service' in cmd or 'restart' in cmd for cmd in self.systemd.commands))
+
+    def test_busy_uninstall_refuses_before_flags_or_service_mutations(self):
+        idle=Mock(side_effect=ValueError('active_calls_defer_dialplan_change'));restore=Mock();atomic=Mock()
+        before=dict(self.systemd.active)
+        with self.assertRaisesRegex(ValueError,'active_calls'):
+            self.global_action('uninstall',SimpleNamespace(require_idle=idle,restore=restore,atomic=atomic))
+        idle.assert_called_once();restore.assert_not_called();atomic.assert_not_called()
+        self.assertFalse((self.state/'module.disabled').exists());self.assertFalse((self.root/'spool/disabled').exists())
+        self.assertEqual(self.systemd.commands,[]);self.assertEqual(self.systemd.active,before)
+
+    def test_uninstall_restores_managed_dialplan_before_stopping_shared_fastagi(self):
+        self.systemd.active['sanequeue-fastagi.service']=True;events=[]
+        original_runner=self.systemd
+        def run(*command):events.append(command);return original_runner(*command)
+        def idle():events.append('idle')
+        def restore():
+            self.assertTrue(original_runner.active['sanequeue-fastagi.service']);events.append('restore')
+        self.systemd=run
+        with patch('scripts.module_control.remove_managed_ami'):
+            self.global_action('uninstall',SimpleNamespace(require_idle=idle,restore=restore,atomic=lambda path,value,*args:path.write_bytes(value)))
+        self.assertEqual(events[0],'idle');self.assertLess(events.index('restore'),events.index(('systemctl','stop','sanequeue-fastagi.service')))
+        self.assertFalse(original_runner.active['sanequeue-fastagi.service']);self.assertFalse(any('restart' in event for event in events if isinstance(event,tuple)))
+
+    def test_failed_uninstall_restore_leaves_shared_fastagi_running(self):
+        self.systemd.active['sanequeue-fastagi.service']=True
+        adapter=SimpleNamespace(require_idle=lambda:None,restore=Mock(side_effect=ValueError('external_dialplan_change_detected')),atomic=lambda path,value,*args:path.write_bytes(value))
+        with self.assertRaisesRegex(ValueError,'external_dialplan_change'):
+            self.global_action('uninstall',adapter)
+        self.assertTrue(self.systemd.active['sanequeue-fastagi.service'])
+        self.assertFalse(any(cmd[1]=='stop' and cmd[-1]=='sanequeue-fastagi.service' for cmd in self.systemd.commands))
+
 
 if __name__=='__main__':unittest.main()
+

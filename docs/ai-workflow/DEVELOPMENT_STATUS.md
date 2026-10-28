@@ -1,3 +1,7 @@
+# Current pilot deployment — 2026-10-28
+
+beta.27 is installed on lab port5000 and read-only preview18897. Shared archive uses one canonical importer/export/plans set. Actual existing login, charts/calendar, CSV/XLSX/PDF downloads and plans systemd condition were verified. Projection-copy migration retained17603events and reachedversion10. Monthly private engine passed53.4swall/13.3sCPU/~32MiBRSS at25%onecore after fixing repeated identity scans. Legacy state alias and private-output upgrade permissions were corrected after observed rollback. Source publication is on feature/reporting-phase2/PR14. See ../PILOT_BETA27.fa.md. This supersedes earlier not-deployed statements; explicit reporting development gaps remain.
+
 # وضعیت راه‌اندازی — ۲۰۲۶/۱۰/۲۸
 
 | ابزار | وضعیت واقعی |

@@ -50,6 +50,23 @@ sudo sanequeuectl disable --module monitoring
 sudo sanequeuectl enable --module monitoring
 ```
 
+Global disable deliberately leaves the shared FastAGI listener running so it does
+not terminate in-flight AGI sessions. Both disabled flags prevent new feature
+dispatch; status may therefore show FastAGI active while the module is disabled.
+Global uninstall first verifies the PBX is idle before changing flags/services,
+restores the managed dialplan while FastAGI remains available, and only then
+stops that listener. A failed restore leaves FastAGI running for safety.
+If global resume fails, both disabled flags are restored and partial background
+starts are stopped; FastAGI is preserved even if that resume just started it.
+
+توقف سراسری، FastAGI مشترک را برای درخواست‌های در حال اجرا روشن نگه می‌دارد؛
+نشانگرهای توقف، اجرای جدید قابلیت‌ها را می‌بندند. بنابراین فعال‌بودن FastAGI در
+وضعیت توقف سراسری عمدی است. حذف کامل ابتدا بی‌تماس‌بودن مرکز تلفن را بررسی
+می‌کند، سپس dialplan مدیریت‌شده را با FastAGI فعال برمی‌گرداند و در پایان آن
+سرویس را متوقف می‌کند. شکست بازگردانی، FastAGI را متوقف نمی‌کند.
+اگر فعال‌سازی سراسری شکست بخورد نیز هر دو نشانگر توقف برمی‌گردند، اما FastAGI
+حتی اگر تازه اجرا شده باشد برای حفظ درخواست‌های در حال اجرا روشن می‌ماند.
+
 Historical data is retained. Stopping reporting makes the archive stale; it does
 not delete reports or hide existing history. Stopping exports/plans may leave
 queued work pending; existing worker lease/recovery behavior applies on resume.

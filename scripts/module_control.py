@@ -203,7 +203,7 @@ def enabled_units(unit_dir=Path('/etc/systemd/system'),ai_marker=Path('/etc/sane
         and (unit!='sanequeue-generative.service' or ((unit_dir/unit).is_file() and generative_marker.is_file() and not generative_marker.is_symlink()))),config_dir)
 
 
-def global_enable(run,flag,units):
+def global_enable(run,flag,units,*,spool=Path('/var/spool/asterisk/sanequeue')):
     """A failed emergency resume remains disabled; never leave partial new starts."""
     previous=_safe_file(flag)
     before={unit:(run('systemctl','is-active','--quiet',unit).returncode==0,
@@ -214,9 +214,19 @@ def global_enable(run,flag,units):
         run('systemctl','start','sanequeue-pbx-apply.service')
         if run('systemctl','enable','--now',*units).returncode:raise RuntimeError('module_start_failed')
     except Exception:
-        _write(flag,previous or b'Disabled after failed global service resume\n')
         failed=False
+        try:_write(flag,previous or b'Disabled after failed global service resume\n')
+        except Exception:failed=True
+        try:
+            if spool.is_dir():
+                from sanequeue.pbx.root_adapter import atomic
+                import pwd
+                atomic(spool/'disabled',b'disabled\n',0,pwd.getpwnam('asterisk').pw_gid)
+        except Exception:failed=True
         for unit,(active,enabled) in before.items():
+            # Even a newly started listener may already serve a live AGI
+            # session. Disable new dispatch above, never interrupt that session.
+            if unit=='sanequeue-fastagi.service':continue
             for operation,needed in (('stop',not active),('disable',not enabled)):
                 if needed:
                     try:
@@ -272,11 +282,18 @@ def main():
         return _global_action(args,run,parser,flag)
 
 
-def _global_action(args,run,parser,flag):
+def _global_action(args,run,parser,flag,*,spool=Path('/var/spool/asterisk/sanequeue'),
+                   unit_dir=Path('/etc/systemd/system'),backup_root=Path('/var/backups/sanequeue'),
+                   manager=Path('/etc/asterisk/manager_custom.conf')):
     if args.action=='enable':
         global_enable(run,flag,enabled_units())
         print('SaneQueue enabled. Per-service disabled workers remain disabled; Asterisk was not restarted.');return
     if args.action=='uninstall' and not args.yes:parser.error('Use uninstall --yes; configuration and private state will be retained')
+    if args.action=='uninstall':
+        from sanequeue.pbx.root_adapter import require_idle,restore
+        # Refuse an already-busy or unverifiable PBX before touching either
+        # disabled flag or stopping any service. restore() checks idle again.
+        require_idle()
     flag.parent.mkdir(parents=True,exist_ok=True)
     descriptor,temporary=tempfile.mkstemp(prefix='.disabled-',dir=flag.parent)
     try:
@@ -284,31 +301,35 @@ def _global_action(args,run,parser,flag):
         os.replace(temporary,flag)
     finally:
         if os.path.exists(temporary):os.unlink(temporary)
-    spool=Path('/var/spool/asterisk/sanequeue')
     if spool.is_dir():
         from sanequeue.pbx.root_adapter import atomic
         import pwd
         atomic(spool/'disabled',b'disabled\n',0,pwd.getpwnam('asterisk').pw_gid)
     failures=[]
     for unit in UNITS:
+        # FastAGI serves shared dialplan requests. Preserve existing sessions;
+        # the spool flag makes new dispatch return no feature variables.
+        if unit=='sanequeue-fastagi.service':continue
         run('systemctl','disable',unit)
         run('systemctl','stop',unit)
         if run('systemctl','is-active','--quiet',unit).returncode==0:failures.append(unit)
     if failures:raise RuntimeError('module_services_still_active:'+','.join(failures))
     if args.action=='uninstall':
-        from sanequeue.pbx.root_adapter import restore
         restore()
-        backup=Path('/var/backups/sanequeue')/(time.strftime('%Y%m%d-%H%M%S')+'-uninstall')
+        # Only after the managed dialplan is restored may its shared FastAGI
+        # listener be stopped. A failed restore leaves that listener running.
+        if run('systemctl','disable','sanequeue-fastagi.service').returncode:raise RuntimeError('fastagi_disable_failed_after_restore')
+        if run('systemctl','stop','sanequeue-fastagi.service').returncode or run('systemctl','is-active','--quiet','sanequeue-fastagi.service').returncode==0:raise RuntimeError('fastagi_stop_failed_after_restore')
+        backup=backup_root/(time.strftime('%Y%m%d-%H%M%S')+'-uninstall')
         backup.mkdir(parents=True,mode=0o700)
-        manager=Path('/etc/asterisk/manager_custom.conf')
         binary=shutil.which('asterisk') or '/usr/sbin/asterisk'
         remove_managed_ami(manager,backup,lambda:run(binary,'-rx','manager reload').returncode)
         for unit in UNITS:
-            target=Path('/etc/systemd/system')/unit
+            target=unit_dir/unit
             if target.is_file():shutil.copy2(target,backup/unit);target.unlink()
         run('systemctl','daemon-reload')
         print('SaneQueue services and its managed AMI identities removed. Private configuration, source and data retained for recovery. Backup: '+str(backup))
-    else:print('All SaneQueue services stopped and disabled. Use sanequeuectl enable to restore them.')
-    print('Asterisk was not restarted; no active PBX channels were hung up.')
+    else:print('SaneQueue web/background services stopped and disabled. Shared FastAGI remains running for existing sessions; new feature dispatch is disabled. Use sanequeuectl enable to resume.')
+    print('Asterisk was not restarted; this controller did not send a channel hangup command.')
 
 if __name__=='__main__':main()

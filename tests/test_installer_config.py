@@ -45,3 +45,17 @@ class InstallerConfigurationTests(unittest.TestCase):
                 self.module.private_permissions(Path(folder),os.getuid(),os.getgid(),0o750)
                 with self.assertRaises(OSError):self.module.private_permissions(alias,os.getuid(),os.getgid(),0o777)
             self.assertEqual(stat.S_IMODE(target.stat().st_mode),0o600)
+
+    def test_upgrade_preserves_owner_only_export_directory_contract(self):
+        import tempfile,stat
+        from sanequeue.reporting.export_jobs import JobStore
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);store=JobStore(root/'jobs.sqlite3',root/'private-exports')
+            store.initialize()
+            self.module.prepare_state_permissions(root,os.getuid(),os.getgid())
+            store.initialize()
+            self.assertEqual(stat.S_IMODE((root/'private-exports').stat().st_mode),0o700)
+            self.assertEqual(stat.S_IMODE((root/'jobs.sqlite3').stat().st_mode),0o600)
+
+    def test_optional_survey_writer_is_in_install_backup_and_rollback_unit_set(self):
+        self.assertIn('sanequeue-surveys.service',self.module.REPORTING_UNITS)
