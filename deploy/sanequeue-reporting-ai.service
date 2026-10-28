@@ -1,0 +1,32 @@
+[Unit]
+Description=SaneQueue optional local CPU transcription worker
+After=local-fs.target
+ConditionPathExists=/etc/sanequeue/reporting-ai.enabled
+
+[Service]
+Type=simple
+User=sanequeue
+Group=sanequeue
+SupplementaryGroups=asterisk
+WorkingDirectory=/opt/sanequeue
+EnvironmentFile=/etc/sanequeue/reporting-ai.env
+Environment=OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+ExecStart=/opt/sanequeue/.venv/bin/python -m sanequeue.reporting.ai_worker --jobs ${AI_JOBS} --archive ${AI_ARCHIVE} --recording-root ${AI_RECORDINGS} --scratch ${AI_SCRATCH} --python ${AI_PYTHON} --ffmpeg ${AI_FFMPEG} --model ${AI_MODEL} --tokens ${AI_TOKENS} --vad ${AI_VAD} --disabled-file /var/lib/sanequeue/module.disabled
+Restart=on-failure
+RestartSec=30
+CPUQuota=20%
+MemoryMax=768M
+TasksMax=24
+Nice=19
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/sanequeue
+ReadOnlyPaths=/var/spool/asterisk/monitor
+RestrictAddressFamilies=AF_UNIX
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

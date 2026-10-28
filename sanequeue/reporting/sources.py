@@ -109,15 +109,31 @@ class QueueLog:
             stream.seek(max(0, offset - 256))
             anchor = hashlib.sha256(stream.read(min(256, offset))).hexdigest()
             checkpoint = dict(path=str(self.path.absolute()), identity=identity, offset=offset,
-                              generation=generation, anchor=anchor, discarding=discarding)
+                              generation=generation, anchor=anchor, discarding=discarding,observed=time.time(),
+                              caught_up=offset>=meta.st_size,
+                              source_time=max((event.timestamp for event in events),default=previous.get('source_time',0)))
+            gaps=list(previous.get('coverage_gaps',[]))
             # Rotation must not silently present partial history as complete.
             if reset:
                 checkpoint['last_rotation_detected'] = time.time()
+                boundary=previous.get('observed',0) if previous.get('caught_up') is True else previous.get('source_time',0)
+                gaps.append([max(0,float(boundary)-120),checkpoint['last_rotation_detected']])
             elif previous.get('last_rotation_detected'):
                 checkpoint['last_rotation_detected'] = previous['last_rotation_detected']
+            if reset or previous.get('coverage_gap'):
+                # The prior inode's unread tail cannot be proven complete.
+                # Preserve this uncertainty across subsequent healthy cycles.
+                checkpoint['coverage_gap']=True
+            if not gaps and previous.get('last_rotation_detected'):
+                # Legacy checkpoints have no trustworthy lower boundary.
+                gaps=[[0,previous['last_rotation_detected']]]
+            if len(gaps)>32:
+                # Bound metadata without silently forgetting an older gap.
+                gaps=[[min(g[0] for g in gaps[:-31]),max(g[1] for g in gaps[:-31])],*gaps[-31:]]
+            if gaps:checkpoint['coverage_gaps']=gaps
             inserted = archive.append(events, checkpoint_source=self.source, checkpoint=checkpoint, rejected=rejected)
             return dict(inserted=inserted, offset=offset, caught_up=offset >= meta.st_size,
-                        rotation_detected=bool(reset), rejected=rejected)
+                        rotation_detected=bool(reset), coverage_gap=bool(checkpoint.get('coverage_gap')), rejected=rejected)
 
 
 def import_json_lines(archive, path, source, *, timezone='Asia/Tehran', max_events=500):

@@ -1,0 +1,22 @@
+{% if user_role == 'admin' and can_view_section('telephony') %}
+<section class="panel" id="incident-notices">
+ <div class="panel-heading"><div><h2>{{ t('پیام وضعیت و رخداد ورودی','Inbound status & incident notice') }}</h2><p>{{ t('یک پیام موقت پیش از ادامهٔ مسیر عادی تماس؛ بدون انتقال یا قطع تماس.','A temporary notice before continuing the original call route; no transfer or hangup.') }}</p></div><button type="button" id="incident-refresh">{{ t('بازخوانی','Refresh') }}</button></div>
+ <p class="report-note" id="incident-integration" role="status">{{ t('بررسی نقاط اتصال مجاز…','Checking approved integration points…') }}</p>
+ <form id="incident-form" class="pbx-feature-form">
+  <div class="pbx-feature-grid">
+   <label>{{ t('نقطه اتصال و صف','Integration point & queue') }}<select name="binding" required></select></label>
+   <label>{{ t('عنوان برای مدیر','Administrative title') }}<input name="title" maxlength="100" required></label>
+   <label>{{ t('شروع اعتبار','Valid from') }}<input name="starts_at" type="datetime-local" required></label>
+   <label>{{ t('پایان اعتبار (حداکثر ۷ روز)','Expires (maximum 7 days)') }}<input name="expires_at" type="datetime-local" required></label>
+   <label>{{ t('فایل صوتی؛ حداکثر ۶۰ ثانیه و ۸ مگابایت','Audio: maximum 60 seconds and 8 MB') }}<input name="audio_file" type="file" accept="audio/*"></label>
+   <label class="feature-switch"><input name="enabled" type="checkbox">{{ t('اجازهٔ پخش در بازهٔ اعتبار','Allow playback during validity period') }}</label>
+  </div>
+  <p id="incident-timezone" class="report-note"></p>
+  <audio id="incident-audio" controls preload="none" hidden></audio>
+  <div class="dialog-actions"><button type="submit" class="primary">{{ t('ثبت نسخهٔ پیام','Save notice version') }}</button></div>
+ </form>
+ <p id="incident-feedback" role="status" aria-live="polite"></p>
+ <div id="incident-current" class="table-wrap"></div>
+ <details class="contextual-help"><summary>{{ t('آموزش پیام وضعیت و فعال‌سازی','Notice setup & activation guide') }}</summary><p>{{ t('ابتدا مدیر فنی باید نقطهٔ اتصال مشخص و صف آن را در فهرست مجاز ثبت و Gosub را در مسیر ورودی همان صف نصب و با تماس آزمایشی تأیید کند. ذخیرهٔ پیام، به‌تنهایی مسیر تماس را تغییر نمی‌دهد و اثبات پخش نیست. صدا را انتخاب، عنوان و شروع/پایان را مشخص و نسخه را ثبت کنید. پس از انقضا یا توقف ماژول، مسیر عادی ادامه دارد. با برداشتن تیک و ثبت نسخه، پخش‌های بعدی غیرفعال می‌شوند؛ پیام در حال پخش قطع نمی‌شود. زمان‌ها طبق منطقهٔ زمانی مرورگر وارد و با منطقهٔ تهران در جدول نمایش داده می‌شوند.','A technical operator must approve an explicit integration point and queue, install its Gosub in that inbound route, and verify it with a test call. Saving a notice neither rewrites routes nor proves playback. Choose audio, title and validity dates, then save a version. Expiry or module disable preserves the original route. Uncheck playback and save a version to disable subsequent playback; an existing playback is not interrupted. Inputs use the browser timezone; the table shows Asia/Tehran time.') }}</p></details>
+</section>
+{% endif %}

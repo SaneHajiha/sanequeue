@@ -20,12 +20,21 @@ class CallbackWorker:
     @contextmanager
     def db(self):
         db=sqlite3.connect(self.path,timeout=2);db.row_factory=sqlite3.Row
-        if os.name!='nt':os.chmod(self.path,0o600)
-        db.execute('CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,source TEXT,target TEXT,created REAL,expires REAL,state TEXT,action_id TEXT,updated REAL)')
-        existing={r[1] for r in db.execute('PRAGMA table_info(jobs)')}
-        for name in ('answered_at','connected_at','ended_at','talk_seconds'):
-            if name not in existing:db.execute('ALTER TABLE jobs ADD COLUMN '+name+' REAL')
         try:
+            if os.name!='nt':os.chmod(self.path,0o600)
+            db.execute('CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,source TEXT,target TEXT,created REAL,expires REAL,state TEXT,action_id TEXT,updated REAL)')
+            existing={r[1] for r in db.execute('PRAGMA table_info(jobs)')}
+            for name in ('answered_at','connected_at','ended_at','talk_seconds'):
+                if name not in existing:db.execute('ALTER TABLE jobs ADD COLUMN '+name+' REAL')
+            # Retaining terminal history must not turn each live dispatch tick into
+            # a full-history scan. These also migrate existing callback databases.
+            for suffix,columns in (
+                ('state_expiry','state,expires'),
+                ('state_updated','state,updated'),
+                ('pair_expiry','source,target,state,expires'),
+                ('created','created DESC'),
+            ):
+                db.execute('CREATE INDEX IF NOT EXISTS callback_jobs_'+suffix+' ON jobs('+columns+')')
             with db:yield db
         finally:db.close()
     def ingest(self,phones,now):
@@ -51,7 +60,9 @@ class CallbackWorker:
                     except OSError:pass
             db.execute("UPDATE jobs SET state='expired',updated=? WHERE state='pending' AND expires<=?",(now,now))
             db.execute("UPDATE jobs SET state='unknown',updated=? WHERE state='dispatching' AND updated<?",(now,now-30))
-            db.execute("DELETE FROM jobs WHERE state NOT IN ('pending','dispatching') AND updated<?",(now-30*86400,))
+            # Expiry governs whether a request may dial, not history retention.
+            # Preserve terminal evidence until an explicit administrative policy
+            # is configured; reporting must not silently lose older callbacks.
     def tick(self,state,now=None):
         now=time.time() if now is None else now
         if not self.spool.exists() or (self.spool/'disabled').exists():return

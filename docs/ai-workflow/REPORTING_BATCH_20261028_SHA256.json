@@ -1,0 +1,28 @@
+{
+  "scope": "Reporting batch source hashes; dirty local checkout, not a published commit",
+  "date": "2026-10-28",
+  "files": {
+    "sanequeue/reporting/builder_exports.py": "4f513f63a70e5407b823d72585c3155fbfe731922d51de6122cff9057fa5b207",
+    "sanequeue/reporting/export_jobs.py": "1b40a49c1b2377dfa444d2a7c2c59c5e31e779f2290ba5afb20c75e4db441a30",
+    "sanequeue/reporting/report_plans.py": "e2648875eb4748116bc0e07f9579ef86082db5b783307ab1c3512fcf1fc52ebb",
+    "sanequeue/reporting/plan_worker.py": "42b69c49e5740fe22a3c9b42ea3ab37b65918cbcecd136a43f09579fda279e89",
+    "sanequeue/reporting/agent_rankings.py": "280371b677f467bf68227b428249c6e5ca69b4a539d6b18a585c046ba6a4c301",
+    "sanequeue/reporting/ring_attempts.py": "87112116567aaa3e3caa0ba5e6ded97a2ff651ba0576942095ab00f31d40c8ef",
+    "sanequeue/reporting/store.py": "b1c76da3f0841fe631860bd0397b728606ec946f8dbf7b99c2b65aa7e7c91d85",
+    "sanequeue/api/reports.py": "2b0295d6cbee90915805656b3e88d29e4b363cd78fb0ce7be9b5b7d0e8cb31fc",
+    "qpanel/themes/qpanel/static/js/agent-rankings.js": "1de415fe050ee992244ef8e2d63109f8727713e8b33d503cbbc37a0e5690540b",
+    "qpanel/themes/qpanel/static/js/report-builder.js": "c0fce7f492443a307a4158ccb4ac99e9ba8cc9bd06b2fbea31720f3bfed82347",
+    "qpanel/themes/qpanel/static/js/report-plans.js": "21154915544b1afdc467fc05e886e497651c25bdbd0dca7ef6ef77032e3d3bbb",
+    "qpanel/themes/qpanel/static/js/navigation.js": "c2ba12a67f0b8a66736e6ad4935baf7db5b93720bd5cc7be6c1cd059c1a76edc",
+    "qpanel/themes/qpanel/templates/reports.html": "9db6050e52d417f3aa3c5dea5bef0ff7afe1b410d0beac828c38e11bd5dac9fb",
+    "qpanel/themes/qpanel/templates/report_builder.html": "bffcfa6407a0600e878116115983153ad704a13ad3416569077f75a3c6717ba1",
+    "qpanel/themes/qpanel/templates/module_navigation.html": "49480afeaceeacb2f245f99ace7825db2e5649605e1bcc39e62162bbcbfa14fb",
+    "qpanel/themes/qpanel/templates/operations.html": "f6af5982277d8174e1e49b0c39c4a401ac0e7646693f676318c3c644a0478ff4",
+    "qpanel/themes/qpanel/static/data/module-catalog.json": "3af64cf5d3a4e99ce1496da2efd1a7c7bf047f0341893279bf2f199afc45ead4",
+    "tools/generate_reporting_fixture.py": "8f38be658847605da4e1b4799c05c1d8c2e20123f0f6f2353c11e23344d08e22",
+    "tools/generate_reporting_month.py": "510d185f4063cbfcfd64e9d288afa1e9be8d2281fac84de8dd29785c24561290",
+    "tools/verify_reporting_month.py": "f77d206d7f9877d3f75209494d4d62aea37d3feb765055e0ddf5bac054714840",
+    "sanequeue/diagnostics/store.py": "6b2806ca8277f93d2a6629bd3c7e532df4111b96683598c6bb1c151784cf8742",
+    "sanequeue/diagnostics/worker.py": "786a20b41500f15d100710a975f29db152e4782550e5acb84001351508bf6e5b"
+  }
+}

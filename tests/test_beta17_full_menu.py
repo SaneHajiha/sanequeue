@@ -2,31 +2,40 @@
 from pathlib import Path
 import re
 import unittest
-from jinja2 import Environment
+from jinja2 import Environment, FileSystemLoader
 
 ROOT=Path(__file__).resolve().parents[1]
 HTML=(ROOT/'qpanel/themes/qpanel/templates/operations.html').read_text(encoding='utf-8')
 JS=(ROOT/'qpanel/themes/qpanel/static/js/operations.js').read_text(encoding='utf-8')
-ALL=['live','queues','calls','waiting','agents','presence','pbx','features','control','wallboard','alerts','audit','policies','users','telephony','settings','shifts','directory']
+ALL=['live','queues','calls','waiting','agents','presence','reports','pbx','features','control','wallboard','alerts','audit','policies','users','telephony','settings','shifts','directory','surveys','voice-feedback']
 
 class FullMenuTests(unittest.TestCase):
     def test_template_is_valid_jinja(self):
         Environment().parse(HTML)
     def test_full_navigation_has_every_view(self):
-        self.assertIn('class="sq-full-nav"',HTML)
         self.assertNotIn('class="sq-deep-views"',HTML)
-        nav=HTML.split('<nav ',1)[1].split('</nav>',1)[0]
-        available=re.findall(r'class="nav-item(?: active)?" data-view="([^"]+)"',nav)
-        # Button type="button" is allowed; order matches the original full sidebar.
-        self.assertEqual(available, ALL)
+        template=Environment(loader=FileSystemLoader(ROOT/'qpanel/themes/qpanel/templates')).get_template('module_navigation.html')
+        nav=template.render(t=lambda fa,en:en,can_view_section=lambda view:True,history_available=True,user_role='admin')
+        available=re.findall(r'data-view="([^"]+)"',nav)
+        self.assertEqual(set(available),set(ALL))
+        self.assertEqual(len(available),len(ALL))
+        self.assertEqual(nav.count('class="nav-module"'),7)
+        restricted=template.render(t=lambda fa,en:en,can_view_section=lambda view:view=='agents',history_available=True,user_role='agent')
+        self.assertEqual(re.findall(r'data-view="([^"]+)"',restricted),['agents'])
+        self.assertNotIn('data-module="administration"',restricted)
     def test_every_navigation_item_has_panel(self):
         for name in ALL:
             with self.subTest(menu=name):
-                self.assertIn('id="'+name+'-view"',HTML)
-                self.assertIn(name+':t(',JS)
+                panels=HTML+''.join((ROOT/'qpanel/themes/qpanel/templates'/name).read_text(encoding='utf-8') for name in ('reports.html','surveys.html','voice_feedback.html'))
+                self.assertIn('id="'+name+'-view"',panels)
+                self.assertIn(("'"+name+"'" if '-' in name else name)+':t(',JS)
     def test_sensitive_menus_preserve_roles(self):
-        self.assertIn("{% if user_role in ('admin','supervisor') %}",HTML)
-        self.assertIn("{% if user_role == 'admin' %}",HTML)
+        template=Environment(loader=FileSystemLoader(ROOT/'qpanel/themes/qpanel/templates')).get_template('module_navigation.html')
+        for role in ('agent','supervisor'):
+            nav=template.render(t=lambda fa,en:en,can_view_section=lambda view:True,history_available=True,user_role=role)
+            for section in ('users','settings','telephony','policies'):
+                self.assertNotIn('data-view="'+section+'"',nav)
+            self.assertEqual('data-view="audit"' in nav,role=='supervisor')
     def test_call_journey_and_full_wallboard_remain(self):
         for part in ['dashboard-journey-cards','wallboard-queue-picker','wallboard-fullscreen','wb-journey-rows','call-rows','dashboard-active-rows','live-view','calls-view','waiting-view','users-view']:
             with self.subTest(part=part): self.assertIn(part,HTML)

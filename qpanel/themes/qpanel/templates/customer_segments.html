@@ -1,0 +1,14 @@
+<section class="panel history-section" id="history-customer-segments-section" aria-labelledby="customer-segments-title">
+ <header class="panel-heading"><h3 id="customer-segments-title">{{ t('مشتریان مهم و مشاهدات مسدودی','VIP customers & blocked-call observations') }}</h3></header>
+ <div class="panel-body">
+  <p class="report-note">{{ t('VIP یک برچسب گزارش‌گیری با تاریخ اثر است؛ مسیریابی یا مجوز تماس را تغییر نمی‌دهد. مخرج SLA تماس‌های پاسخ‌داده‌شده با انتظار معلوم است. بدون برچسب یعنی طبقه‌بندی نشده، نه مشتری عادی.','VIP is a dated reporting annotation; it changes neither routing nor call permissions. SLA uses answered visits with known wait. No label means unclassified, not ordinary.') }}</p>
+  <p class="report-note">{{ t('مسدودی‌ها فقط مشاهدات واردشده از منبع فنی‌اند؛ نبود ردیف به معنی نبود تماس مسدود نیست. این صفحه قانون مسدودسازی ایجاد نمی‌کند. تاریخ و صف‌ها از فیلتر اصلی گزارش خوانده می‌شوند؛ حداکثر بازه ۳۱ روز است.','Blocked rows are explicitly imported technical observations; no rows do not prove no blocked calls. This page creates no blocking rule. Dates/queues come from the main report filter; maximum range is 31 days.') }}</p>
+  <div class="history-analysis-controls"><label>{{ t('آستانه SLA (ثانیه)','SLA threshold (seconds)') }} <input id="segments-sla" type="number" min="1" max="3600" value="20"></label><button id="segments-refresh" type="button">{{ t('دریافت گزارش','Load report') }}</button></div>
+  <p id="segments-feedback" role="status" aria-live="polite"></p><div id="history-vip-volume-chart"></div><div id="history-vip-sla-chart"></div><div id="segments-results" class="table-responsive"></div>
+  <form id="segments-vip-form" hidden>
+   <h4>{{ t('ثبت نسخهٔ برچسب VIP','Record VIP annotation') }}</h4>
+   <p class="report-note">{{ t('شماره دقیقاً با حذف فاصله و نشانه‌ها تطبیق می‌یابد؛ تبدیل ۰۹ به ‎+۹۸ حدس زده نمی‌شود. ثبت گذشته‌نگر، نظر مدیر برای طبقه‌بندی گزارش است و اثبات وضعیت تاریخی مرکز تلفن نیست.','Numbers match after removing formatting; 09 and +98 are not guessed equivalent. Backdating is an administrator reporting annotation, not proof of historic PBX state.') }}</p>
+   <div class="history-analysis-controls"><label>{{ t('صف','Queue') }} <select name="queue" required></select></label><label>{{ t('شماره','Number') }} <input name="number" dir="ltr" maxlength="64" required></label><label>{{ t('طبقه‌بندی','Classification') }} <select name="enabled"><option value="1">{{ t('VIP','VIP') }}</option><option value="0">{{ t('صریحاً غیر VIP','Explicitly not VIP') }}</option></select></label><label><input name="period" type="checkbox">{{ t('اثر از ابتدای بازهٔ انتخابی','Effective from selected period start') }}</label><button type="submit">{{ t('ثبت نسخهٔ جدید','Record new version') }}</button></div>
+  </form>
+ </div>
+</section>

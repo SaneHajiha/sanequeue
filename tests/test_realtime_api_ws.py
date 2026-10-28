@@ -27,7 +27,9 @@ class StateAPITests(unittest.TestCase):
     def test_many_concurrent_readers_coalesce_redis_and_return_independent_values(self):
         redis = Mock()
         redis.mget.return_value = [json.dumps(fixture()),json.dumps({'generation':'g','connected':True,'complete':True})]
-        reader = StateReader(redis,'test')
+        # Thread scheduling can exceed the cache TTL on a busy test host.
+        # Freeze time to test coalescing independently from wall-clock load.
+        reader = StateReader(redis,'test',clock=lambda:100)
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
             values = list(pool.map(lambda _:reader.read(),range(100)))
         self.assertEqual(redis.mget.call_count,1)

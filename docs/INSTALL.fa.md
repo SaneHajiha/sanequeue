@@ -1,11 +1,15 @@
-# نصب خودکار · beta.23
+راهنمای نسخهٔ جاری و کنترل ماژول‌ها: [پایلوت beta.27](PILOT_BETA27.fa.md). برای نصب تکرارپذیر، REF را SHA کامل نسخه قرار دهید.
+
+# نصب خودکار · beta.27 pilot
 
 [English](INSTALL.md) · [راهنمای تصویری](USER_GUIDE.fa.md) · [شواهد آزمون](AUDIT_BETA23.md)
+
+یادداشت زمان‌دار ارزیابی کیفیت، مدت فایل را فقط از فرادادهٔ همان فایلِ مجازشده می‌خواند. برای MP3 و Ogg Vorbis/Opus وابستگی سبک Mutagen را با دستور `/opt/sanequeue/.venv/bin/python -m pip install -r /opt/sanequeue/requirements/reporting.txt` نصب کنید؛ WAV از کتابخانهٔ استاندارد Python استفاده می‌کند. درخواست وب هیچ FFmpeg/FFprobe یا پردازش تبدیل صوت اجرا نمی‌کند. سقف خواندن ۵۱۲ کیبی‌بایت، ۱۰۲۴ عملیات ورودی/خروجی و جابه‌جایی، و مهلت مشارکتی ۲۵۰ میلی‌ثانیه است. نبود تجزیه‌گر، فرادادهٔ خراب یا گذشتن از سقف با HTTP 415 رد می‌شود و یادداشت زمانی ذخیره نمی‌شود؛ پیوست صوتِ مجاز بدون یادداشت، مدت را بررسی نمی‌کند. فراداده به‌تنهایی کامل یا قابل پخش بودن همهٔ صوت را اثبات نمی‌کند.
 
 روی خود سرور PBX، با کاربر root یا sudo اجرا کنید. Linux دارای systemd، Asterisk محلی، AMI فعال روی 127.0.0.1:5038، اینترنت HTTPS و مخزن بستهٔ سالم لازم است. پیش از اجرا متن اسکریپت را بررسی کنید:
 
 ```bash
-curl -fL https://raw.githubusercontent.com/SaneHajiha/sanequeue/v2.1.0-beta.24/scripts/install.sh -o /tmp/sanequeue-install.sh
+curl -fL https://raw.githubusercontent.com/SaneHajiha/sanequeue/feature/reporting-phase2/scripts/install.sh -o /tmp/sanequeue-install.sh
 sudo bash /tmp/sanequeue-install.sh
 ```
 

@@ -1,0 +1,16 @@
+'use strict';
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const document={documentElement:{lang:'fa'}},window={};
+vm.runInNewContext(fs.readFileSync('qpanel/themes/qpanel/static/js/report-periods.js','utf8'),{window,document,Intl,Date,Number,String,Error,Object});
+const p=window.SaneQueueReportPeriods;
+const month=p.bucket('2026-10','month');assert.equal(month.first,'2026-10-01');assert.equal(month.last,'2026-10-31');assert.ok(month.label.includes('ماه میلادی'));
+const partial=p.bucket('2026-10','month',{start:'2026-10-23',end:'2026-10-27'});assert.equal(partial.first,'2026-10-23');assert.equal(partial.last,'2026-10-27');assert.ok(partial.label.includes('بخشی'));assert.equal(partial.x,month.x,'clipping labels cannot move the chronological bucket');
+const days=p.trend([{bucket:'2026-10-23'},{bucket:'2026-10-25'}],'day');assert.equal(days.type,'line');assert.equal(days.x[1]-days.x[0],2*86400000);assert.equal(JSON.stringify(days.gaps),'[false,true]');
+const hours=p.trend([{bucket:'2026-10-23 00:00'},{bucket:'2026-10-23 01:00'},{bucket:'2026-10-23 03:00'}],'hour');assert.equal(JSON.stringify(hours.gaps),'[false,false,true]');
+assert.equal(JSON.stringify(p.trend([{bucket:'2026-09'},{bucket:'2026-11'}],'month').gaps),'[false,true]');
+assert.throws(()=>p.trend([{bucket:'2026-10-25'},{bucket:'2026-10-23'}],'day'),/unordered/);
+assert.equal(p.bucket('2026-13','month'),null);assert.equal(p.bucket('2026-02-30','day'),null);
+assert.equal(p.trend([{bucket:'2026-10'}],'month').type,'bar');
+const caption=p.caption(new URLSearchParams({from:'2026-10-23',to:'2026-10-27',queue:'8001',src:'09123456789'}));assert.ok(caption.includes('8001'));assert.ok(caption.includes('فیلترهای تکمیلی'));assert.ok(!caption.includes('09123456789'),'chart captions do not copy raw number filters into exported graphics');
+document.documentElement.lang='en';assert.ok(p.bucket('2026-10','month').label.includes('Gregorian month'));assert.ok(p.period('2026-10-23','2026-10-27').includes('23/10/2026'));
+console.log('report periods: calendar semantics, clipped month/week bounds, real chronological gaps, invalid and English labels passed');

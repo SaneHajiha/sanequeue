@@ -151,6 +151,12 @@ def install(app,state,role):
         if callable(provider) and 'telephony' not in provider(current_user.get_id(),'admin'):abort(403)
     def csrf():
         if not session.get('csrf_token') or not hmac.compare_digest(request.headers.get('X-CSRF-Token',''),session['csrf_token']):abort(403)
+    from .incidents import install as install_incidents
+    install_incidents(app,state,role,admin,csrf)
+    from sanequeue.surveys.api import install as install_surveys
+    install_surveys(app,state)
+    from sanequeue.surveys.voice_feedback_api import install as install_voice_feedback
+    install_voice_feedback(app,state)
     @app.before_request
     def prompt_limit():
         if request.path=='/api/pbx/features/audio':request.max_content_length=8*1024*1024+65536

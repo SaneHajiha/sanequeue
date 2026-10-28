@@ -1,0 +1,59 @@
+{# Navigation only: authorization remains enforced by every backend endpoint. #}
+{% macro item(view,fa,en,count='') %}
+{% if can_view_section(view) %}<button type="button" class="nav-item{% if view=='live' %} active{% endif %}" data-view="{{view}}"{% if view=='live' %} aria-current="page"{% endif %}>{{t(fa,en)}}{% if count %}<b id="{{count}}">—</b>{% endif %}</button>{% endif %}
+{% endmacro %}
+{% macro shortcut(view,target,fa,en) %}<button type="button" class="module-shortcut" data-module-view="{{view}}" data-module-target="{{target}}">{{t(fa,en)}}</button>{% endmacro %}
+<nav aria-label="{{t('ناوبری اصلی','Main navigation')}}" class="sq-full-nav module-navigation">
+{% if can_view_section('live') or can_view_section('queues') or can_view_section('calls') or can_view_section('waiting') or can_view_section('wallboard') %}
+<details class="nav-module" data-module="monitoring" open><summary>{{t('پایش زنده','Live monitoring')}}</summary><div class="module-items">
+{{item('live','مرکز عملیات','Overview')}}{{item('queues','وضعیت صف‌ها','Queue status')}}{{item('calls','تماس‌های جاری','Active calls','calls-count')}}{{item('waiting','تماس‌های منتظر','Waiting calls','waiting-nav-count')}}{{item('wallboard','دیوار نمایش','Wallboard')}}
+</div></details>{% endif %}
+{% if history_available and can_view_section('reports') %}
+<details class="nav-module" data-module="reporting"><summary>{{t('گزارش‌ها و تحلیل','Reports & analytics')}}</summary><div class="module-items">
+{{item('reports','نمای کلی گزارش‌ها','Report overview')}}
+<div data-report-family="pbx"><p class="report-note">{{t('مرکز تلفن','PBX')}}</p>
+{% if user_role=='admin' and can_view_section('users') %}{{shortcut('reports','history-cdr-section','ترافیک خطوط و CDR','Trunk traffic & CDR')}}{% endif %}
+{{shortcut('reports','history-calls-section','تماس‌ها و فایل صوتی','Calls & recordings')}}
+</div>
+<div data-report-family="contact-center"><p class="report-note">{{t('کال‌سنتر و صف','Contact center & queues')}}</p>
+{{shortcut('reports','history-analysis-section','روندها و تحلیل صف','Queue trends & analysis')}}
+{{shortcut('reports','history-agents-section','عملکرد کارشناسان','Agent performance')}}
+{{shortcut('reports','history-agent-rankings-section','مقایسه و رتبه‌بندی کارشناس','Agent comparison & rankings')}}
+{% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-ring-attempts-section','زنگ داخلی بدون پاسخ','Unanswered ring attempts')}}{% endif %}
+{{shortcut('reports','history-agent-metrics-section','زمان رسیدگی و اشغال','Handling & occupancy evidence')}}
+{% if can_view_section('shifts') %}{{shortcut('reports','history-shifts-section','پایبندی و تأخیر شیفت','Shift adherence & lateness')}}{% endif %}
+{{shortcut('reports','history-activity-section','حضور و علت توقف','Duty & pause reasons')}}
+{{shortcut('reports','history-intervals-section','ریز تغییر وضعیت','State intervals')}}
+{{shortcut('reports','history-outbound-section','تماس حین توقف','Calls during pauses')}}
+{{shortcut('reports','history-work-section','هپی‌کال و نظرسنجی','Happy calls & surveys')}}
+{% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-followup-section','مراجعه پس از رهاشدن','Contact after abandonment')}}{% endif %}
+{% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-customer-segments-section','مشتریان مهم و مسدودی','VIP & blocked observations')}}{% endif %}
+</div>
+<div data-report-family="shared"><p class="report-note">{{t('ابزارهای مشترک','Shared tools')}}</p>
+{{shortcut('reports','history-builder-section','گزارش‌ساز','Report builder')}}
+{% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-export-jobs-section','خروجی‌های پس‌زمینه','Background exports')}}{% endif %}
+{% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-plan-section','قالب و زمان‌بندی گزارش','Report plans & schedules')}}{% endif %}
+{% if user_role in ('admin','supervisor') and can_view_section('audit') %}{{shortcut('reports','history-transcript-section','جست‌وجوی متن مکالمه','Transcript search')}}{% endif %}
+{% if user_role in ('admin','supervisor') and can_view_section('audit') %}{{shortcut('reports','history-quality-section','کنترل کیفیت مکالمه','Call quality reviews')}}{% endif %}
+</div>
+</div></details>{% endif %}
+{% if can_view_section('surveys') %}<details class="nav-module" data-module="customer-surveys"><summary>{{t('صدای مشتری و رضایت','Customer satisfaction')}}</summary><div class="module-items">{{item('surveys','نظرسنجی کلیدی مشتری','Customer DTMF surveys')}}{% if user_role in ('admin','supervisor') %}<button type="button" class="nav-item" data-view="voice-feedback">{{t('بازخورد صوتی و پیگیری','Voice feedback & follow-up')}}</button>{% endif %}{% if user_role=='admin' %}{{shortcut('surveys','survey-design','طراحی فرم نظرسنجی','Survey form design')}}{% endif %}{{shortcut('surveys','survey-results','پاسخ‌ها و شاخص رضایت','Responses & satisfaction')}}</div></details>{% endif %}
+{% if can_view_section('agents') or can_view_section('presence') or can_view_section('shifts') %}
+<details class="nav-module" data-module="team"><summary>{{t('کارشناسان و شیفت','Team & shifts')}}</summary><div class="module-items">
+{{item('agents','کارشناسان و عضویت صف','Agents & membership','agent-count')}}{{item('presence','داخلی‌ها و حضور','Extensions & presence')}}{{item('shifts','برنامه شیفت','Shift planning')}}
+</div></details>{% endif %}
+{% if can_view_section('control') or can_view_section('directory') or (user_role=='admin' and can_view_section('telephony')) %}
+<details class="nav-module" data-module="telephony"><summary>{{t('تلفن و ارتباطات','Telephony')}}</summary><div class="module-items">
+{{item('control','کنترل تماس','Call controls')}}{{item('directory','دفترچه تلفن','Directory')}}
+{% if user_role=='admin' and can_view_section('telephony') %}{{item('telephony','تنظیمات ماژول‌های تلفنی','Telephone module settings')}}{{shortcut('telephony','telephony-waiting','انتظار داخلی و کال‌بک','Extension waiting & callback')}}{{shortcut('telephony','telephony-callerid','اصلاح شماره تماس‌گیرنده','Caller ID formatting')}}{{shortcut('telephony','pbx-audio-slots','پیام‌های صوتی','Voice prompts')}}{{shortcut('telephony','callback-jobs','درخواست‌های کال‌بک','Callback requests')}}{{shortcut('telephony','incident-notices','پیام وضعیت ورودی','Inbound status notice')}}{% endif %}
+</div></details>{% endif %}
+{% if can_view_section('alerts') or can_view_section('pbx') or (user_role in ('admin','supervisor') and can_view_section('audit')) %}
+<details class="nav-module" data-module="health"><summary>{{t('هشدار و سلامت','Alerts & health')}}</summary><div class="module-items">
+{{item('alerts','هشدارهای فعال','Active alerts','alerts-nav-count')}}{{item('pbx','سلامت مرکز تلفن','PBX health')}}{% if user_role in ('admin','supervisor') %}{{item('audit','ثبت عملیات','Audit trail')}}{% endif %}
+</div></details>{% endif %}
+{% if (user_role=='admin' and (can_view_section('policies') or can_view_section('users') or can_view_section('settings'))) or can_view_section('features') %}
+<details class="nav-module" data-module="administration"><summary>{{t('مدیریت و تنظیمات','Administration')}}</summary><div class="module-items">
+{% if user_role=='admin' %}{{item('policies','قوانین و آستانه صف‌ها','Queue rules & thresholds')}}{{item('users','کاربران و دسترسی‌ها','Users & permissions')}}{{item('settings','سازمان و سرویس','Organization & service')}}{% if can_view_section('settings') %}{{shortcut('settings','notification-settings','تلگرام و بله','Telegram & Bale')}}{% endif %}{% endif %}
+{{item('features','وضعیت قابلیت‌ها','Capability status')}}
+</div></details>{% endif %}
+</nav>

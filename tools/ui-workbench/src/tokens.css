@@ -1,0 +1,4 @@
+/* Generated from tokens.json. Run npm run tokens after editing. */
+[data-theme="light"]{--sq-bg:#f5f7fb;--sq-card:#ffffff;--sq-ink:#172b43;--sq-muted:#526579;--sq-line:#c3cedb;--sq-accent:#087e8b;--sq-soft:#e7f5f3;--sq-danger:#b02d40;--sq-available:#14684b;--sq-ringing:#805400;--sq-paused:#6940a5;--sq-offline:#526579}
+[data-theme="dark"]{--sq-bg:#10202d;--sq-card:#172d3d;--sq-ink:#e5eef6;--sq-muted:#b5c5d3;--sq-line:#687e8f;--sq-accent:#69d5dc;--sq-soft:#183f43;--sq-danger:#ff9baa;--sq-available:#73dfb5;--sq-ringing:#ffcf72;--sq-paused:#d2b2ff;--sq-offline:#b5c5d3}
+.sq-workbench{--sq-spacing-xs:4px;--sq-spacing-sm:8px;--sq-spacing-md:12px;--sq-spacing-lg:16px;--sq-spacing-xl:24px;--sq-spacing-xxl:32px;--sq-radius-control:9px;--sq-radius-card:14px}

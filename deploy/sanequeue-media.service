@@ -1,0 +1,29 @@
+[Unit]
+Description=SaneQueue bounded private incident audio conversion worker
+After=local-fs.target
+
+[Service]
+Type=simple
+User=sanequeue
+Group=sanequeue
+WorkingDirectory=/opt/sanequeue
+ExecStart=/opt/sanequeue/.venv/bin/python -m sanequeue.pbx.incident_media --state /var/lib/sanequeue --accounts /var/lib/sanequeue/local_accounts.json --bindings /etc/sanequeue/incident-bindings.json
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=5
+UMask=0077
+Nice=19
+IOSchedulingClass=idle
+CPUQuota=12%
+MemoryMax=192M
+TasksMax=16
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sanequeue
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

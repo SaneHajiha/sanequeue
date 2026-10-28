@@ -17,6 +17,7 @@ QUEUE_ID = re.compile(r'^[A-Za-z0-9_-]{1,32}$')
 USER_ID = re.compile(r'^[A-Za-z0-9_.@-]{1,70}$')
 REASON_ID = re.compile(r'^[a-z][a-z0-9_-]{0,31}$')
 ALLOWED_GRANTS = frozenset({'view', 'pause', 'membership', 'monitor', 'hangup', 'priority', 'caller_details','transfer','park','pickup','dial'})
+ALLOWED_GRANTS = ALLOWED_GRANTS | {'report_export','recording_play','recording_download','survey_reports'}
 DEFAULT_REASONS = [
     {'id':'break', 'label':'استراحت'},
     {'id':'lunch', 'label':'ناهار'},
@@ -87,7 +88,7 @@ def validate_config(raw):
     for username, grant in users.items():
         if not USER_ID.fullmatch(username) or not isinstance(grant,dict):raise ValueError('invalid_supervisor')
         qids=grant.get('queues',[]); actions=grant.get('actions',['view'])
-        if not isinstance(qids,list) or not isinstance(actions,list) or len(qids)>100 or len(actions)>11:
+        if not isinstance(qids,list) or not isinstance(actions,list) or len(qids)>100 or len(actions)>len(ALLOWED_GRANTS):
             raise ValueError('invalid_supervisor_scope')
         if any(q not in cleaned['queues'] for q in qids) or any(a not in ALLOWED_GRANTS for a in actions):
             raise ValueError('invalid_supervisor_scope')

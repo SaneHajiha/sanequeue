@@ -30,7 +30,7 @@ if not SERVER_MODE:
 import qpanel.backend as qbackend
 with patch.object(qbackend.Backend, '_connect'):
     from qpanel import app as module
-from flask import session, request, jsonify, abort
+from flask import session, request, jsonify, abort, g
 from flask_login import login_required, current_user
 from qpanel.backend import Backend
 
@@ -44,6 +44,9 @@ module.app.config['SESSION_COOKIE_HTTPONLY'] = True
 module.app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024
 module.app.config['SANEQUEUE_REQUIRE_SESSION_VERSION'] = SERVER_MODE
 module.app.config['SESSION_COOKIE_SAMESITE'] = 'Strict'
+if os.getenv('SANEQUEUE_REPORTING_PREVIEW') == '1':
+    module.app.config['SESSION_COOKIE_NAME'] = 'sanequeue_reporting_preview'
+    module.app.config['REMEMBER_COOKIE_NAME'] = 'sanequeue_reporting_preview_remember'
 module.app.config['SESSION_COOKIE_SECURE'] = os.getenv('SANEQUEUE_HTTPS') == '1'
 if os.getenv('SANEQUEUE_TRUST_PROXY') == '1':
     from werkzeug.middleware.proxy_fix import ProxyFix
@@ -84,6 +87,16 @@ install_organization(module.app,STATE,lambda:cfg.get_value_set_default('roles',c
 
 @module.app.before_request
 def maintenance_controls():
+    from sanequeue.reporting.preview_policy import builder_preview_request, diagnostics_preview_request
+    report_job_request=(request.path in ('/api/history/export-jobs','/api/history/work-sessions','/api/history/quality/forms','/api/history/plans') or
+        re.fullmatch(r'/api/history/plans/[0-9a-f]{32}/(?:archive|run)',request.path) is not None or
+        re.fullmatch(r'/api/history/visits/[0-9a-f]{64}/reviews',request.path) is not None or
+        re.fullmatch(r'/api/history/visits/[0-9a-f]{64}/recordings/[^/]+/ai',request.path) is not None or
+        re.fullmatch(r'/api/history/ai-jobs/[0-9a-f]{32}',request.path) is not None or
+        re.fullmatch(r'/api/history/export-jobs/[0-9a-f]{32}/cancel',request.path) is not None or
+        re.fullmatch(r'/api/history/work-sessions/[0-9a-f]{32}/close',request.path) is not None)
+    if os.getenv('SANEQUEUE_REPORTING_PREVIEW') == '1' and request.method not in ('GET','HEAD','OPTIONS') and request.path != '/login' and not (report_job_request or builder_preview_request(request.path) or diagnostics_preview_request(request.path)):
+        return jsonify(error='reporting_preview_read_only'),403
     if module_disabled() and (request.path in ('/api/control','/api/members/pause') or request.path.startswith('/api/ami/')):
         return jsonify(error='module_disabled'),503
 cfg.config.set('sanequeue', 'minimum_ready_percent', cfg.get_value_set_default('sanequeue','minimum_ready_percent','0'))  # Isolated test queue may have only one agent.
@@ -1145,6 +1158,48 @@ def planning_api(kind):
     return jsonify(rows=rows,queues=list(allowed),editable=role in ('admin','supervisor'),dial_queues=dial_queues,
                    assigned_phone=cfg.get_value_set_default('supervisor_extensions',current_user.get_id() or '',''))
 
+from sanequeue.api.reports import install as install_reports
+def report_own_interfaces():
+    from sanequeue.reporting.identity import aliases
+    from sanequeue.realtime.local_inventory import read_snapshot
+    assigned=tuple(x.strip() for x in cfg.get_value_set_default('agent_interfaces',current_user.get_id() or '','').split(',') if x.strip())
+    return aliases(assigned,read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json')))
+
+def report_known_agents():
+    from sanequeue.realtime.local_inventory import read_snapshot
+    data=read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json'))
+    return tuple(sorted({item['technology']+'/'+item['endpoint'] for item in (data or {}).get('endpoints',[])
+                         if item.get('category')=='extension'}))
+
+def report_shift_identity(agent,starts,ends):
+    # Explicit endpoints name devices, not the current person owning a phone.
+    if re.fullmatch(r'(?:SIP|PJSIP)/[^/\s]+|Local/[^@/\s]+@[^/\s]+(?:/n)?',agent):
+        return dict(agent=agent,aliases=[agent],valid_from=0,valid_until=None)
+    if 'report_shift_accounts' not in g:
+        g.report_shift_accounts=read_accounts(ACCOUNTS_PATH)
+    account=g.report_shift_accounts.get(agent)
+    if not account or not account.get('phone') or not account.get('phone_assigned_at'):
+        return None
+    from sanequeue.reporting.identity import aliases
+    from sanequeue.realtime.local_inventory import read_snapshot
+    if 'report_shift_inventory' not in g:
+        g.report_shift_inventory=read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json'))
+    names=aliases((account['phone'],),g.report_shift_inventory)
+    names=[name for name in names if name.startswith(('SIP/','PJSIP/','Local/'))]
+    return dict(agent=account['phone'],aliases=names,valid_from=account['phone_assigned_at'],valid_until=None)
+
+install_reports(module.app, STATE/'history.sqlite3',
+    role=lambda:cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'),
+    sections=lambda:account_sections(current_user.get_id(),cfg.get_value_set_default('roles',current_user.get_id() or '','viewer')),
+    can_queue=lambda queue,action:POLICIES.access(current_user.get_id() or '',cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'),queue,action),
+    own_interfaces=report_own_interfaces,
+    known_agents=report_known_agents,
+    planning_path=PLANNING.path,
+    shift_identity=report_shift_identity,
+    own_since=lambda:read_accounts(ACCOUNTS_PATH).get(current_user.get_id(),{}).get('phone_assigned_at',0),
+    recording_root=cfg.get_value_set_default('sanequeue','recording_root','/var/spool/asterisk/monitor'),
+    reason_label=lambda queue,reason:next((item['label'] for item in POLICIES.reasons(queue) if item['id']==reason),reason))
+
 from sanequeue.pbx.features import install as install_pbx_features
 install_pbx_features(module.app,STATE,lambda:cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'))
 
@@ -1159,7 +1214,7 @@ def run_callbacks():
             if health.get('connected') and health.get('complete'):worker.tick(state)
         except Exception:module.app.logger.warning('Callback worker deferred; see PBX module status')
 
-if PERSISTENT_READER is not None and SERVER_MODE:
+if PERSISTENT_READER is not None and SERVER_MODE and os.getenv('SANEQUEUE_REPORTING_PREVIEW') != '1':
     threading.Thread(target=reconcile_commands,name='command-alert-reconcile',daemon=True).start()
     threading.Thread(target=deliver_notifications,name='alert-delivery',daemon=True).start()
     threading.Thread(target=run_callbacks,name='internal-callback',daemon=True).start()

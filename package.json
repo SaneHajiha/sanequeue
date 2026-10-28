@@ -4,5 +4,10 @@
   "private": true,
   "description": "SaneQueue contact-center monitoring development build",
   "license": "MIT",
-  "scripts": {}
+  "scripts": {
+    "ui:dev": "npm run dev --prefix tools/ui-workbench",
+    "ui:storybook": "npm run storybook --prefix tools/ui-workbench",
+    "ui:test": "npm test --prefix tools/ui-workbench",
+    "ui:build": "npm run build --prefix tools/ui-workbench"
+  }
 }

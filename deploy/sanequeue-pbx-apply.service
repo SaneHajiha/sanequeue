@@ -1,7 +1,6 @@
 [Unit]
 Description=SaneQueue typed telephone configuration adapter
 After=asterisk.service sanequeue-inventory.service
-ConditionPathExists=!/var/lib/sanequeue/module.disabled
 [Service]
 Type=oneshot
 User=root

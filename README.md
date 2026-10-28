@@ -1,3 +1,5 @@
+**beta.27 pilot**: [installation and acceptance](docs/PILOT_BETA27.en.md) · [independent service controls](docs/SERVICE_MODULE_CONTROL.md) · [remaining reporting scope](docs/REPORTING_COMPLETION_CHECKLIST.en.md).
+
 <p align="center"><img src="docs/images/banner.jpg" alt="SaneHajiha — Open-source VoIP & Contact Center Tools" /></p>
 
 # SaneQueue
@@ -6,11 +8,13 @@ Persian and English live queue monitoring for Asterisk-based contact centers. MI
 
 **2.1.0-beta.26 · Redis and WebSocket monitoring beta · [راهنمای فارسی](README.fa.md)**
 
+**Reporting development branch:** `feature/reporting-phase2` adds historical reports, private CSV/Excel exports and schedules, survey work sessions, traffic/agent analysis, human quality reviews and optional local Persian speech processing. Start with the [current handoff](docs/DEVELOPMENT_STATUS.en.md) and [operator/development guide](docs/REPORTING_PHASE5.md). This work is under review in draft PR #14; it is not a production release or proof of multi-version/load compatibility. The installer instructions below describe the beta baseline; use the named branch explicitly to continue development.
+
 ![English operations dashboard with synthetic demonstration data](docs/images/dashboard-en.png)
 
 ## Automatic installation, scoped controls and contextual help
 
-The standard installer now connects the existing dashboard to Redis and an authenticated ASGI WebSocket gateway. A separate read-only AMI collector handles queue events independently of browser count. See [deployment](docs/REALTIME_DEPLOYMENT.md), [architecture](docs/REALTIME_ARCHITECTURE.md), [beta.25 audit and scores](docs/AUDIT_BETA26.md) and [admin password recovery](docs/ADMIN_ACCESS.md). Reporting remains the next phase.
+The standard installer connects the dashboard to Redis and an authenticated ASGI WebSocket gateway. A separate read-only AMI collector handles queue events independently of browser count. See [deployment](docs/REALTIME_DEPLOYMENT.md), [architecture](docs/REALTIME_ARCHITECTURE.md), [beta audit](docs/AUDIT_BETA26.md) and [admin password recovery](docs/ADMIN_ACCESS.md). Historical reporting development has separate bounded workers and acceptance limits described in the handoff above.
 
 ## What you can use
 
@@ -22,7 +26,7 @@ The standard installer now connects the existing dashboard to Redis and an authe
 - Live call journey events, threshold alerts, Telegram and Bale notifications, queue directory and shift planning with overlap validation.
 - Persistent collector mode: Redis-only normal reads, WebSocket push, scoped exact call targets, durable command/capacity state and optional alert outbox. Legacy five-second snapshots remain an explicit rollback mode.
 
-Listen/whisper/barge requests use ChanSpy and a configured supervisor extension. AMI acceptance is **not audio confirmation**. These controls remain beta and require a manual audio acceptance test on each installation. Transfer, park/retrieve and pickup have now passed test-PBX telephone acceptance; they remain installation-specific beta controls. CRM, WebRTC, AI and historical reports remain deferred. See the [feature matrix](docs/FEATURES.md).
+Listen/whisper/barge requests use ChanSpy and a configured supervisor extension. AMI acceptance is **not audio confirmation**. These controls remain beta and require a manual audio acceptance test on each installation. Transfer, park/retrieve and pickup have now passed test-PBX telephone acceptance; they remain installation-specific beta controls. CRM and WebRTC remain deferred. Historical reporting and optional local speech code on this branch have the explicit limits described in the development handoff. See the [feature matrix](docs/FEATURES.md).
 
 ## Install and operate
 
@@ -50,3 +54,12 @@ Third-party copyright and license notices are preserved in [LICENSE](LICENSE) an
 
 
 [ماژول‌های تلفنی و صوت پیش‌فرض](docs/TELEPHONY_MODULES.fa.md) · [Telephone modules and bundled audio](docs/TELEPHONY_MODULES.en.md) · [Beta.25 release notes](docs/RELEASE_BETA26.md)
+
+
+## New development checkpoint: bounded optional modules
+
+- [VIP/blocked observations](CUSTOMER_SEGMENTS.en.md): temporal per-queue reporting labels, separate answered-known-wait SLA denominator, exact normalized numbers, append-only database triggers, scoped/masked observation history and bounded idempotent operator import. Labels do not change PBX routing; imports are not independent blocking proof or an automatic blacklist adapter.
+- [Voice feedback](VOICE_FEEDBACK.en.md): authorized manual WAV intake, independent play/download grants, access audit, review/follow-up workflow and private atomic storage. This does not claim automatic phone capture or speaker identity.
+- [Generative assistance](GENERATIVE_ANALYSIS.en.md): opt-in owner-private pinned transcript analysis through a strict loopback service, fresh multi-queue grants, killable background child and cited source excerpts. No model is installed or enabled by default. Client worker limits do not limit a separate model service. Real Persian quality/inference load remain untested.
+- [Archive catalog](ARCHIVE_CATALOG.en.md): monthly-labelled full reporting snapshots with durable intent/retry, verification and no-overwrite restore. These are not physical event partitions, transparent archive query routing, full installation backups or live cutover.
+

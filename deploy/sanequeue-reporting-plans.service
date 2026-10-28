@@ -1,0 +1,28 @@
+[Unit]
+Description=SaneQueue private report schedule dispatcher
+After=local-fs.target sanequeue-reporting.service
+
+[Service]
+Type=simple
+User=sanequeue
+Group=sanequeue
+WorkingDirectory=/opt/sanequeue
+ExecStart=/opt/sanequeue/.venv/bin/python -m sanequeue.reporting.plan_worker --plans /var/lib/sanequeue/report-plans.sqlite3 --jobs /var/lib/sanequeue/export-jobs.sqlite3 --outputs /var/lib/sanequeue/private-exports --archive /var/lib/sanequeue/history.sqlite3 --accounts /var/lib/sanequeue/local_accounts.json --policies /var/lib/sanequeue/local_queue_policies.json
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=10
+UMask=0077
+Nice=19
+IOSchedulingClass=idle
+CPUQuota=5%
+MemoryMax=128M
+TasksMax=16
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sanequeue
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

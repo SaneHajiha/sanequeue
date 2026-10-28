@@ -63,7 +63,8 @@ def install(app, cfg, backend, get_data, render):
 
     @app.context_processor
     def security_context():
-        return dict(csrf_token=csrf, user_role=role(), can_view_section=lambda key:key in sections())
+        return dict(csrf_token=csrf, user_role=role(), can_view_section=lambda key:key in sections(),
+                    history_available=bool(app.config.get('SANEQUEUE_HISTORY_INSTALLED')))
 
     @app.before_request
     def protect_sections():
@@ -80,6 +81,7 @@ def install(app, cfg, backend, get_data, render):
             if path=='/api/control' and request.form.get('action')=='dial':required.add('directory')
         elif path=='/api/members/pause':required={'agents','queues','control'}
         elif path=='/api/activity/daily':required={'agents'}
+        elif path.startswith('/api/history/'):required={'reports'}
         elif path=='/api/operations':required={'live','queues','calls','waiting','agents','presence','wallboard','alerts','control'}
         elif path.startswith('/api/audit'):required={'audit'}
         elif path.startswith('/api/planning/'):required={path.rsplit('/',1)[-1]}
@@ -169,8 +171,9 @@ def install(app, cfg, backend, get_data, render):
     def ops_home():
         from sanequeue.security.permissions import ROLE_SECTIONS,ROLE_ACTIONS
         from qpanel.user_help import GUIDES
+        from qpanel.product_catalog import module_catalog
         return render('operations.html', ops_config=dict(
-            build_version=__import__('qpanel').__version__, test_controls_enabled=bool(app.config.get('SANEQUEUE_TEST_CONTROLS_STATUS', lambda:False)()), controls_status_url='/api/ami/control-status', controls_toggle_url='/api/ami/control-toggle', data_url=url_for('ops_data'), report_url=url_for('ops_reports'), pause_url=url_for('pause_member'), control_url=url_for('ops_control'), audit_url=url_for('ops_audit'),
+            module_catalog=module_catalog(), build_version=__import__('qpanel').__version__, test_controls_enabled=bool(app.config.get('SANEQUEUE_TEST_CONTROLS_STATUS', lambda:False)()), controls_status_url='/api/ami/control-status', controls_toggle_url='/api/ami/control-toggle', data_url=url_for('ops_data'), report_url=url_for('ops_reports'), pause_url=url_for('pause_member'), control_url=url_for('ops_control'), audit_url=url_for('ops_audit'),
             interval=max(2000, cfg.interval * 1000), csrf=csrf(), role=role(), demo_mode=str(option('demo_mode','false')).lower()=='true',
             wait_threshold=number(option('wait_threshold', 60)),
             pause_threshold=number(option('pause_threshold', 900)),

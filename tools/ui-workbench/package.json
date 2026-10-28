@@ -1,0 +1,25 @@
+{
+  "name": "sanequeue-ui-workbench",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 18910 --strictPort",
+    "build": "vite build",
+    "storybook": "storybook dev --host 127.0.0.1 --port 18911 --no-open --disable-telemetry",
+    "build-storybook": "storybook build --disable-telemetry",
+    "test": "node scripts/test.mjs",
+    "test:update": "node scripts/test.mjs --update-snapshots",
+    "test:report": "playwright show-report",
+    "tokens": "node scripts/generate-tokens.mjs",
+    "prebuild": "npm run tokens",
+    "predev": "npm run tokens",
+    "prebuild-storybook": "npm run tokens"
+  },
+  "devDependencies": {
+    "@storybook/html-vite": "10.6.5",
+    "storybook": "10.6.5",
+    "vite": "8.3.5",
+    "@playwright/test": "1.64.1",
+    "@axe-core/playwright": "4.14.0"
+  }
+}

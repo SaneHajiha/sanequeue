@@ -1,4 +1,6 @@
-# Automatic installation · beta.23
+Current release and module controls: [beta.27 pilot](PILOT_BETA27.en.md). Pin REF to the full reviewed commit for reproducible installs.
+
+# Automatic installation · beta.27 pilot
 
 [فارسی](INSTALL.fa.md) · [User guide](USER_GUIDE.en.md) · [Validation](AUDIT_BETA23.md)
 
@@ -7,7 +9,7 @@
 Use a systemd Linux PBX with Asterisk available locally, AMI listening on 127.0.0.1:5038, outbound HTTPS and a working distribution package repository. Review the script before running it as root:
 
 ```bash
-curl -fL https://raw.githubusercontent.com/SaneHajiha/sanequeue/v2.1.0-beta.24/scripts/install.sh -o /tmp/sanequeue-install.sh
+curl -fL https://raw.githubusercontent.com/SaneHajiha/sanequeue/feature/reporting-phase2/scripts/install.sh -o /tmp/sanequeue-install.sh
 sudo bash /tmp/sanequeue-install.sh
 ```
 
@@ -16,6 +18,8 @@ Alternatively clone this release and run `sudo bash scripts/install.sh`. The boo
 On first install, choose an administrator username, a 12–200 character password (entered twice without echo), an optional detected supervisor phone, and the exact panel origin. There is no default password. Upgrades retain existing accounts and passwords. Do not put passwords in shell arguments or public issue reports.
 
 ## What is provisioned
+
+Timed quality-review notes use recording metadata on the already authorized file descriptor. Install the small optional reporting dependencies in the application virtual environment with `/opt/sanequeue/.venv/bin/python -m pip install -r /opt/sanequeue/requirements/reporting.txt` to support MP3 and Ogg Vorbis/Opus duration parsing through Mutagen. WAV uses the Python standard library. The web request never starts FFmpeg/FFprobe or decodes audio. Metadata reads are capped at 512 KiB, 1,024 I/O/seek operations and a cooperative 250 ms deadline. Missing parsers, malformed/truncated headers or budget exhaustion return HTTP 415 and do not save timed notes; attaching an authorized recording without notes does not probe duration. This metadata check is not proof of complete or decodable audio.
 
 - Immutable source release under `/opt/sanequeue-releases/`; `/opt/sanequeue` points to it.
 - Restricted `sanequeue` OS identity and private state in `/var/lib/sanequeue`.
