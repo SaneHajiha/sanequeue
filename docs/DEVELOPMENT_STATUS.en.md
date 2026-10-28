@@ -1,3 +1,5 @@
+Current completion checklist (2026-10-28): [فارسی](REPORTING_COMPLETION_CHECKLIST.fa.md) · [English](REPORTING_COMPLETION_CHECKLIST.en.md). Historical checkpoints below do not override this current scope.
+
 # SaneQueue development handoff
 
 Updated 2026-10-26. Continue from **feature/reporting-phase2**, draft PR **#14**. This is a development branch, not a production certification. Master does not contain the entire reporting change.

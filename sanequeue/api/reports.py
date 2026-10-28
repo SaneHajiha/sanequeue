@@ -1046,3 +1046,6 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         return proof
     install_generative(app, ai_store, archive, role=role, sections=sections,
                        can_queue=can_queue, authorize_source=authorize_generation)
+
+    from sanequeue.api.ring_attempts import install as install_ring_attempts
+    install_ring_attempts(app, archive, context, role=role, sections=sections, can_queue=can_queue)

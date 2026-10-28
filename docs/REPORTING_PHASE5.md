@@ -1,3 +1,5 @@
+Current completion checklist (2026-10-28): [فارسی](REPORTING_COMPLETION_CHECKLIST.fa.md) · [English](REPORTING_COMPLETION_CHECKLIST.en.md). Historical checkpoints below do not override this current scope.
+
 # Reporting development: snapshots, schedules, quality and local speech
 
 This development branch extends the historical reporting module. It is not a certification of every PBX version or of concurrent RTP capacity.

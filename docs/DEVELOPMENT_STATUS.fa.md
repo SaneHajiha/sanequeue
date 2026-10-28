@@ -1,3 +1,5 @@
+Current completion checklist (2026-10-28): [فارسی](REPORTING_COMPLETION_CHECKLIST.fa.md) · [English](REPORTING_COMPLETION_CHECKLIST.en.md). Historical checkpoints below do not override this current scope.
+
 # وضعیت توسعهٔ SaneQueue
 
 به‌روزرسانی: ۲۰۲۶-۱۰-۲۶. شاخهٔ کار `feature/reporting-phase2` و درخواست ادغام شمارهٔ ۱۴ است. این شاخه نسخهٔ توسعه است، نه تأییدیهٔ نصب زیر بار. برای ادامه از دستگاه دیگر همین شاخه را بگیرید؛ master هنوز همهٔ این تغییرات را ندارد.

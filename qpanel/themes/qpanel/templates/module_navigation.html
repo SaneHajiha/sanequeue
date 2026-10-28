@@ -21,6 +21,7 @@
 {% if user_role in ('admin','supervisor') and can_view_section('audit') %}{{shortcut('reports','history-transcript-section','جست‌وجوی متن مکالمه','Transcript search')}}{% endif %}
 {% if user_role in ('admin','supervisor') and can_view_section('audit') %}{{shortcut('reports','history-quality-section','کنترل کیفیت مکالمه','Call quality reviews')}}{% endif %}
 {{shortcut('reports','history-agents-section','عملکرد کارشناسان','Agent performance')}}
+{% if user_role in ('admin','supervisor') %}{{shortcut('reports','history-ring-attempts-section','زنگ داخلی بدون پاسخ','Unanswered ring attempts')}}{% endif %}
 {{shortcut('reports','history-agent-metrics-section','زمان رسیدگی و اشغال','Handling & occupancy evidence')}}
 {% if can_view_section('shifts') %}{{shortcut('reports','history-shifts-section','پایبندی و تأخیر شیفت','Shift adherence & lateness')}}{% endif %}
 {% if user_role=='admin' and can_view_section('users') %}{{shortcut('reports','history-cdr-section','ترافیک خطوط و CDR','Trunk traffic & CDR')}}{% endif %}

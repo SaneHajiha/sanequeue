@@ -60,3 +60,4 @@ jobs:
       - run: node tests/generative_frontend.cjs
       - run: node --check qpanel/themes/qpanel/static/js/report-charts.js
       - run: node tests/report_charts_frontend.cjs
+      - run: node --check qpanel/themes/qpanel/static/js/ring-attempts.js

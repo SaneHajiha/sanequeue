@@ -14,7 +14,7 @@ class ReportingThemeTests(unittest.TestCase):
                 html=render_theme_template('qpanel','reports.html',t=lambda fa,en:fa if lang=='fa' else en,
                     user_role='admin',can_view_section=lambda key:True,
                     ops_config={'allowed_sections':['reports','audit','shifts','users']})
-                for name in ('history-customer-segments-section','history-builder-section','history-transcript-section'):
+                for name in ('history-customer-segments-section','history-builder-section','history-transcript-section','history-ring-attempts-section'):
                     self.assertIn('id="'+name+'"',html)
 
     def test_voice_feedback_is_rendered_only_for_granted_supervisors(self):

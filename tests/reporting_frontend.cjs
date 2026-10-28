@@ -168,4 +168,15 @@ async function chartAdapters(){
  const t=prepare('report-analytics.js');action=t.element('history-analysis-run').onclick();t.pending[0].resolve({totals:{visits:4,answered:3,abandoned:1,sla_percent:100},trends:[{bucket:'2026-10-01',visits:4,answered:3,abandoned:1,average_wait_seconds:2,sla_percent:100,incomplete:0}],queues:[{queue:'8001',asa_seconds:2,wait_percentiles:{p50_seconds:2,p90_seconds:4,p95_seconds:5},longest_wait_seconds:5,abandon_percent:25,sla_numerator:3,sla_denominator:3,unknown_wait:0}],heatmap:[]});await action;
  assert.deepEqual(Array.from(t.charts.get('history-analysis-chart').series[0].values),[3]);assert.deepEqual(Array.from(t.charts.get('history-queue-wait-chart').series[2].values),[4]);t.element('history-filters').listeners.change();assert.equal(t.charts.size,0);
 }
-(async()=>{await chartAdapters();await reporting();await plans();await transcripts();await exportRecovery();await journey();await customerSegments();console.log('Reporting frontend: failure, stale-response, transcript, export recovery, journey and customer-segment lifecycle checks passed');})().catch(error=>{console.error(error);process.exitCode=1;});
+
+async function ringAttempts(){
+ const {element,document,pending,observers,charts}=setup('ring-attempts.js',true);document.body.dataset.view='reports';
+ const payload={totals:{attempts:3,known_duration_attempts:2,unknown_duration_attempts:1,average_known_ring_seconds:1.5},groups:[{queue:'8001',agent:'<img src=x>',attempts:3,known_duration_attempts:2,known_ring_seconds:3,average_known_ring_seconds:1.5}],rows:[{timestamp:100,queue:'8001',agent:'<img src=x>',ring_seconds:null,correlation:'queue_visit_unproven'}],next:'opaque-cursor',coverage:{queue_log:{fresh:true},source_gap:false}};
+ element('ring-attempts-run').listeners.click();pending[0].resolve(payload);await settle();
+ assert.equal(charts.get('ring-attempts-chart').series[0].values[0],3);assert.equal(element('ring-attempts-more').hidden,false);
+ const allText=node=>node.textContent+' '+node.children.map(allText).join(' ');assert.match(allText(element('ring-attempts-rows')),/<img src=x>/);assert.equal(element('ring-attempts-rows').innerHTML,'');
+ element('ring-attempts-more').listeners.click();assert.match(pending[1].url,/before=opaque-cursor/);element('history-filters').listeners.input();pending[1].resolve(payload);await settle();assert.equal(charts.size,0);assert.equal(element('ring-attempts-run').disabled,false,'filter changes must not strand disabled button');
+ element('ring-attempts-run').listeners.click();document.body.dataset.view='live';observers.forEach(f=>f());document.body.dataset.view='reports';pending[2].resolve(payload);await settle();assert.equal(charts.size,0);assert.equal(element('ring-attempts-rows').children.length,0);
+ element('ring-attempts-run').listeners.click();pending[3].reject(Error('denied'));await settle();assert.equal(charts.size,0);assert.match(element('ring-attempts-feedback').textContent,/Report unavailable/);
+}
+(async()=>{await ringAttempts();await chartAdapters();await reporting();await plans();await transcripts();await exportRecovery();await journey();await customerSegments();console.log('Reporting frontend: failure, stale-response, transcript, export recovery, journey and customer-segment lifecycle checks passed');})().catch(error=>{console.error(error);process.exitCode=1;});
