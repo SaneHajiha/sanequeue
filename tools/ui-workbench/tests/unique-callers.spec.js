@@ -8,6 +8,6 @@ for(const locale of ['fa','en'])test(`distinct callers ${locale}`,async({page})=
  await page.addScriptTag({path:resolve('../../qpanel/themes/qpanel/static/js/report-charts.js')});await page.addScriptTag({path:resolve('../../qpanel/themes/qpanel/static/js/report-periods.js')});await page.addScriptTag({path:resolve('../../qpanel/themes/qpanel/static/js/unique-callers.js')});
  await page.locator('#unique-callers-run').click();await expect(page.locator('#unique-callers-chart svg')).toBeVisible();await expect(page.locator('#unique-callers-table table')).toHaveCount(2);await expect(page.locator('#unique-callers-table')).toContainText('8001');
  await expect(page.locator('#unique-callers-table table').first()).not.toContainText('2026-10-01');
- await page.evaluate(()=>document.dispatchEvent(new Event('sanequeue:reports-loaded')));await expect(page.locator('#unique-callers-table table')).toHaveCount(2);
+ await page.evaluate(()=>document.dispatchEvent(new Event('sanequeue:reports-loaded')));await expect(page.locator('#unique-callers-table table')).toHaveCount(2);await expect(page.locator('#unique-callers-chart svg')).toBeVisible();
  await page.locator('[name=from]').fill('2026-10-02');await expect(page.locator('#unique-callers-table table')).toHaveCount(0);expect(errors).toEqual([]);
 });
