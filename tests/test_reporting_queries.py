@@ -59,6 +59,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(len(evidence['timeline']), 3)
         agent = agents(self.archive, self.scope, self.stamp, self.stamp+100)['rows'][0]
         self.assertEqual((agent['answered'], agent['caller_segment_hangup'], agent['talk_seconds']), (1, 1, 30))
+        self.assertEqual(agent['last_observed_answer'], self.stamp+10)
         hidden = visits(self.archive, Scope(('8002',)), self.stamp, self.stamp + 100)['rows'][0]
         self.assertIsNone(detail(self.archive, self.scope, self.stamp, self.stamp + 100, hidden['id']))
 
@@ -76,6 +77,23 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(project_batch(self.archive)['processed'], 0)
         self.assertEqual(visits(self.archive, Scope(()), self.stamp, self.stamp + 100)['rows'], [])
         self.assertEqual(visits(self.archive, Scope(('8001',), (), True), self.stamp, self.stamp + 100)['rows'], [])
+
+    def test_last_observed_answer_is_per_queue_and_within_selected_entry_range(self):
+        self.seed()
+        self.archive.append([
+            self.event('c','8002','ENTERQUEUE',50,['','123']),
+            self.event('c','8002','CONNECT',60,['10','uid','1']),
+            self.event('c','8002','COMPLETEAGENT',70,['10','10','1']),
+            self.event('d','8001','ENTERQUEUE',200,['','456']),
+            self.event('d','8001','CONNECT',210,['10','uid','1']),
+            self.event('d','8001','COMPLETECALLER',220,['10','10','1']),
+        ])
+        while project_batch(self.archive,limit=10)['processed']:pass
+        scoped=agents(self.archive,Scope(('8001','8002')),self.stamp,self.stamp+100)['rows']
+        by_queue={row['queue']:row['last_observed_answer'] for row in scoped}
+        self.assertEqual(by_queue,{'8001':self.stamp+10,'8002':self.stamp+60})
+        only_first=agents(self.archive,Scope(('8001',)),self.stamp,self.stamp+300)['rows']
+        self.assertEqual(only_first[0]['last_observed_answer'],self.stamp+210)
 
     def test_projection_replays_latest_cdr_version_and_is_pbx_isolated(self):
         payload = dict(uniqueid='a', linkedid='a', src='200', dst='100', billsec='10', duration='20')

@@ -147,7 +147,8 @@ def agents(archive, scope, start, end):
           SUM(segment_ended_by='caller') caller_segment_hangup,
           SUM(segment_ended_by='agent') agent_segment_hangup,
           SUM(segment_ended_by IS NULL) unknown_segment_hangup,
-          MIN(entered) first_visit,MAX(ended) last_end
+          MIN(entered) first_visit,MAX(ended) last_end,
+          MAX(answered) last_observed_answer
           FROM report_visits WHERE ''' + clause + " AND agent<>'' AND agent<>'NONE' GROUP BY queue,agent ORDER BY queue,agent LIMIT 501", args)]
     return dict(rows=rows[:500], limited=len(rows)>500, unit='agent_queue_segment',
                 work_time_source='collector_intervals_required', final_hangup_source='separate_conversation_evidence_required')
