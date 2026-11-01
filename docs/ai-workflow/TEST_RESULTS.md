@@ -161,6 +161,8 @@ PDF گزارش‌ساز صف برای ریز، گروه‌بندی و زمان�
 
 Outbound dashboard local validation: 40 tests and 17 subtests passed across CDR, access, builder and theme integration, including permission revocation after archive read. Two browser workbench tests passed in Persian and English with a synthetic dataset and escaped content. These results do not validate external trunks, human contact or production load.
 
+Outbound test-server installation: 5ec1c9 passed 270 Linux tests; the UI-only follow-up 7cc317 passed 10 targeted Linux tests. Asterisk retained the same PID during both switches. The authenticated browser opened the outbound menu without page errors; the selected lab period had zero observed outbound segments, so only the empty state was validated on that archive. Non-empty arithmetic was checked using isolated synthetic fixtures; no external trunk was available.
+
 Queue wait distributions: local queue outcomes/analytics/query suite 32 passed and 15 subtests, plus a boundary rerun with 9 passed and 6 subtests. Seven browser workbench tests covered Persian and English, answered and unanswered views, unknown waits, redraw and clearing on filter change. All use local synthetic data; this entry does not assert telephony or production-load acceptance.
 
 Ready-agent alert: 27 policy/outbox/messaging/system-alert tests and 3 subtests passed locally, including an explicitly empty member set, missing member field and transition deduplication. Actual message delivery and stale collector transitions were not tested in this increment.
