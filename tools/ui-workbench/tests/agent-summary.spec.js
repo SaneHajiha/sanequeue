@@ -17,7 +17,7 @@ for(const locale of ['fa','en']) for(const width of [390,1440]) {
     </section></section></body></html>`);
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   const job={id:'abc',state:'completed',start:1790800200,end:1793219400,updated:1793219400,progress:3,can_download:true};
-  const rank={rows:[{rank:1,agent:'PJSIP/100',value:3,answered_count:3,talk_known_count:3}]};
+  const rank={state:'partial',unresolved_answered_count:2,rows:[{rank:1,agent:'PJSIP/100',value:3,answered_count:3,talk_known_count:3}]};
   const result={start:job.start,end:job.end,source_watermark:20,projection_version:10,snapshot:{visits:{sequence:3},activity:{sequence:4}},rankings:{answered_count:rank,avg_queue_talk_seconds:rank},presence:[{agent:'PJSIP/100',observed_seconds:30,unique_on_duty_seconds:20,unique_on_call_seconds:10,unique_paused_seconds:0,explicit_acw_seconds:null,coverage_complete:false}]};
   await page.route('**/api/history/agent-summary-jobs**',route=>route.fulfill({json:route.request().url().endsWith('/result')?{result}:{jobs:[job]}}));
   await page.addScriptTag({path:resolve('../../qpanel/themes/qpanel/static/js/report-charts.js')});
@@ -29,6 +29,7 @@ for(const locale of ['fa','en']) for(const width of [390,1440]) {
   await expect(page.locator('#agent-summary-job-talk-chart svg')).toBeVisible();
   await expect(page.locator('#agent-summary-job-presence')).toContainText('PJSIP/100');
   await expect(page.locator('#agent-summary-job-presence')).toContainText('—');
+  await expect(page.locator('#agent-summary-job-answers-table')).toContainText(locale==='fa'?'رتبه‌بندی کامل نیست':'ranking is incomplete');
   await page.screenshot({path:test.info().outputPath('agent-summary.png'),fullPage:true});
   await page.locator('[name=from]').fill('2026-10-02');
   await expect(page.locator('#agent-summary-job-result')).toBeHidden();

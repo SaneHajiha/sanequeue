@@ -39,9 +39,23 @@ class AgentBackgroundTests(unittest.TestCase):
             db.execute("UPDATE report_activity SET canonical_agent='PJSIP/changed' WHERE canonical_agent='PJSIP/100'")
             db.execute("UPDATE report_visits SET agent='PJSIP/changed' WHERE agent LIKE 'Local/100%'")
         actual = run_pinned(self.archive, token, self.root/'pinned', self.scope, self.first, self.last, min_samples=1)
-        self.assertEqual(actual['rankings'], expected['rankings'])
+        for metric in expected['rankings']:
+            self.assertEqual(actual['rankings'][metric]['rows'], expected['rankings'][metric]['rows'])
+            self.assertEqual(actual['rankings'][metric]['state'], 'available')
+            self.assertEqual(actual['rankings'][metric]['unresolved_answered_count'], 0)
         self.assertEqual(actual['presence'], expected['presence'])
         self.assertEqual(actual['snapshot'], token)
+
+    def test_pinned_unresolved_identity_is_counted_but_never_guessed(self):
+        with self.archive.writer() as db:
+            db.execute("UPDATE report_activity SET canonical_agent='PJSIP/other' WHERE agent LIKE 'Local/100%'")
+            db.execute("UPDATE report_visits SET agent='Local/unresolvable@from-queue/n' WHERE agent LIKE 'Local/100%'")
+        token=activity_snapshots.capture(self.archive)
+        result=run_pinned(self.archive,token,self.root/'partial',self.scope,self.first,self.last,min_samples=1)
+        ranking=result['rankings']['answered_count']
+        self.assertEqual(ranking['state'],'partial')
+        self.assertGreater(ranking['unresolved_answered_count'],0)
+        self.assertTrue(all(row['agent']!='PJSIP/100' for row in ranking['rows']))
 
     def test_pinned_rechecks_generation_and_cooperative_checkpoint(self):
         token = activity_snapshots.capture(self.archive)

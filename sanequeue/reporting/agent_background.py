@@ -152,7 +152,7 @@ def _identities(work, budget):
     work.commit()
 
 
-def _visits(path, pbx, scope, first, last, work, budget, output, fetch_page=None):
+def _visits(path, pbx, scope, first, last, work, budget, output, fetch_page=None, on_unresolved=None):
     agents = {}
     if first >= last:
         return agents
@@ -183,6 +183,9 @@ def _visits(path, pbx, scope, first, last, work, budget, output, fetch_page=None
                     candidates = work.execute(IDENTITY_SQL,
                                               (queue, agent, row['answered'], row['answered'])).fetchall()
                     if len(candidates) != 1 or not _ENDPOINT.fullmatch(candidates[0][0]):
+                        if on_unresolved is not None:
+                            on_unresolved()
+                            continue
                         raise AggregationError('agent_identity_unresolved')
                     agent = candidates[0][0]
                 if agent not in agents:
@@ -391,14 +394,22 @@ def run_pinned(archive, snapshot, destination, scope, start, end, *, seconds=240
             return activity_snapshots.visit_page(archive, snapshot, scope, start, end, queue, after=after)
         _activity(None, archive.pbx, scope, first, end, snapshot['activity_observed'], work, budget, output,
                   fetch_page=activity_page)
-        agents = _visits(None, archive.pbx, scope, first, end, work, budget, output, fetch_page=visit_page)
+        unresolved = [0]
+        def record_unresolved():
+            unresolved[0] += 1
+        agents = _visits(None, archive.pbx, scope, first, end, work, budget, output,
+                         fetch_page=visit_page, on_unresolved=record_unresolved)
+        rankings={metric: _rank(agents, metric, min_samples, top)
+                  for metric in ('answered_count', 'avg_queue_talk_seconds')}
+        for ranking in rankings.values():
+            ranking['state']='partial' if unresolved[0] else 'available'
+            ranking['unresolved_answered_count']=unresolved[0]
         result = dict(format='sanequeue-private-agent-background-v1', start=float(start), end=float(end),
                       effective_start=first, pbx=archive.pbx, queues=list(scope.queues),
                       scope=dict(agents=list(scope.agents), self_only=scope.self_only, not_before=scope.not_before),
                       snapshot=snapshot, projection_version=snapshot['projection_version'],
                       source_watermark=snapshot['watermark'], observed_until=snapshot['activity_observed'],
-                      rankings={metric: _rank(agents, metric, min_samples, top)
-                                for metric in ('answered_count', 'avg_queue_talk_seconds')},
+                      rankings=rankings,
                       presence=_presence(work, first, end, budget),
                       contract=dict(unit='queue_visit', unique_conversations=False, ranking_is_quality=False,
                                     presence='union_observed_intervals_across_selected_queue_memberships',
