@@ -35,3 +35,5 @@
 
 
 2026-10-28 beta.27: installed pilot/API/calendar/charts and real CSV/XLSX/PDF downloads passed; see PILOT_BETA27.fa.md. Private sealed-backup monthly agent aggregation now passed the full synthetic month (53.4s wall,13.3sCPU,~32MiB RSS at25%onecore). Current-permission background job/API integration remains development; interactive limits were not raised.
+
+خروجی CSV جداگانه برای جدول صف‌ها و روزها در گزارش‌های پاسخ و بدون پاسخ و همچنین علت خروج بدون پاسخ اضافه شد؛ سایر جدول‌ها و قالب‌های مستقل هنوز باید جداگانه بررسی شوند.

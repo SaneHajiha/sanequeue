@@ -196,3 +196,4 @@ Outbound dashboard filters: 28 targeted backend tests and 4 subtests passed; 6 b
 
 On the lab, revision 60f396e passed 27 Linux tests with the Asterisk PID unchanged. An authenticated Chrome session on port 5000 applied origin/status filters and downloaded the days CSV with filter metadata and no page errors. The selected range had zero outbound segments, so nonempty real-trunk data and real browser PDF export remain unverified.
 
+Queue outcome aggregate CSV: 36 local tests and 18 subtests passed for outcome, analytics and query suites; 9 browser workbench tests passed. Covered per-queue/day/reason reconciliation, CSRF, scope, permission revocation, empty data and mocked browser download. This does not establish real trunk or operational load acceptance.

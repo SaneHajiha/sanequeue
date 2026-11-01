@@ -119,3 +119,44 @@ def distribution_csv(result,kind,language,queues):
         writer.writerow(common+[bucket['start_seconds'],bucket['end_seconds'] if bucket['end_seconds'] is not None else '',bucket['count'],item['known'],100*bucket['count']/item['known'] if item['known'] else ''])
     writer.writerow(common+[('نامعلوم' if fa else 'unknown'),'',item['unknown'],item['known'],''])
     return output.getvalue().encode('utf-8-sig')
+
+
+def aggregate_csv(result, kind, table, language, queues):
+    """Export the displayed aggregates with scope, denominators and missing data."""
+    if (kind not in ('answered', 'unanswered') or table not in ('queues', 'days', 'reasons')
+            or table == 'reasons' and kind != 'unanswered' or language not in ('fa', 'en')
+            or result.get('state') != 'available'):
+        raise ValueError('invalid_queue_aggregate_export')
+    from .exports import persian_date
+    fa=language=='fa'
+    def stamp(value):
+        local=datetime.fromtimestamp(value,ZONE)
+        return (persian_date(local.date()) if fa else local.date().isoformat())+local.strftime(' %H:%M:%S')
+    def safe(value):
+        # Queue identifiers and any future textual dimensions must stay literal in spreadsheets.
+        return "'"+str(value) if value is not None else ''
+    common=[stamp(result['start']),stamp(result['end']),safe(','.join(queues)),kind]
+    output=io.StringIO(newline='');writer=csv.writer(output)
+    base=['شروع تهران','پایان انحصاری تهران','صف‌های انتخابی','دسته'] if fa else ['period_start_tehran','period_end_exclusive_tehran','queues','category']
+    if table=='reasons':
+        writer.writerow(base+(['علت','تعداد','مخرج بدون پاسخ','درصد از بدون پاسخ'] if fa else ['reason','visits','unanswered_denominator','percent_unanswered']))
+        total=result['totals']['unanswered']
+        labels={'abandoned':'انصراف تماس‌گیرنده','exitwithtimeout':'پایان زمان انتظار','exitwithkey':'خروج با کلید','exitempty':'خروج صف خالی'}
+        for name in UNANSWERED:
+            value=result['totals'][name]
+            writer.writerow(common+[(labels[name] if fa else name),value,total,100*value/total if total else ''])
+    else:
+        dimension=('صف' if table=='queues' else 'روز') if fa else ('queue' if table=='queues' else 'day')
+        headers=['تعداد','مخرج نتایج معلوم','درصد از نتایج معلوم','میانگین انتظار ثانیه','نمونه انتظار معلوم'] if fa else ['visits','known_outcomes_denominator','percent_known_outcomes','mean_wait_seconds','known_wait_samples']
+        if kind=='answered':headers+=['میانگین مکالمه ثانیه','نمونه مکالمه معلوم'] if fa else ['mean_talk_seconds','known_talk_samples']
+        writer.writerow(base+[dimension]+headers)
+        rows=result[table]
+        for row in rows:
+            value=row['queue' if table=='queues' else 'day']
+            if table=='days' and fa:
+                value=persian_date(datetime.fromisoformat(value).date())
+            fields=[row[kind],row['known_outcomes'],row[kind+'_percent_of_known'],row['average_'+kind+'_wait_seconds'],row[kind+'_wait_samples']]
+            if kind=='answered':fields += [row['average_answered_talk_seconds'],row['answered_talk_samples']]
+            writer.writerow(common+[safe(value)]+['' if item is None else item for item in fields])
+        if not rows:writer.writerow(common+[('بدون داده' if fa else 'No records')]+['']*len(headers))
+    return output.getvalue().encode('utf-8-sig')

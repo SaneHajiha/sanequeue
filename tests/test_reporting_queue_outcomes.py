@@ -64,6 +64,38 @@ class QueueOutcomeTests(unittest.TestCase):
         self.assertNotIn('09123456789',result.get_data(as_text=True))
         denied.append('report_export');self.assertEqual(client.post(url,headers={'X-CSRF-Token':'token'}).status_code,403)
 
+    def test_aggregate_csv_tables_match_visible_summary_and_scope(self):
+        denied=[];client=self.case.client(role='supervisor',menus=('reports',),denied=denied)
+        with client.session_transaction() as state:state['csrf_token']='token'
+        base='/api/history/queue-outcomes/aggregate.csv'+self.case.dates+'&lang=en'
+        self.assertEqual(client.post(base+'&kind=answered&table=queues').status_code,403)
+        for kind,table,expected in [('answered','queues',2),('unanswered','days',4),('unanswered','reasons',4)]:
+            with self.subTest(kind=kind,table=table):
+                response=client.post(base+'&kind='+kind+'&table='+table,headers={'X-CSRF-Token':'token'})
+                self.assertEqual(response.status_code,200)
+                rows=list(csv.DictReader(io.StringIO(response.data.decode('utf-8-sig'))))
+                self.assertEqual(sum(int(row['visits']) for row in rows),expected)
+                self.assertTrue(all(row['queues'].startswith("'") for row in rows))
+                self.assertNotIn('09123456789',response.get_data(as_text=True))
+                self.assertEqual(response.headers['Cache-Control'],'private, no-store')
+        self.assertEqual(client.post(base+'&kind=answered&table=reasons',headers={'X-CSRF-Token':'token'}).status_code,400)
+        self.assertEqual(client.post(base+'&kind=answered&table=queues&queue=8002',headers={'X-CSRF-Token':'token'}).status_code,403)
+        denied.append('report_export')
+        self.assertEqual(client.post(base+'&kind=answered&table=days',headers={'X-CSRF-Token':'token'}).status_code,403)
+
+    def test_aggregate_csv_revocation_and_empty_are_not_false_zero(self):
+        denied=[];client=self.case.client(role='supervisor',menus=('reports',),denied=denied)
+        with client.session_transaction() as state:state['csrf_token']='token'
+        from sanequeue.reporting.queue_outcomes import aggregate_csv
+        def revoke(*args,**kwargs):
+            value=aggregate_csv(*args,**kwargs);denied.append('report_export');return value
+        url='/api/history/queue-outcomes/aggregate.csv'+self.case.dates+'&kind=answered&table=days&lang=en'
+        with patch('sanequeue.api.reports.queue_outcomes.aggregate_csv',side_effect=revoke):
+            self.assertEqual(client.post(url,headers={'X-CSRF-Token':'token'}).status_code,403)
+        empty=report(self.case.archive,Scope(('8001',)),self.case.stamp+1000,self.case.stamp+1100)
+        rows=list(csv.DictReader(io.StringIO(aggregate_csv(empty,'answered','days','en',('8001',)).decode('utf-8-sig'))))
+        self.assertEqual(rows[0]['day'],'No records');self.assertEqual(rows[0]['visits'],'')
+
     def test_wait_distribution_csv_rechecks_revoked_export_grant(self):
         denied=[];client=self.case.client(role='supervisor',menus=('reports',),denied=denied)
         with client.session_transaction() as state:state['csrf_token']='token'

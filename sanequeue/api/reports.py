@@ -528,6 +528,26 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if str(current_user.get_id())!=owner or current!=scope:abort(403)
         return jsonify(result)
 
+    @app.post('/api/history/queue-outcomes/aggregate.csv')
+    @login_required
+    @safe
+    def history_queue_aggregate_csv():
+        owner=str(current_user.get_id());scope,start,end=context();export_csrf()
+        if role() not in ('admin','supervisor') or not scope.queues or not all(can_queue(q,'report_export') for q in scope.queues):abort(403)
+        kind=request.args.get('kind','');table=request.args.get('table','');language=request.args.get('lang','fa')
+        if kind not in ('answered','unanswered') or table not in ('queues','days','reasons') or table=='reasons' and kind!='unanswered' or language not in ('fa','en'):raise ValueError('invalid_queue_aggregate_export')
+        if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
+        try:
+            result=queue_outcomes.report(archive,scope,start,end)
+            if result['state']!='available':raise QueryDeadline('queue_outcome_visit_limit')
+            content=queue_outcomes.aggregate_csv(result,kind,table,language,scope.queues)
+        finally:aggregate_gate.release()
+        current,_,_=context()
+        if owner!=str(current_user.get_id()) or current!=scope or role() not in ('admin','supervisor') or not all(can_queue(q,'report_export') for q in scope.queues):abort(403)
+        return Response(content,mimetype='text/csv; charset=utf-8',headers={
+            'Content-Disposition':f'attachment; filename="sanequeue-{kind}-{table}.csv"',
+            'X-SaneQueue-Unit':'queue_visit','Cache-Control':'private, no-store'})
+
     @app.post('/api/history/queue-outcomes/wait-distribution.csv')
     @login_required
     @safe
