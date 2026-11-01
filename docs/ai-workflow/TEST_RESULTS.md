@@ -217,3 +217,6 @@ Bounded EXITWITHKEY repair: 37 targeted tests and 17 subtests passed locally; te
 On the lab, revision d7d80a2 passed 33 Linux tests, including repair continuation and rollback on isolated test databases; Asterisk PID remained unchanged. No repair was applied to the lab archive because read-only inspection found no EXITWITHKEY records. Large-archive performance and automatic maintenance scheduling remain unverified.
 
 Queue positions: 40 local tests and 17 subtests passed for explicit entry/exit, conflicts, unknowns, re-entry, authorized queue scope and bounded backfill; 9 UI workbench tests passed. Values are current projections and are not in pinned background exports. No cross-version live acceptance or large-archive load claim.
+
+On the lab, revision 6988731 passed 36 Linux tests with Asterisk PID unchanged. Authenticated Chrome displayed entry/exit column headings in both queue outcome detail views with no page errors. Bounded historical position repair was started and checkpointed on the lab archive in small batches; it was not yet complete at the end of this run. Individual legacy positions and production-scale completion remain unverified.
+
