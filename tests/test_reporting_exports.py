@@ -43,9 +43,12 @@ class ExportTests(unittest.TestCase):
             self.assertEqual(cells['C5'].find('.//s:t',ns).text,'=untrusted')
             self.assertEqual(sheet.findall('.//s:f',ns),[])
             self.assertNotIn('I5',cells)
+            self.assertNotIn('M5',cells);self.assertNotIn('N5',cells)
+            self.assertEqual(cells['M4'].find('.//s:t',ns).text,'جایگاه ورود')
+            self.assertEqual(cells['N4'].find('.//s:t',ns).text,'جایگاه خروج')
             self.assertEqual(sheet.find('.//s:sheetView',ns).get('rightToLeft'),'1')
             self.assertEqual(sheet.find('.//s:pane',ns).get('ySplit'),'4')
-            self.assertEqual(sheet.find('s:autoFilter',ns).get('ref'),'A4:L5')
+            self.assertEqual(sheet.find('s:autoFilter',ns).get('ref'),'A4:N5')
         with self.assertRaises(ValueError):xlsx_bytes([self.row()]*201)
         with self.assertRaises(ValueError):csv_bytes([],language='unknown')
 

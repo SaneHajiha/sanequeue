@@ -4,7 +4,7 @@ import re
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile, ZIP_DEFLATED
 
-from .exports import xlsx_bytes, table
+from .exports import xlsx_bytes, table, position_headers
 
 NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main'
 
@@ -39,7 +39,7 @@ class Workbook:
             self._write(prefix)
             title='گزارش مراجعه‌های صف' if language=='fa' else 'Queue visit report'
             note=('زمان تهران؛ مقادیر نامعلوم خالی هستند | ' if language=='fa' else 'Asia/Tehran; unknown values are blank | ')+period
-            self.append([[title],[note],[],table([],language)[0]])
+            self.append([[title],[note],[],table([],language)[0]+position_headers(language)])
         except Exception:
             try:
                 if hasattr(self,'sheet'):self.sheet.close()
@@ -72,7 +72,7 @@ class Workbook:
     def close(self):
         if self.closed:return
         try:
-            self._write(('</sheetData><autoFilter ref="A4:L'+str(self.row)+'"/><mergeCells count="2"><mergeCell ref="A1:L1"/><mergeCell ref="A2:L2"/></mergeCells></worksheet>').encode())
+            self._write(('</sheetData><autoFilter ref="A4:N'+str(self.row)+'"/><mergeCells count="2"><mergeCell ref="A1:N1"/><mergeCell ref="A2:N2"/></mergeCells></worksheet>').encode())
         finally:
             self.closed=True
             try:self.sheet.close()

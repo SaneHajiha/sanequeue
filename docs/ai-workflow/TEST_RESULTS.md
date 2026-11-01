@@ -224,3 +224,4 @@ Position snapshot CSV: 45 targeted tests and 17 subtests passed; snapshot/export
 
 On the lab, aaac37c passed 44 Linux tests with Asterisk PID unchanged. Authenticated browser submitted answered and unanswered background CSV exports (43 and 448 rows); both downloads contained position columns and comparable rows matched the current API for the selected unchanged interval. Pinned-before-correction behavior was verified in synthetic unit tests, not with live customer calls. Excel and PDF position columns remain open.
 
+Position columns in XLSX: 68 local tests and 19 subtests passed across queue positions, snapshot/export jobs, XLSX, PDF regressions and queue outcomes. XLSX OOXML was checked for numeric cells, blank unknowns, RTL and expanded filter range; synthetic pinned snapshot retains values when current facts change. A visual inspection in Microsoft Excel and live telephony/load acceptance remain separate.

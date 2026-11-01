@@ -70,9 +70,16 @@ def csv_bytes(rows, language='en'):
     return ('\ufeff'+output.getvalue()).encode('utf-8')
 
 
+def position_headers(language):
+    if language not in ('fa','en'):raise ValueError('invalid_export_language')
+    return ['جایگاه ورود','جایگاه خروج'] if language=='fa' else ['Entry position','Exit position']
+
+
 def xlsx_bytes(rows, language='en', *, period=''):
     """Inline strings preserve phone numbers/IDs and cannot become formulas."""
     headers, body = table(rows, language)
+    headers += position_headers(language)
+    body = [values+[row.get('entry_position'),row.get('exit_position')] for values,row in zip(body,rows)]
     ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
     tag = lambda name: '{'+ns+'}'+name
     ET.register_namespace('', ns)
@@ -81,7 +88,7 @@ def xlsx_bytes(rows, language='en', *, period=''):
     view = ET.SubElement(views,tag('sheetView'),workbookViewId='0',rightToLeft='1' if language=='fa' else '0',zoomScale='100',showGridLines='0')
     ET.SubElement(view,tag('pane'),ySplit='4',topLeftCell='A5',activePane='bottomLeft',state='frozen')
     cols = ET.SubElement(sheet,tag('cols'))
-    for index,width in enumerate((10,20,14,18,26,26,26,16,22,20,18,68),1):
+    for index,width in enumerate((10,20,14,18,26,26,26,16,22,20,18,68,18,18),1):
         attributes=dict(min=str(index),max=str(index),width=str(width),customWidth='1')
         if index==12:attributes['hidden']='1'
         ET.SubElement(cols,tag('col'),attributes)
@@ -104,10 +111,10 @@ def xlsx_bytes(rows, language='en', *, period=''):
                 cell=ET.SubElement(row_node,tag('c'),r=ref,s=style,t='inlineStr')
                 text=ET.SubElement(ET.SubElement(cell,tag('is')),tag('t'),{'{http://www.w3.org/XML/1998/namespace}space':'preserve'})
                 text.text=re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]','',str(value))[:32767]
-    ET.SubElement(sheet,tag('autoFilter'),ref=f'A4:L{len(values)}')
+    ET.SubElement(sheet,tag('autoFilter'),ref=f'A4:N{len(values)}')
     merges=ET.SubElement(sheet,tag('mergeCells'),count='2')
-    ET.SubElement(merges,tag('mergeCell'),ref='A1:L1')
-    ET.SubElement(merges,tag('mergeCell'),ref='A2:L2')
+    ET.SubElement(merges,tag('mergeCell'),ref='A1:N1')
+    ET.SubElement(merges,tag('mergeCell'),ref='A2:N2')
     styles=f'''<styleSheet xmlns="{ns}"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF12283F"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFill="1" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'''
     output=io.BytesIO()
     with ZipFile(output,'w',ZIP_DEFLATED) as archive:

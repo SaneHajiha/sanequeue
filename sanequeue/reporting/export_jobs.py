@@ -529,7 +529,7 @@ class ExportWorker:
                                 row['caller']=display_number(row['caller'],spec['number_modes'][row['queue']],
                                     secret=self.number_key,tenant='default',pbx=spec['pbx'],version=spec['number_policy_version'])
                             _,body=table(rows,spec['language'])
-                            if spec['format']=='csv':
+                            if spec['format'] in ('csv','xlsx'):
                                 body=[values+[row.get('entry_position'),row.get('exit_position')] for values,row in zip(body,rows)]
                         if workbook:
                             workbook.append(body);size=output.tell()

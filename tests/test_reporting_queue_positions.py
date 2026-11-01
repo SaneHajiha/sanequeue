@@ -49,8 +49,10 @@ class QueuePositionTests(unittest.TestCase):
         self.assertEqual({(r['entry_position'],r['exit_position']) for r in rows},{(5,2),(7,3)})
         self.assertEqual(step(c.archive)['rebuilt_calls'],0)
 
-    def test_snapshot_and_csv_preserve_positions_as_of_request(self):
+    def test_snapshot_csv_and_xlsx_preserve_positions_as_of_request(self):
         import csv,io,os
+        from zipfile import ZipFile
+        from xml.etree import ElementTree as ET
         from sanequeue.reporting import visit_snapshots
         from sanequeue.reporting.export_jobs import JobStore,ExportWorker,Limits,projection_watermark
         c=self.case;c.archive.append([c.event('a','8001','ENTERQUEUE',0,['','100','5']),
@@ -60,6 +62,8 @@ class QueuePositionTests(unittest.TestCase):
         store=JobStore(c.root/'jobs.db',c.root/'private');store.initialize()
         ident=store.create('test',Scope(('8001',)),c.stamp,c.stamp+100,watermark=projection_watermark(c.archive),
                            number_modes={'8001':'masked'},snapshot=old,format='csv',language='en',outcome_class='unanswered')
+        xlsx_id=store.create('test',Scope(('8001',)),c.stamp,c.stamp+100,watermark=projection_watermark(c.archive),
+                            number_modes={'8001':'masked'},snapshot=old,format='xlsx',language='en',outcome_class='unanswered')
         with c.archive.writer() as db:db.execute('UPDATE report_visit_positions SET entry_position=9,exit_position=1')
         new=visit_snapshots.capture(c.archive)
         self.assertGreater(new['sequence'],old['sequence'])
@@ -73,6 +77,17 @@ class QueuePositionTests(unittest.TestCase):
         fd,_=store.open_output(ident,'test')
         with os.fdopen(fd,'rb') as stream:rows=list(csv.DictReader(io.StringIO(stream.read().decode('utf-8-sig'))))
         self.assertEqual((rows[0]['Entry position'],rows[0]['Exit position']),('5','2'))
+        result=worker.run_once();self.assertEqual(result['state'],'completed',result)
+        fd,_=store.open_output(xlsx_id,'test')
+        with os.fdopen(fd,'rb') as stream, ZipFile(io.BytesIO(stream.read())) as book:
+            sheet=ET.fromstring(book.read('xl/worksheets/sheet1.xml'))
+        ns={'s':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+        cells={cell.get('r'):cell for cell in sheet.findall('.//s:c',ns)}
+        self.assertEqual(cells['M4'].find('.//s:t',ns).text,'Entry position')
+        self.assertEqual(cells['N4'].find('.//s:t',ns).text,'Exit position')
+        self.assertEqual(cells['M5'].find('s:v',ns).text,'5')
+        self.assertEqual(cells['N5'].find('s:v',ns).text,'2')
+        self.assertEqual(sheet.find('s:autoFilter',ns).get('ref'),'A4:N5')
 
     def test_snapshot_reader_handles_archive_before_position_version_migration(self):
         from sanequeue.reporting import visit_snapshots
