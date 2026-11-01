@@ -7,7 +7,7 @@ import os
 from zipfile import ZipFile
 from unittest.mock import patch
 from tests import test_reporting_queries as fixtures
-from sanequeue.reporting.queries import Scope
+from sanequeue.reporting.queries import Scope,visits
 from sanequeue.reporting.queue_outcomes import report
 from sanequeue.reporting import visit_snapshots
 from sanequeue.reporting.export_jobs import JobStore,ExportWorker,Limits,projection_watermark
@@ -60,6 +60,25 @@ class QueueOutcomeTests(unittest.TestCase):
         self.assertEqual(response.headers['Cache-Control'],'private, no-store')
         self.assertEqual(client.get('/api/history/queue-outcomes'+self.case.dates+'&queue=8002').status_code,403)
         self.assertNotIn('09123456789',response.text)
+
+    def test_category_details_match_summary_across_pages_and_scope(self):
+        archive=self.case.archive;scope=Scope(('8001',));start=self.case.stamp;end=start+100
+        totals=report(archive,scope,start,end)['totals']
+        for kind in ('answered','unanswered'):
+            cursor=None;rows=[]
+            while True:
+                page=visits(archive,scope,start,end,before=cursor,limit=2,outcome_class=kind)
+                rows.extend(page['rows']);cursor=page['next']
+                if cursor is None:break
+            self.assertEqual(len(rows),totals[kind]);self.assertEqual(len({row['id'] for row in rows}),len(rows))
+            self.assertEqual({row['queue'] for row in rows},{'8001'})
+        client=self.case.client(role='supervisor',menus=('reports',),details=False)
+        result=client.get('/api/history/visits'+self.case.dates+'&outcome_class=unanswered')
+        self.assertEqual(result.status_code,200,result.json);self.assertEqual(len(result.json['rows']),4)
+        self.assertNotIn('09123456789',result.text);self.assertEqual(result.json['consistency'],'current_page_not_snapshot')
+        self.assertEqual(client.get('/api/history/visits'+self.case.dates+'&outcome_class=unanswered&queue=8002').status_code,403)
+        self.assertEqual(client.get('/api/history/visits'+self.case.dates+'&outcome_class=bogus').status_code,400)
+        self.assertEqual(client.get('/api/history/visits'+self.case.dates+'&outcome_class=answered&outcome=abandoned').status_code,400)
 
     def test_concurrent_aggregate_is_rejected_without_blocking(self):
         first=self.case.client(role='supervisor',menus=('reports',),details=True);second=first.application.test_client()

@@ -517,11 +517,15 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     @login_required
     @safe
     def history_visits():
-        scope, start, end = context()
+        owner=str(current_user.get_id());scope, start, end = context()
         before = (request.args['before_time'], request.args['before_id']) if 'before_time' in request.args and 'before_id' in request.args else None
         result = queries.visits(archive, scope, start, end, before=before,
-                                queue=request.args.get('queue'), outcome=request.args.get('outcome'))
+                                queue=request.args.get('queue'), outcome=request.args.get('outcome'),
+                                outcome_class=request.args.get('outcome_class') or None)
+        current,_,_=context()
+        if str(current_user.get_id())!=owner or current!=scope:abort(403)
         result['rows'] = [protect_number(r) for r in result['rows']]
+        if request.args.get('outcome_class'):result['consistency']='current_page_not_snapshot'
         return jsonify(result)
 
     @app.get('/api/history/analytics')

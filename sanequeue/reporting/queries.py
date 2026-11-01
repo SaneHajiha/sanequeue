@@ -70,7 +70,7 @@ def overview(archive, scope, start, end, *, sla_seconds=20):
                 retention='no_automatic_deletion')
 
 
-def visits(archive, scope, start, end, *, before=None, limit=100, queue=None, outcome=None):
+def visits(archive, scope, start, end, *, before=None, limit=100, queue=None, outcome=None, outcome_class=None):
     clause, args = _where(archive.pbx, scope, start, end)
     if queue:
         clause += ' AND queue=?'
@@ -81,6 +81,10 @@ def visits(archive, scope, start, end, *, before=None, limit=100, queue=None, ou
             raise ValueError('invalid_report_outcome')
         clause += ' AND outcome=?'
         args.append(outcome)
+    if outcome_class is not None:
+        if outcome:raise ValueError('conflicting_outcome_filters')
+        from .queue_outcomes import class_clause
+        clause += class_clause(outcome_class)
     if before:
         stamp, ident = float(before[0]), str(before[1])
         if not math.isfinite(stamp) or len(ident) != 64:
