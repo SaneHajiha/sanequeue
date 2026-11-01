@@ -5,7 +5,7 @@ function node(tag){return {tag,children:[],dataset:{},textContent:'',hidden:fals
 const sections=new Map(['history-summary-section','history-cdr-section','history-agent-rankings-section','history-builder-section'].map(id=>[id,node('section')]));
 const local=node('nav'),report=node('report'),nav=node('main-nav'),body=node('body');body.dataset.view='reports';
 const overview=node('button');overview.textContent='Overview';overview.dataset.view='reports';overview.closest=()=>null;overview.click=()=>{};
-const shortcuts=[['history-cdr-section','pbx'],['history-agent-rankings-section','contact-center'],['history-builder-section','shared']].map(([target,family])=>{const button=node('button');button.textContent=target;button.dataset={moduleTarget:target,moduleView:'reports'};button.closest=selector=>selector==='[data-report-family]'?{dataset:{reportFamily:family}}:null;button.click=()=>{};return button;});
+const shortcuts=[['history-summary-section','contact-center'],['history-cdr-section','pbx'],['history-agent-rankings-section','contact-center'],['history-builder-section','shared']].map(([target,family])=>{const button=node('button');button.textContent=target;button.dataset={moduleTarget:target,moduleView:'reports'};button.closest=selector=>selector==='[data-report-family]'?{dataset:{reportFamily:family}}:null;button.click=()=>{};return button;});
 nav.querySelectorAll=selector=>selector==='.nav-module'?[]:selector.includes('data-module-view')?shortcuts:selector==='button[data-view]'?[overview]:[];
 nav.querySelector=selector=>selector==='button[data-view="reports"]'?overview:null;
 report.querySelector=selector=>selector==='.history-navigation'?local:sections.get(selector.slice(1));

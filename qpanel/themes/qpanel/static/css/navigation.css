@@ -8,6 +8,8 @@
 .module-navigation .nav-module>summary:hover{background:#ffffff0a;color:#fff}
 .module-navigation .current-module>summary{color:#fff}
 .module-navigation .module-items{padding:2px 0 9px}
+.module-navigation .report-submenu>summary{cursor:pointer;color:#b9ccde;font-size:12px;font-weight:700;line-height:1.6;padding:10px 13px;min-height:40px;border-radius:8px}
+.module-navigation .report-submenu>summary:hover,.module-navigation .report-submenu>summary:focus-visible{background:#ffffff12;color:#fff;outline-offset:2px}
 .module-navigation .nav-item,.module-navigation .module-shortcut{display:flex;align-items:center;gap:8px;width:100%;min-height:40px;padding:9px 13px;margin:2px 0;border:0;border-radius:8px;text-align:start;line-height:1.7;background:transparent;color:#b9ccde;font-size:11px;white-space:normal;box-shadow:none}
 .module-navigation .nav-item:before{display:none}
 .module-navigation .nav-item.active{background:#1769dc;color:#fff;font-weight:700}

@@ -29,9 +29,10 @@
    const overview=nav.querySelector('button[data-view="reports"]');
    const destinations=[...(overview?[{target:'history-summary-section',button:overview}]:[]),
     ...[...nav.querySelectorAll('[data-module-view="reports"]')].map(button=>({target:button.dataset.moduleTarget,button}))];
-   const reportGroups=new Map(),fa=document.documentElement.lang==='fa';
+   const reportGroups=new Map(),seenTargets=new Set(),fa=document.documentElement.lang==='fa';
    for(const destination of destinations){
-    if(!report.querySelector('#'+destination.target))continue;
+    if(seenTargets.has(destination.target)||!report.querySelector('#'+destination.target))continue;
+    seenTargets.add(destination.target);
     const option=document.createElement('option');option.value=destination.target;
     option.textContent=destination.button.textContent.trim();
     const family=destination.button.closest('[data-report-family]')?.dataset.reportFamily||'contact-center';
