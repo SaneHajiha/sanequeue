@@ -98,23 +98,34 @@ def report(archive,start,end,filters,spec,*,numbers,secret):
         number_policy='full' if numbers else 'masked',maximum_segments=MAX_SEGMENTS,filters=clean if numbers else {})
 
 
-def csv_bytes(data,language):
+def headers(columns,language):
     if language not in ('fa','en'):raise ValueError('invalid_cdr_builder_language')
-    if len(data['rows'])>MAX_CSV_ROWS:raise ValueError('cdr_builder_csv_row_limit')
     labels=dict(ts='شروع (تهران)',src='مبدأ نمایشی',dst='مقصد',origin='داخلی واقعی',outbound_cid='CID خروجی',did='سرشماره',
         trunk='ترانک',direction='جهت',disposition='نتیجه',duration='مدت (ثانیه)',billsec='مکالمه (ثانیه)',
         segments='بخش CDR',answered='پاسخ داده',unanswered='بدون پاسخ',unknown_disposition='نتیجه نامعلوم',
         known_duration='نمونه مدت معلوم',average_duration_seconds='میانگین مدت معلوم',known_billsec='نمونه مکالمه معلوم',average_billsec_seconds='میانگین مکالمه معلوم')
-    output=io.StringIO(newline='');writer=csv.writer(output);columns=data['columns']
-    writer.writerow([labels[key] if language=='fa' else key for key in columns])
-    for row in data['rows']:
+    return [labels[key] if language=='fa' else key for key in columns]
+
+
+def body(rows,columns,language,*,csv_safe=False):
+    headers(columns,language);result=[]
+    for row in rows:
         cells=[]
         for key in columns:
             value=row.get(key)
             if key=='ts' and value is not None:
                 local=datetime.fromtimestamp(value,_ZONE);value=(persian_date(local.date()) if language=='fa' else local.date().isoformat())+local.strftime(' %H:%M:%S')
-            if isinstance(value,str) and (key in NUMBERS or value.lstrip().startswith(('=','+','-','@','\t','\r','\n'))):value="'"+value
+            if csv_safe and isinstance(value,str) and (key in NUMBERS or value.lstrip().startswith(('=','+','-','@','\t','\r','\n'))):value="'"+value
             cells.append('' if value is None else value)
+        result.append(cells)
+    return result
+
+
+def csv_bytes(data,language):
+    if len(data['rows'])>MAX_CSV_ROWS:raise ValueError('cdr_builder_csv_row_limit')
+    output=io.StringIO(newline='');writer=csv.writer(output);columns=data['columns']
+    writer.writerow(headers(columns,language))
+    for cells in body(data['rows'],columns,language,csv_safe=True):
         writer.writerow(cells)
         if output.tell()>MAX_CSV_BYTES:raise ValueError('cdr_builder_csv_byte_limit')
     result=output.getvalue().encode('utf-8-sig')

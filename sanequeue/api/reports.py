@@ -206,6 +206,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         spec = job['spec']
         if spec['pbx'] != pbx:
             return False
+        if spec.get('dataset')=='cdr_segments':
+            if role()!='admin' or 'users' not in sections() or set(queries.queues(archive))!=set(spec['scope']['queues']):return False
         for queue in spec['scope']['queues']:
             if not can_queue(queue, 'view') or not can_queue(queue, 'report_export'):
                 return False
@@ -216,7 +218,9 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     def export_public(job):
         return {key: job[key] for key in ('id', 'state', 'created', 'updated', 'rows', 'bytes', 'error_code')} | {
             'format': job['spec']['format'], 'start': job['spec']['start'], 'end': job['spec']['end'],
-            'outcome_class':job['spec'].get('outcome_class')}
+            'outcome_class':job['spec'].get('outcome_class'),'dataset':job['spec'].get('dataset'),
+            **({'cdr_definition':job['spec']['cdr_definition'],'cdr_filters':job['spec']['cdr_filters'],
+                'consistency':job['spec']['consistency']} if job['spec'].get('dataset')=='cdr_segments' else {})}
 
     def agent_context():
         owner=export_context()
@@ -354,7 +358,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             finally:
                 stream.close()
         extension=job['spec']['format']
-        prefix='sanequeue-'+job['spec']['outcome_class'] if job['spec'].get('outcome_class') else 'sanequeue'
+        prefix=('sanequeue-cdr' if job['spec'].get('dataset')=='cdr_segments' else
+                'sanequeue-'+job['spec']['outcome_class'] if job['spec'].get('outcome_class') else 'sanequeue')
         mime={'xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','pdf':'application/pdf',
               'csv':'text/csv; charset=utf-8'}[extension]
         result = Response(chunks(), mimetype=mime, headers={
@@ -739,6 +744,29 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                 'X-SaneQueue-Unit':'cdr_segment'})
         result['total_rows']=len(result['rows']);result['rows']=result['rows'][:100];result['preview_limited']=result['total_rows']>100
         return jsonify(result)
+
+    @app.post('/api/history/cdr/builder/jobs')
+    @login_required
+    @safe
+    def history_cdr_builder_jobs():
+        owner=export_context();start,end,filters,numbers=cdr_context();export_csrf()
+        if not request.is_json:raise ValueError('invalid_cdr_builder_body')
+        if request.content_length is not None and request.content_length>8192:abort(413)
+        raw=request.stream.read(8193)
+        if len(raw)>8192:abort(413)
+        body=json.loads(raw)
+        if not isinstance(body,dict) or set(body)!={'definition','language','format','request_key'}:raise ValueError('invalid_cdr_builder_body')
+        queues=queries.queues(archive)
+        if not queues or not all(can_queue(queue,'report_export') for queue in queues):abort(403)
+        scope=queries.Scope(tuple(queues));modes={queue:'full' if numbers else 'masked' for queue in queues}
+        watermark=projection_watermark(archive)
+        if owner!=str(current_user.get_id()) or cdr_context()!=(start,end,filters,numbers) or queries.queues(archive)!=queues or not all(can_queue(queue,'report_export') for queue in queues):abort(403)
+        ident=export_store.create(owner,scope,start,end,watermark=watermark,pbx=pbx,number_modes=modes,
+            language=body['language'],format=body['format'],request_key=body['request_key'],
+            cdr_definition=body['definition'],cdr_filters=filters)
+        job=export_store.get(ident,owner)
+        if not export_permitted(job):export_store.cancel(ident,owner);abort(403)
+        return jsonify(export_public(job)),202
 
     def work_context():
         scope, start, end = context(restrict_queue=False)

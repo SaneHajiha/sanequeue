@@ -104,6 +104,7 @@ def local_authorizer(accounts_path,policies_path):
                 if not str(account.get('password_hash','')).startswith('pbkdf2:sha256:'):return False
             account=accounts.get(spec['owner'])
             if not account or account['role'] not in ('admin','supervisor') or 'reports' not in sections_for(account['role'],account):return False
+            if spec.get('dataset')=='cdr_segments' and (account['role']!='admin' or 'users' not in sections_for(account['role'],account)):return False
             raw=_local_json(policies_path)
             if not isinstance(raw,dict) or type(raw.get('version')) is not int or raw['version']!=1 or not all(key in raw for key in ('queues','supervisors')):return False
             policy=validate_config(raw);role=account['role']
@@ -182,7 +183,8 @@ class JobStore:
         finally:db.close()
 
     def create(self,owner,scope,start,end,*,watermark,pbx='primary',number_modes,
-               language='en',outcome=None,format='csv',snapshot=None,request_key=None,builder_definition=None,outcome_class=None):
+               language='en',outcome=None,format='csv',snapshot=None,request_key=None,builder_definition=None,outcome_class=None,
+               cdr_definition=None,cdr_filters=None):
         if not isinstance(owner,str) or not 1<=len(owner)<=128:raise ValueError('invalid_export_owner')
         _where(pbx,scope,start,end)
         if not scope.queues:raise ValueError('empty_export_scope')
@@ -211,6 +213,17 @@ class JobStore:
             spec['builder_definition']=definition(builder_definition)
             builder_exports.validate(spec)
             spec['row_unit']='group' if spec['builder_definition']['group_by'] else 'queue_visit'
+        if cdr_definition is not None:
+            from types import SimpleNamespace
+            from . import cdr_builder,cdr_queries
+            if builder_definition is not None or snapshot is not None or outcome is not None or outcome_class is not None or scope.self_only:
+                raise ValueError('invalid_cdr_export_scope')
+            if any(mode not in ('full','masked') for mode in number_modes.values()):raise ValueError('invalid_cdr_export_number_policy')
+            spec['cdr_definition']=cdr_builder.definition(cdr_definition)
+            _,_,spec['cdr_filters']=cdr_queries._where(SimpleNamespace(pbx=pbx),start,end,cdr_filters or {})
+            if any(mode!='full' for mode in number_modes.values()) and any(key in spec['cdr_filters'] for key in ('src','dst','party','origin','outbound_cid','did','src_length','dst_length')):
+                raise ValueError('invalid_cdr_export_number_filter')
+            spec['dataset']='cdr_segments';spec['unit']='cdr_segment';spec['consistency']='worker_start_snapshot'
         if request_key is not None and (not isinstance(request_key,str) or not re.fullmatch('[A-Za-z0-9_.:-]{1,128}',request_key)):
             raise ValueError('invalid_export_request_key')
         core={key:value for key,value in spec.items() if key not in ('watermark','snapshot')}
@@ -337,6 +350,17 @@ class ExportWorker:
     def _check(self,spec):
         if not self.authorize(spec):raise ExportFailure('export_access_revoked')
         if spec['pbx']!=self.archive.pbx:raise ExportFailure('export_pbx_mismatch')
+        if spec.get('dataset')=='cdr_segments':
+            from . import cdr_builder,cdr_queries,queries
+            if (spec.get('snapshot') is not None or spec.get('builder_definition') is not None or spec.get('outcome') is not None
+                    or spec.get('outcome_class') is not None or spec['scope']['self_only'] or spec.get('consistency')!='worker_start_snapshot'):
+                raise ExportFailure('cdr_export_spec_invalid')
+            if any(mode not in ('full','masked') for mode in spec['number_modes'].values()):raise ExportFailure('cdr_export_spec_invalid')
+            cdr_builder.definition(spec['cdr_definition']);cdr_queries._where(self.archive,spec['start'],spec['end'],spec['cdr_filters'])
+            if set(queries.queues(self.archive))!=set(spec['scope']['queues']):raise ExportFailure('export_access_revoked')
+            if any(mode!='full' for mode in spec['number_modes'].values()) and any(key in spec['cdr_filters'] for key in ('src','dst','party','origin','outbound_cid','did','src_length','dst_length')):
+                raise ExportFailure('cdr_export_spec_invalid')
+            return
         if spec.get('outcome_class') is not None:
             from .queue_outcomes import class_clause
             class_clause(spec['outcome_class'])
@@ -427,6 +451,17 @@ class ExportWorker:
                     if not self.store._update(ident,worker,state='completed',rows=rows_written,size=size,checksum=job['checksum']):raise _Cancelled('cancelled')
                     return dict(id=ident,state='completed',rows=rows_written,bytes=size,recovered=True)
                 self._check(spec)
+                cdr=spec.get('dataset')=='cdr_segments'
+                cdr_data=None
+                if cdr:
+                    from . import cdr_builder
+                    # One short archive read at execution start freezes this
+                    # bounded result in worker memory, never in the web process.
+                    cdr_data=cdr_builder.report(self.archive,spec['start'],spec['end'],spec['cdr_filters'],
+                        spec['cdr_definition'],numbers=all(mode=='full' for mode in spec['number_modes'].values()),
+                        secret=self.number_key or b'')
+                    if len(cdr_data['rows'])>self.limits.max_rows:raise ExportFailure('export_row_limit')
+                    self._gate(deadline);self._check(spec)
                 builder=builder_exports.validate(spec) if spec.get('builder_definition') is not None else None
                 groups=builder_exports.Groups(builder) if builder and builder['group_by'] else None
                 # Prior attempts have unique names. Bounded reconciliation,
@@ -447,27 +482,35 @@ class ExportWorker:
                         period=datetime.fromtimestamp(spec['start'],zone).isoformat()+' .. '+datetime.fromtimestamp(spec['end'],zone).isoformat()+' [end exclusive]'
                         if spec.get('outcome_class'):
                             period+=' | '+({'answered':'پاسخ‌داده با شاهد','unanswered':'خروج بدون پاسخ'} if spec['language']=='fa' else {'answered':'answered with evidence','unanswered':'unanswered exits'})[spec['outcome_class']]
-                        workbook=(builder_exports.Workbook(output,spec['language'],headers=builder_exports.headers(builder,spec['language']),period=period,max_bytes=self.limits.max_bytes)
-                                  if builder else xlsx_stream.Workbook(output,spec['language'],period=period,max_bytes=self.limits.max_bytes))
+                        if cdr:
+                            period+=' | CDR filters: '+_json(spec['cdr_filters'])
+                            workbook=builder_exports.Workbook(output,spec['language'],headers=cdr_builder.headers(cdr_data['columns'],spec['language']),period=period,
+                                max_bytes=self.limits.max_bytes,title='گزارش سفارشی مرکز تلفن' if spec['language']=='fa' else 'Custom PBX CDR report')
+                        else:
+                            workbook=(builder_exports.Workbook(output,spec['language'],headers=builder_exports.headers(builder,spec['language']),period=period,max_bytes=self.limits.max_bytes)
+                                      if builder else xlsx_stream.Workbook(output,spec['language'],period=period,max_bytes=self.limits.max_bytes))
                         cleanup.callback(workbook.abort)
                     elif spec['format']=='pdf':
                         def pdf_check():
                             self._gate(deadline);self._check(spec)
                             if not self.store._update(ident,worker,rows=rows_written,size=output.tell(),lease_seconds=self.limits.lease_seconds):
                                 raise _Cancelled('cancelled')
-                        pdf_type=pdf_stream.CustomDocument if builder else pdf_stream.Document
-                        custom_options=dict(headers=builder_exports.headers(builder,spec['language']),grouped=bool(groups)) if builder else {}
+                        pdf_type=pdf_stream.CustomDocument if builder or cdr else pdf_stream.Document
+                        custom_options=(dict(headers=cdr_builder.headers(cdr_data['columns'],spec['language']),grouped=cdr_data['grouped'],global_cdr=True,
+                                             filter_items=[str(key)+': '+_json(value) for key,value in sorted(spec['cdr_filters'].items())]) if cdr else
+                                        dict(headers=builder_exports.headers(builder,spec['language']),grouped=bool(groups)) if builder else {})
                         document=pdf_type(output,spec['language'],start=spec['start'],end=spec['end'],
                             queues=spec['scope']['queues'],outcome=spec['outcome'],outcome_class=spec.get('outcome_class'),check=pdf_check,
                             max_rows=min(self.limits.max_rows,pdf_stream.MAX_ROWS),max_bytes=min(self.limits.max_bytes,pdf_stream.MAX_BYTES),**custom_options)
                         cleanup.callback(document.abort)
                     else:
                         write(b'\xef\xbb\xbf')
-                        if builder:headers=builder_exports.headers(builder,spec['language'])
+                        if cdr:headers=cdr_builder.headers(cdr_data['columns'],spec['language'])
+                        elif builder:headers=builder_exports.headers(builder,spec['language'])
                         else:headers,_=table([],spec['language'])
                         line(headers)
                     before=None;rows_scanned=0
-                    while True:
+                    while not cdr:
                         self._gate(deadline);self._check(spec)
                         if not self.store._update(ident,worker,rows=rows_written,size=size,lease_seconds=self.limits.lease_seconds):raise _Cancelled('cancelled')
                         rows=self._page(spec,before,deadline)
@@ -494,6 +537,17 @@ class ExportWorker:
                         self._check(spec)
                         if not self.store._update(ident,worker,rows=rows_written,size=size,lease_seconds=self.limits.lease_seconds):raise _Cancelled('cancelled')
                     self._gate(deadline);self._check(spec)
+                    if cdr:
+                        for offset in range(0,len(cdr_data['rows']),self.limits.page_size):
+                            self._gate(deadline);self._check(spec)
+                            batch=cdr_data['rows'][offset:offset+self.limits.page_size]
+                            body=cdr_builder.body(batch,cdr_data['columns'],spec['language'],csv_safe=spec['format']=='csv')
+                            if workbook:workbook.append(body);size=output.tell()
+                            elif document:document.append(body);size=output.tell()
+                            else:
+                                for values in body:line(values)
+                            rows_written+=len(body)
+                            if not self.store._update(ident,worker,rows=rows_written,size=size,lease_seconds=self.limits.lease_seconds):raise _Cancelled('cancelled')
                     if groups:
                         aggregate=groups.rows()
                         for offset in range(0,len(aggregate),self.limits.page_size):

@@ -65,6 +65,7 @@ class PdfDocumentTests(unittest.TestCase):
         document=self.document(max_rows=1)
         with self.assertRaisesRegex(pdf_stream.PdfFailure,'^pdf_row_limit$'):document.append(table(rows(2),'en')[1])
         document.abort()
+
         document=self.document(max_pages=1)
         with self.assertRaisesRegex(pdf_stream.PdfFailure,'^pdf_page_limit$'):document.append(table(rows(42),'en')[1])
         document.abort()
@@ -74,6 +75,12 @@ class PdfDocumentTests(unittest.TestCase):
         document=self.document();body=table(rows(),'en')[1];body[0][2]='X'*512
         with self.assertRaisesRegex(pdf_stream.PdfFailure,'^pdf_field_limit$'):document.append(body)
         document.abort()
+
+    def test_custom_cdr_pdf_shows_global_scope_and_filters(self):
+        output=io.BytesIO();document=pdf_stream.CustomDocument(output,'en',start=1792886400,end=1792972800,
+            queues=['8001'],headers=['Direction'],global_cdr=True,filter_items=['direction: outbound'])
+        commands=document.pdf.getCurrentPageContent();self.assertIn('Global CDR segments',commands);self.assertIn('direction: outbound',commands)
+        document.append([['outbound']]);document.close();self.assertTrue(output.getvalue().startswith(b'%PDF-'))
 
     def test_callback_fences_pages_and_serialization_and_no_html_actions(self):
         calls=[];document=self.document(check=lambda:calls.append(1))

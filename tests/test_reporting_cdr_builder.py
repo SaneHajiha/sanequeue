@@ -6,6 +6,7 @@ from tests.test_reporting_cdr import CDRTests
 from tests.test_reporting_cdr_api import CDRAPITests
 from sanequeue.reporting import cdr_builder
 from sanequeue.reporting.store import QueryDeadline
+from sanequeue.reporting.export_jobs import JobStore
 
 
 class CDRBuilderTests(unittest.TestCase):
@@ -78,6 +79,25 @@ class CDRBuilderAPITests(unittest.TestCase):
         with patch('sanequeue.api.reports.cdr_builder.report',side_effect=revoke):
             response=client.post(path,json=self.body,headers={'X-CSRF-Token':'token'})
         self.assertEqual(response.status_code,403);self.assertNotIn('09123456789',response.text)
+
+    def test_background_cdr_jobs_require_global_role_and_preserve_definition_filters(self):
+        jobs=JobStore(self.c.root/'export-jobs.sqlite3',self.c.root/'private-exports');jobs.initialize()
+        path='/api/history/cdr/builder/jobs'+self.query+'&direction=outbound'
+        client=self.c.client(role='admin',menus=('reports','users'),details=False)
+        with client.session_transaction() as state:state['csrf_token']='token'
+        body={**self.body,'format':'pdf','request_key':'request-one'}
+        self.assertEqual(client.post(path,json=body).status_code,403)
+        response=client.post(path,json=body,headers={'X-CSRF-Token':'token'})
+        self.assertEqual(response.status_code,202,response.json);job=jobs.get(response.json['id'],'test')
+        self.assertEqual(job['spec']['dataset'],'cdr_segments');self.assertEqual(job['spec']['cdr_filters']['direction'],'outbound')
+        self.assertEqual(job['spec']['cdr_definition'],self.body['definition']);self.assertEqual(job['spec']['consistency'],'worker_start_snapshot')
+        self.assertEqual(job['spec']['number_modes'],{'8001':'masked'})
+        self.assertEqual(client.post(path,json=body,headers={'X-CSRF-Token':'token'}).json['id'],response.json['id'])
+        self.assertEqual(client.post(path,json={**body,'format':'xlsx'},headers={'X-CSRF-Token':'token'}).status_code,422)
+        self.assertEqual(client.post(path+'&src=100',json=body,headers={'X-CSRF-Token':'token'}).status_code,403)
+        hidden=self.c.client(role='supervisor',menus=('reports','users'),details=True)
+        self.assertEqual(hidden.get('/api/history/export-jobs').json['jobs'],[])
+        self.assertEqual(hidden.get('/api/history/export-jobs/'+response.json['id']+'/download').status_code,403)
 
 
 if __name__=='__main__':unittest.main()

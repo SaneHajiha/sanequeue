@@ -132,7 +132,7 @@ def body(rows,value,spec,number_key):
 
 class Workbook(xlsx_stream.Workbook):
     """Reuse bounded OOXML append/abort with exact custom header geometry."""
-    def __init__(self,output,language,*,headers,period='',max_bytes=32*1024*1024):
+    def __init__(self,output,language,*,headers,period='',max_bytes=32*1024*1024,title=None):
         if not 1<=len(headers)<=12:raise BuilderFailure('builder_column_limit')
         self.language=language;self.row=0;self.xml_size=0;self.max_xml_bytes=64*1024*1024;self.closed=False;self.last_column=chr(64+len(headers))
         self.archive=ZipFile(xlsx_stream._BoundedFile(output,max_bytes),'w',ZIP_DEFLATED,compresslevel=1)
@@ -144,7 +144,7 @@ class Workbook(xlsx_stream.Workbook):
             width=b'<cols>'+b''.join(('<col min="'+str(n)+'" max="'+str(n)+'" width="26" customWidth="1"/>').encode() for n in range(1,len(headers)+1))+b'</cols>'
             prefix=re.sub(rb'<cols>.*?</cols>',lambda match:width,prefix)
             self.sheet=self.archive.open('xl/worksheets/sheet1.xml','w');self._write(prefix+b'<sheetData>')
-            title='گزارش سفارشی مراجعه صف' if language=='fa' else 'Custom queue-visit report'
+            if title is None:title='گزارش سفارشی مراجعه صف' if language=='fa' else 'Custom queue-visit report'
             self.append([[title],['Asia/Tehran · '+period],[],headers])
         except Exception:
             try:
