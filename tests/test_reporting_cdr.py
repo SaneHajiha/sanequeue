@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from sanequeue.reporting.store import Archive, Event, QueryDeadline
 from sanequeue.reporting.facts import project_batch
-from sanequeue.reporting.cdr_queries import page, summary
+from sanequeue.reporting.cdr_queries import page, summary, unique_inbound
 
 
 class CDRTests(unittest.TestCase):
@@ -49,6 +49,24 @@ class CDRTests(unittest.TestCase):
         for secret in ('private/audio', 'same-private-conversation', 'private-a', '000000ab'):
             self.assertNotIn(secret, encoded)
         self.assertFalse(page(self.archive, 100, 200)['audio_granted'])
+
+    def test_unique_inbound_counts_numbers_not_segments_or_people(self):
+        stamp=datetime(2026,10,24,9,tzinfo=ZoneInfo('Asia/Tehran')).timestamp()
+        inbound=dict(channel='PJSIP/provider-main-000000af',dstchannel='SIP/200-000000ae')
+        self.seed(self.event('one',stamp,src='09123456789',**inbound),
+                  self.event('two',stamp+10,src='۰۹۱۲۳۴۵۶۷۸۹',**inbound),
+                  self.event('three',stamp+86400,src='09123456789',**inbound),
+                  self.event('unknown',stamp+20,src='anonymous',**inbound),
+                  self.event('outbound',stamp+30,src='09999999999'))
+        data=unique_inbound(self.archive,stamp,stamp+2*86400)
+        self.assertEqual((data['total_unique'],data['known_number_segments'],data['unknown_number_segments']),(1,3,1))
+        self.assertEqual([row['unique_numbers'] for row in data['by_day']],[1,1])
+        self.assertNotIn('09123456789',str(data));self.assertFalse(data['contract']['unique_conversations_proven'])
+        self.assertEqual(unique_inbound(self.archive,stamp,stamp+2*86400,{'hour_from':9,'hour_to':9})['total_unique'],1)
+        with self.assertRaises(ValueError):unique_inbound(self.archive,stamp,stamp+2*86400,{'direction':'outbound'})
+        with patch('sanequeue.reporting.cdr_queries.MAX_UNIQUE_INBOUND_SEGMENTS',2):
+            limited=unique_inbound(self.archive,stamp,stamp+2*86400)
+        self.assertEqual(limited['state'],'limited');self.assertNotIn('total_unique',limited)
 
     def test_numeric_filters_normalize_unicode_and_never_interpolate(self):
         self.seed(self.event('a', outbound_cnum='02177777777', did='8001'),

@@ -588,11 +588,12 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     @login_required
     @safe
     def history_cdr():
-        start,end,filters,numbers=cdr_context()
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context()
         before=None
         if request.args.get('before_time') is not None:
             before=(request.args['before_time'],request.args.get('before_id'))
         data=cdr_queries.page(archive,start,end,filters,before=before)
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
         secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
         for row in data['rows']:
             for key in ('src','dst','internal_caller_ext','outbound_cid','did'):
@@ -606,11 +607,30 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     @login_required
     @safe
     def history_cdr_summary():
-        start,end,filters,numbers=cdr_context()
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context()
         data=cdr_queries.summary(archive,start,end,filters)
-        # Trunk labels identify configured routes, not telephone numbers.
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        # DID is a number even in a grouped result. Enforce the same policy as
+        # the detail endpoint before serializing any aggregate rows.
+        if not numbers:
+            secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+            for row in data['trunk_traffic']:
+                if row.get('did') is not None:
+                    row['did']=display_number(row['did'],mode='masked',secret=secret,tenant='default',pbx=pbx,version='1')
         data['can_search_numbers']=numbers
         data['filters']={} if not numbers else data['filters']
+        return jsonify(data)
+
+    @app.get('/api/history/cdr/unique-inbound')
+    @login_required
+    @safe
+    def history_cdr_unique_inbound():
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context()
+        if not numbers:abort(403)
+        if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
+        try:data=cdr_queries.unique_inbound(archive,start,end,filters)
+        finally:aggregate_gate.release()
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
         return jsonify(data)
 
     def work_context():

@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 from .store import QueryDeadline
 
 MAX_GROUPS=1000
+MAX_UNIQUE_INBOUND_SEGMENTS=50000
 _ZONE=ZoneInfo('Asia/Tehran')
 _NUMBER_FIELDS={'src':'c.src','dst':'c.dst','origin':'e.internal_caller_ext',
                 'outbound_cid':'e.outbound_cid','did':'e.did'}
@@ -166,3 +167,30 @@ def summary(archive,start,end,filters=None):
                 definitions=dict(count='latest_cdr_segments_not_unique_conversations',
                   origin='known_origin_extension_not_src',outbound_cid='explicit_cdr_source_field_only',
                   unknown='null_metrics_and_known_sample_counts',timezone='Asia/Tehran',week_starts='Saturday'))
+
+
+def unique_inbound(archive,start,end,filters=None):
+    """Count observed inbound source numbers, never unique calls or people."""
+    selected=dict(filters or {})
+    if selected.get('direction') not in (None,'','inbound'):raise ValueError('invalid_unique_inbound_direction')
+    selected['direction']='inbound'
+    clause,args,clean=_where(archive,start,end,selected)
+    with archive.reader() as db:
+        _functions(db)
+        rows=db.execute('SELECT c.ts,c.src '+_JOIN+' WHERE '+clause+' LIMIT ?',
+                        (*args,MAX_UNIQUE_INBOUND_SEGMENTS+1)).fetchall()
+    if len(rows)>MAX_UNIQUE_INBOUND_SEGMENTS:
+        return dict(state='limited',reason='unique_inbound_segment_limit',maximum_segments=MAX_UNIQUE_INBOUND_SEGMENTS)
+    numbers=set();days={};unknown=0
+    for row in rows:
+        number=_phone(row['src'])
+        if number is None:unknown+=1;continue
+        day=datetime.fromtimestamp(row['ts'],_ZONE).date().isoformat()
+        numbers.add(number);item=days.setdefault(day,dict(numbers=set(),segments=0));item['numbers'].add(number);item['segments']+=1
+    return dict(state='available',start=float(start),end=float(end),timezone='Asia/Tehran',
+        total_unique=len(numbers),known_number_segments=sum(item['segments'] for item in days.values()),unknown_number_segments=unknown,
+        by_day=[dict(day=day,unique_numbers=len(item['numbers']),known_number_segments=item['segments']) for day,item in sorted(days.items())],
+        contract=dict(unit='distinct_normalized_inbound_cdr_source_number',source='observed_inbound_cdr_segments',
+            source_is_displayed_caller_id=True,unique_conversations_proven=False,customer_identity_proven=False,
+            unknown_direction_excluded=True,daily_totals_additive=False,country_prefix_equivalence=False,
+            maximum_segments=MAX_UNIQUE_INBOUND_SEGMENTS,complete_history=False))

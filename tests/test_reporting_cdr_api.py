@@ -42,6 +42,10 @@ class CDRAPITests(unittest.TestCase):
         self.assertNotIn('private',response.get_data(as_text=True))
         self.assertFalse(response.json['audio_granted'])
         self.assertEqual(masked.get('/api/history/cdr'+self.query+'&party=100').status_code,403)
+        self.assertEqual(masked.get('/api/history/cdr/unique-inbound'+self.query).status_code,403)
+        hidden_summary=masked.get('/api/history/cdr/summary'+self.query)
+        self.assertEqual(hidden_summary.status_code,200,hidden_summary.json)
+        self.assertNotIn('02188888888',hidden_summary.get_data(as_text=True))
         full=self.case.client(role='admin',menus=('reports','users'),details=True)
         response=full.get('/api/history/cdr'+self.query+'&origin=100')
         self.assertEqual(response.status_code,200,response.json)
@@ -50,7 +54,11 @@ class CDRAPITests(unittest.TestCase):
         self.assertEqual(summary.status_code,200)
         self.assertEqual(summary.json['totals']['segments_started'],1)
         self.assertEqual(sum(row['segments_started'] for row in summary.json['trunk_traffic']),1)
+        self.assertEqual(summary.json['trunk_traffic'][0]['did'],'02188888888')
         self.assertEqual(full.get('/api/history/cdr'+self.query+'&queue=8001').status_code,403)
+        unique=full.get('/api/history/cdr/unique-inbound'+self.query)
+        self.assertEqual(unique.status_code,200,unique.json);self.assertEqual(unique.json['total_unique'],0)
+        self.assertNotIn('02199999999',unique.get_data(as_text=True))
 
 
 if __name__=='__main__':unittest.main()
