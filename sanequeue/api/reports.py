@@ -535,7 +535,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         owner=str(current_user.get_id());scope,start,end=context();export_csrf()
         if role() not in ('admin','supervisor') or not scope.queues or not all(can_queue(q,'report_export') for q in scope.queues):abort(403)
         kind=request.args.get('kind','');table=request.args.get('table','');language=request.args.get('lang','fa')
-        if kind not in ('answered','unanswered') or table not in ('queues','days','hours','reasons') or table=='reasons' and kind!='unanswered' or language not in ('fa','en'):raise ValueError('invalid_queue_aggregate_export')
+        if kind not in ('answered','unanswered') or table not in ('queues','days','hours','weekdays','reasons') or table=='reasons' and kind!='unanswered' or language not in ('fa','en'):raise ValueError('invalid_queue_aggregate_export')
         if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
         try:
             result=queue_outcomes.report(archive,scope,start,end)

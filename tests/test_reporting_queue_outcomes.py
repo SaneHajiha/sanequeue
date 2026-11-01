@@ -42,8 +42,28 @@ class QueueOutcomeTests(unittest.TestCase):
         self.assertEqual((total['answered_wait_samples'],total['average_answered_wait_seconds']),(2,10))
         self.assertEqual((total['unanswered_wait_samples'],total['average_unanswered_wait_seconds']),(4,10))
         self.assertEqual(sum(x['visits'] for x in r['hours']),total['visits'])
+        self.assertEqual(sum(x['visits'] for x in r['weekdays']),total['visits'])
+        self.assertEqual(sum(x['answered_wait_samples'] for x in r['weekdays']),total['answered_wait_samples'])
         self.assertNotIn('09123456789',str(r))
         self.assertTrue(r['contract']['exit_empty_is_not_proof_no_staff'])
+
+    def test_weekdays_use_tehran_entry_day_and_weighted_samples(self):
+        from datetime import datetime, timezone
+        from sanequeue.reporting.analytics import ZONE
+        base=datetime(2026,10,23,20,40,tzinfo=timezone.utc).timestamp() # Saturday in Tehran
+        with self.case.archive.writer() as db:
+            db.execute('UPDATE report_visits SET entered=?, wait_seconds=4 WHERE id=?',(base,format(1,'064x')))
+            db.execute('UPDATE report_visits SET entered=?, wait_seconds=10 WHERE id=?',(base+7*86400,format(2,'064x')))
+            db.execute('UPDATE report_visits SET entered=? WHERE id=?',(base+86400,format(3,'064x')))
+        result=report(self.case.archive,Scope(('8001',)),base,base+8*86400)
+        saturday=next(row for row in result['weekdays'] if row['weekday']==5)
+        self.assertEqual((saturday['answered'],saturday['answered_wait_samples']),(2,2))
+        self.assertEqual(saturday['average_answered_wait_seconds'],7)
+        self.assertEqual([row['weekday'] for row in result['weekdays']],[5,6])
+        self.assertEqual(datetime.fromtimestamp(base,ZONE).weekday(),5)
+        from sanequeue.reporting.queue_outcomes import aggregate_csv
+        rows=list(csv.DictReader(io.StringIO(aggregate_csv(result,'answered','weekdays','en',('8001',)).decode('utf-8-sig'))))
+        self.assertEqual(rows[0]['weekday'],"'Saturday");self.assertEqual(rows[0]['mean_wait_seconds'],'7.0')
 
     def test_limit_and_scope(self):
         with patch('sanequeue.reporting.queue_outcomes.MAX_VISITS',2):
@@ -69,7 +89,7 @@ class QueueOutcomeTests(unittest.TestCase):
         with client.session_transaction() as state:state['csrf_token']='token'
         base='/api/history/queue-outcomes/aggregate.csv'+self.case.dates+'&lang=en'
         self.assertEqual(client.post(base+'&kind=answered&table=queues').status_code,403)
-        for kind,table,expected in [('answered','queues',2),('answered','hours',2),('unanswered','hours',4),('unanswered','days',4),('unanswered','reasons',4)]:
+        for kind,table,expected in [('answered','queues',2),('answered','hours',2),('answered','weekdays',2),('unanswered','weekdays',4),('unanswered','hours',4),('unanswered','days',4),('unanswered','reasons',4)]:
             with self.subTest(kind=kind,table=table):
                 response=client.post(base+'&kind='+kind+'&table='+table,headers={'X-CSRF-Token':'token'})
                 self.assertEqual(response.status_code,200)

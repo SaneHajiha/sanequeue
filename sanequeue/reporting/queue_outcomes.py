@@ -70,7 +70,7 @@ def report(archive,scope,start,end):
                         'FROM report_visits WHERE '+clause+' LIMIT ?',(*args,MAX_VISITS+1)).fetchall()
         projection=db.execute('SELECT after_id,updated FROM report_projection WHERE pbx=?',(archive.pbx,)).fetchone()
     if len(rows)>MAX_VISITS:return dict(state='limited',reason='queue_outcome_visit_limit',maximum_visits=MAX_VISITS)
-    totals=_empty();queues={};hours={};days={};missing=0
+    totals=_empty();queues={};hours={};days={};weekdays={};missing=0
     wait_distribution={kind:dict(counts=[0]*len(WAIT_BOUNDARIES),unknown=0) for kind in ('answered','unanswered')}
     for row in rows:
         if row['coverage']=='missing_entry':missing+=1;continue
@@ -82,14 +82,15 @@ def report(archive,scope,start,end):
             else:
                 index=next((i for i in range(len(WAIT_BOUNDARIES)-1) if value<WAIT_BOUNDARIES[i+1]),len(WAIT_BOUNDARIES)-1)
                 distribution['counts'][index]+=1
-        local=datetime.fromtimestamp(row['entered'],ZONE);day=local.date().isoformat();hour=local.hour
-        for item in (totals,queues.setdefault(row['queue'],_empty()),hours.setdefault(hour,_empty()),days.setdefault(day,_empty())):
+        local=datetime.fromtimestamp(row['entered'],ZONE);day=local.date().isoformat();hour=local.hour;weekday=local.weekday()
+        for item in (totals,queues.setdefault(row['queue'],_empty()),hours.setdefault(hour,_empty()),days.setdefault(day,_empty()),weekdays.setdefault(weekday,_empty())):
             _add(item,row)
     return dict(state='available',start=float(start),end=float(end),timezone='Asia/Tehran',unit='queue_visit',
         totals=_finish(totals),missing_entry_visits=missing,
         queues=[dict(queue=k,**_finish(v)) for k,v in sorted(queues.items())],
         hours=[dict(hour=k,**_finish(v)) for k,v in sorted(hours.items())],
         days=[dict(day=k,**_finish(v)) for k,v in sorted(days.items())],
+        weekdays=[dict(weekday=k,**_finish(v)) for k,v in sorted(weekdays.items(),key=lambda item:(item[0]-5)%7)],
         wait_distribution={kind:dict(known=sum(item['counts']),unknown=item['unknown'],
             buckets=[dict(start_seconds=lower,end_seconds=WAIT_BOUNDARIES[i+1] if i+1<len(WAIT_BOUNDARIES) else None,count=item['counts'][i])
                      for i,lower in enumerate(WAIT_BOUNDARIES)]) for kind,item in wait_distribution.items()},
@@ -123,7 +124,7 @@ def distribution_csv(result,kind,language,queues):
 
 def aggregate_csv(result, kind, table, language, queues):
     """Export the displayed aggregates with scope, denominators and missing data."""
-    if (kind not in ('answered', 'unanswered') or table not in ('queues', 'days', 'hours', 'reasons')
+    if (kind not in ('answered', 'unanswered') or table not in ('queues', 'days', 'hours', 'weekdays', 'reasons')
             or table == 'reasons' and kind != 'unanswered' or language not in ('fa', 'en')
             or result.get('state') != 'available'):
         raise ValueError('invalid_queue_aggregate_export')
@@ -146,15 +147,18 @@ def aggregate_csv(result, kind, table, language, queues):
             value=result['totals'][name]
             writer.writerow(common+[(labels[name] if fa else name),value,total,100*value/total if total else ''])
     else:
-        dimension=({'queues':'صف','days':'روز','hours':'ساعت ورود تهران'} if fa else {'queues':'queue','days':'day','hours':'entry_hour_tehran'})[table]
+        dimension=({'queues':'صف','days':'روز','hours':'ساعت ورود تهران','weekdays':'روز هفته'} if fa else {'queues':'queue','days':'day','hours':'entry_hour_tehran','weekdays':'weekday'})[table]
         headers=['تعداد','مخرج نتایج معلوم','درصد از نتایج معلوم','میانگین انتظار ثانیه','نمونه انتظار معلوم'] if fa else ['visits','known_outcomes_denominator','percent_known_outcomes','mean_wait_seconds','known_wait_samples']
         if kind=='answered':headers+=['میانگین مکالمه ثانیه','نمونه مکالمه معلوم'] if fa else ['mean_talk_seconds','known_talk_samples']
         writer.writerow(base+[dimension]+headers)
         rows=result[table]
         for row in rows:
-            value=row[{'queues':'queue','days':'day','hours':'hour'}[table]]
+            value=row[{'queues':'queue','days':'day','hours':'hour','weekdays':'weekday'}[table]]
             if table=='days' and fa:
                 value=persian_date(datetime.fromisoformat(value).date())
+            elif table=='weekdays':
+                value=({'fa':['دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه','شنبه','یکشنبه'],
+                        'en':['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']}[language])[value]
             fields=[row[kind],row['known_outcomes'],row[kind+'_percent_of_known'],row['average_'+kind+'_wait_seconds'],row[kind+'_wait_samples']]
             if kind=='answered':fields += [row['average_answered_talk_seconds'],row['answered_talk_samples']]
             writer.writerow(common+[safe(value)]+['' if item is None else item for item in fields])
