@@ -36,6 +36,7 @@ from sanequeue.reporting import builder_exports
 from sanequeue.reporting.report_builder import definition as builder_definition
 from sanequeue.reporting import adherence, adherence_source
 from sanequeue.reporting import cdr_queries
+from sanequeue.reporting import cdr_builder
 from sanequeue.reporting import journey
 from sanequeue.reporting.quality import QualityStore, QualityConflict, QualityUnavailable
 from sanequeue.reporting.ai_jobs import AIJobs, AIConflict, AIUnavailable
@@ -705,6 +706,39 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         finally:aggregate_gate.release()
         if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
         return jsonify(data)
+
+    @app.post('/api/history/cdr/builder/preview')
+    @app.post('/api/history/cdr/builder/export.csv')
+    @login_required
+    @safe
+    def history_cdr_builder():
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context();export=request.path.endswith('/export.csv')
+        export_csrf()
+        if not request.is_json:raise ValueError('invalid_cdr_builder_body')
+        if request.content_length is not None and request.content_length>8192:abort(413)
+        raw=request.stream.read(8193)
+        if len(raw)>8192:abort(413)
+        body=json.loads(raw)
+        if not isinstance(body,dict) or set(body)-{'definition','language'}:raise ValueError('invalid_cdr_builder_body')
+        if export:
+            queues=queries.queues(archive)
+            if not queues or not all(can_queue(queue,'report_export') for queue in queues):abort(403)
+        secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+        if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
+        try:
+            result=cdr_builder.report(archive,start,end,filters,body.get('definition'),numbers=numbers,secret=secret)
+            content=cdr_builder.csv_bytes(result,body.get('language','en')) if export else None
+        finally:aggregate_gate.release()
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        if export:
+            current=queries.queues(archive)
+            if current!=queues or not all(can_queue(queue,'report_export') for queue in current):abort(403)
+            return Response(content,mimetype='text/csv; charset=utf-8',headers={
+                'Content-Disposition':'attachment; filename="sanequeue-custom-cdr.csv"',
+                'X-SaneQueue-Export-Rows':str(len(result['rows'])),
+                'X-SaneQueue-Unit':'cdr_segment'})
+        result['total_rows']=len(result['rows']);result['rows']=result['rows'][:100];result['preview_limited']=result['total_rows']>100
+        return jsonify(result)
 
     def work_context():
         scope, start, end = context(restrict_queue=False)

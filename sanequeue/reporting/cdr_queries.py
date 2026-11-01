@@ -40,7 +40,9 @@ _METRICS='''COUNT(*) segments_started,
 
 def _phone(value):
     if value is None:return None
-    value=str(value).strip()
+    value=str(value)
+    if len(value)>256:return None
+    value=value.strip()
     value=''.join(str(unicodedata.digit(char)) if char.isdecimal() else char for char in value)
     if value.startswith('+'):value=value[1:]
     return value if re.fullmatch('[0-9]{1,24}',value) else None
