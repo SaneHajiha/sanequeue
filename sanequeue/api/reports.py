@@ -593,6 +593,51 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if str(current_user.get_id())!=owner or role() not in ('admin','supervisor') or context()[0]!=scope or not can_queue(queue,'caller_details'):abort(403)
         return jsonify(result)
 
+    def followup_cdr_authorized(visit_id):
+        if role()!='admin' or 'reports' not in sections() or 'users' not in sections():abort(403)
+        if not quality_ready:raise QualityUnavailable('quality_storage_unavailable')
+        all_queues=queries.queues(archive)
+        if not all_queues or not all(can_queue(queue,cap) for queue in all_queues for cap in ('view','caller_details')):abort(403)
+        visit=authorized_detail(visit_id)['visit']
+        if visit['outcome']!='abandoned' or not can_queue(visit['queue'],'caller_details'):abort(404)
+        return visit,tuple(all_queues)
+
+    @app.get('/api/history/followup/<visit_id>/cdr-candidates')
+    @login_required
+    @safe
+    def history_followup_cdr_candidates(visit_id):
+        owner=str(current_user.get_id());scope,_,_=context();visit,queues=followup_cdr_authorized(visit_id)
+        if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
+        try:result=followup.outbound_candidates(archive,visit,window_days=int(request.args.get('window_days','7')))
+        finally:aggregate_gate.release()
+        fresh,fresh_queues=followup_cdr_authorized(visit_id)
+        if str(current_user.get_id())!=owner or context()[0]!=scope or fresh_queues!=queues or fresh!=visit:abort(403)
+        return jsonify(result)
+
+    @app.route('/api/history/followup/<visit_id>/actions/<action_id>/cdr-evidence',methods=['GET','POST'])
+    @login_required
+    @safe
+    def history_followup_cdr_evidence(visit_id,action_id):
+        owner=str(current_user.get_id());scope,_,_=context();visit,queues=followup_cdr_authorized(visit_id)
+        if request.method=='GET':
+            result=quality_store.followup_evidence(action_id,visit_id,visit['queue'])
+        else:
+            export_csrf()
+            if not request.is_json:raise ValueError('invalid_followup_evidence_body')
+            if request.content_length is not None and request.content_length>4096:abort(413)
+            raw=request.stream.read(4097)
+            if len(raw)>4096:abort(413)
+            body=json.loads(raw)
+            if not isinstance(body,dict) or set(body)!={'source_key','request_key','window_days'}:raise ValueError('invalid_followup_evidence_body')
+            evidence=followup.outbound_candidates(archive,visit,source_key=body['source_key'],window_days=body['window_days'])
+            if not evidence.get('rows'):abort(404)
+            fresh,fresh_queues=followup_cdr_authorized(visit_id)
+            if str(current_user.get_id())!=owner or context()[0]!=scope or fresh_queues!=queues or fresh!=visit:abort(403)
+            result=dict(evidence=quality_store.add_followup_evidence(action_id,visit_id,visit['queue'],owner,evidence['rows'][0],body['request_key']))
+        fresh,fresh_queues=followup_cdr_authorized(visit_id)
+        if str(current_user.get_id())!=owner or context()[0]!=scope or fresh_queues!=queues or fresh!=visit:abort(403)
+        return jsonify(result),201 if request.method=='POST' else 200
+
     def cdr_context():
         scope,start,end=context()
         # Global CDR is deliberately separate from queue-scoped reporting.

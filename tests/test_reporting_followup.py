@@ -4,8 +4,8 @@ from unittest.mock import patch
 from tests import test_reporting_queries as fixtures
 from sanequeue.reporting.facts import project_batch
 from sanequeue.reporting.queries import Scope
-from sanequeue.reporting.followup import report
-from sanequeue.reporting.store import QueryDeadline
+from sanequeue.reporting.followup import report,outbound_candidates
+from sanequeue.reporting.store import QueryDeadline,Event
 
 
 class FollowupTests(unittest.TestCase):
@@ -108,6 +108,51 @@ class FollowupTests(unittest.TestCase):
                 self.assertFalse(row['matchable']);self.assertIsNone(row['first_reentry'])
         with c.archive.writer() as db:db.execute("UPDATE report_visits SET caller='200',coverage='unknown'")
         self.assertFalse(report(c.archive,Scope(('8001',)),c.stamp,c.stamp+6,now=c.stamp+100)['rows'][0]['matchable'])
+
+    def test_outbound_candidates_require_observed_abandonment_number_and_evidence(self):
+        self.seed();c=self.case
+        inventory=dict(observed_at=c.stamp,endpoints=[dict(technology='PJSIP',endpoint='100',category='extension'),dict(technology='PJSIP',endpoint='provider',category='trunk')])
+        def cdr(key,ts,dst,channel='PJSIP/100-aa',dstchannel='PJSIP/provider-bb'):
+            return Event('cdr',key,ts,'CDR',dict(src='100',dst=dst,channel=channel,dstchannel=dstchannel,disposition='ANSWERED',duration=12,billsec=8))
+        c.archive.append([cdr('correct',c.stamp+40,'09123456789'),cdr('other',c.stamp+42,'09111111111'),
+            cdr('inbound',c.stamp+43,'09123456789',channel='PJSIP/provider-aa',dstchannel='PJSIP/100-bb')])
+        while project_batch(c.archive,inventory=inventory)['processed']:pass
+        with c.archive.reader() as db:visit=dict(db.execute("SELECT * FROM report_visits WHERE outcome='abandoned' AND queue='8001'").fetchone())
+        result=outbound_candidates(c.archive,visit,now=c.stamp+100)
+        self.assertEqual([row['id'] for row in result['rows']],['correct']);self.assertNotIn('09123456789',str(result))
+        self.assertEqual(outbound_candidates(c.archive,visit,source_key='other',now=c.stamp+100)['rows'],[])
+        self.assertFalse(outbound_candidates(c.archive,{**visit,'coverage':'missing_entry'},now=c.stamp+100)['available'])
+        self.assertFalse(outbound_candidates(c.archive,{**visit,'caller':'anonymous'},now=c.stamp+100)['available'])
+        self.assertEqual(outbound_candidates(c.archive,visit,now=c.stamp+10)['rows'],[])
+        with self.assertRaises(ValueError):outbound_candidates(c.archive,visit,window_days=31)
+
+    def test_linked_cdr_evidence_is_global_admin_only_frozen_and_does_not_prove_causation(self):
+        self.seed();c=self.case
+        with c.archive.writer() as db:db.execute("DELETE FROM report_visits WHERE queue='8002'")
+        inventory=dict(observed_at=c.stamp,endpoints=[dict(technology='PJSIP',endpoint='100',category='extension'),dict(technology='PJSIP',endpoint='provider',category='trunk')])
+        c.archive.append([Event('cdr','outbound-proof',c.stamp+40,'CDR',dict(src='100',dst='09123456789',
+            channel='PJSIP/100-aa',dstchannel='PJSIP/provider-bb',disposition='ANSWERED',duration=12,billsec=8))])
+        while project_batch(c.archive,inventory=inventory)['processed']:pass
+        with c.archive.writer() as db:db.execute("DELETE FROM report_visits WHERE queue='8002'")
+        visit=report(c.archive,Scope(('8001',)),c.stamp,c.stamp+6,now=c.stamp+100)['rows'][0]['id']
+        base='/api/history/followup/'+visit;query=c.dates
+        client=c.client(role='admin',menus=('reports','users'),details=True)
+        with client.session_transaction() as session:session['csrf_token']='token'
+        headers={'X-CSRF-Token':'token'}
+        action=client.post(base+'/actions'+query,json=dict(status='reached',note='',request_key='one'),headers=headers)
+        self.assertEqual(action.status_code,201,action.json);action_id=action.json['action']['id']
+        path=base+'/actions/'+action_id+'/cdr-evidence'+query
+        candidates=client.get(base+'/cdr-candidates'+query);self.assertEqual(candidates.status_code,200,candidates.json)
+        self.assertEqual([r['id'] for r in candidates.json['rows']],['outbound-proof']);self.assertNotIn('09123456789',candidates.text)
+        body=dict(source_key='outbound-proof',request_key='evidence-one',window_days=7)
+        self.assertEqual(client.post(path,json=body).status_code,403)
+        result=client.post(path,json=body,headers=headers);self.assertEqual(result.status_code,201,result.json)
+        self.assertEqual(result.json['evidence']['attribution'],'manual_link_same_number_not_proof_of_causation')
+        retry=client.post(path,json=body,headers=headers);self.assertEqual(retry.json['evidence']['id'],result.json['evidence']['id'])
+        self.assertEqual(client.post(path,json={**body,'source_key':'bogus'},headers=headers).status_code,404)
+        self.assertEqual(len(client.get(path).json['rows']),1)
+        self.assertEqual(c.client(role='supervisor',menus=('reports','users'),details=True).get(base+'/cdr-candidates'+query).status_code,403)
+        self.assertEqual(c.client(role='admin',menus=('reports','users'),details=False).get(base+'/cdr-candidates'+query).status_code,403)
 
     def test_scope_cutoff_empty_scope_and_deadline(self):
         self.seed();c=self.case

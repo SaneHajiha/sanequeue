@@ -131,12 +131,20 @@ class QualityStore:
                     note TEXT NOT NULL,created REAL NOT NULL,request_key TEXT NOT NULL,spec_hash TEXT NOT NULL,
                     UNIQUE(pbx,actor,request_key));
                   CREATE INDEX IF NOT EXISTS fa_visit ON followup_actions(pbx,queue,visit_id,sequence);
+                  CREATE TABLE IF NOT EXISTS followup_cdr_evidence(
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,pbx TEXT NOT NULL,
+                    action_id TEXT NOT NULL,visit_id TEXT NOT NULL,queue TEXT NOT NULL,actor TEXT NOT NULL,
+                    evidence TEXT NOT NULL,created REAL NOT NULL,request_key TEXT NOT NULL,spec_hash TEXT NOT NULL,
+                    UNIQUE(pbx,actor,request_key));
+                  CREATE INDEX IF NOT EXISTS fce_action ON followup_cdr_evidence(pbx,queue,action_id,sequence);
                   CREATE TRIGGER IF NOT EXISTS qf_no_update BEFORE UPDATE ON quality_forms BEGIN SELECT RAISE(ABORT,'immutable_quality_form'); END;
                   CREATE TRIGGER IF NOT EXISTS qf_no_delete BEFORE DELETE ON quality_forms BEGIN SELECT RAISE(ABORT,'immutable_quality_form'); END;
                   CREATE TRIGGER IF NOT EXISTS qr_no_update BEFORE UPDATE ON quality_reviews BEGIN SELECT RAISE(ABORT,'immutable_quality_review'); END;
                   CREATE TRIGGER IF NOT EXISTS qr_no_delete BEFORE DELETE ON quality_reviews BEGIN SELECT RAISE(ABORT,'immutable_quality_review'); END;''')
                 db.executescript('''CREATE TRIGGER IF NOT EXISTS fa_no_update BEFORE UPDATE ON followup_actions BEGIN SELECT RAISE(ABORT,'immutable_followup_action'); END;
-                  CREATE TRIGGER IF NOT EXISTS fa_no_delete BEFORE DELETE ON followup_actions BEGIN SELECT RAISE(ABORT,'immutable_followup_action'); END;''')
+                  CREATE TRIGGER IF NOT EXISTS fa_no_delete BEFORE DELETE ON followup_actions BEGIN SELECT RAISE(ABORT,'immutable_followup_action'); END;
+                  CREATE TRIGGER IF NOT EXISTS fce_no_update BEFORE UPDATE ON followup_cdr_evidence BEGIN SELECT RAISE(ABORT,'immutable_followup_evidence'); END;
+                  CREATE TRIGGER IF NOT EXISTS fce_no_delete BEFORE DELETE ON followup_cdr_evidence BEGIN SELECT RAISE(ABORT,'immutable_followup_evidence'); END;''')
                 # Constant-default ADD COLUMN does not rewrite historical rows
                 # or fire the append-only UPDATE triggers. Empty means unproven.
                 columns={row['name'] for row in db.execute('PRAGMA table_info(quality_reviews)')}
@@ -191,6 +199,42 @@ class QualityStore:
         with self._db() as db:
             rows=db.execute('SELECT * FROM followup_actions WHERE pbx=? AND queue=? AND visit_id=? ORDER BY sequence DESC LIMIT 101',(self.pbx,queue,visit_id)).fetchall()
         return dict(rows=[self._followup_action(row) for row in rows[:100]],limited=len(rows)>100)
+
+    def add_followup_evidence(self,action_id,visit_id,queue,actor,evidence,request_key):
+        _id(action_id)
+        if not isinstance(visit_id,str) or not re.fullmatch(r'[0-9a-f]{64}',visit_id):raise ValueError('invalid_followup_visit')
+        queue=_text(queue,128,'queue');actor=_text(actor,128,'actor');request_key=_text(request_key,128,'request_key')
+        if not isinstance(evidence,dict) or set(evidence)!={'id','event_id','ts','disposition','duration','billsec','agent'}:raise ValueError('invalid_followup_evidence')
+        _text(evidence['id'],256,'cdr_id');_number(evidence['ts'],1e12,'cdr_ts')
+        if isinstance(evidence['event_id'],bool) or not isinstance(evidence['event_id'],int) or evidence['event_id']<1:raise ValueError('invalid_followup_evidence_event')
+        for name in ('duration','billsec'):
+            if evidence[name] is not None:_number(evidence[name],315360000,'cdr_duration')
+        for name in ('disposition','agent'):
+            if evidence[name] is not None:_text(evidence[name],256,'cdr_field',True)
+        payload=_json(evidence);fingerprint=hashlib.sha256(_json([action_id,visit_id,queue,evidence]).encode()).hexdigest()
+        with self._db(write=True) as db:
+            if not db.execute('SELECT 1 FROM followup_actions WHERE pbx=? AND id=? AND queue=? AND visit_id=?',(self.pbx,action_id,queue,visit_id)).fetchone():raise ValueError('invalid_followup_action')
+            prior=db.execute('SELECT * FROM followup_cdr_evidence WHERE pbx=? AND actor=? AND request_key=?',(self.pbx,actor,request_key)).fetchone()
+            if prior:
+                if prior['spec_hash']!=fingerprint:raise QualityConflict('followup_evidence_request_key_reused')
+                return self._followup_evidence(prior)
+            ident=uuid.uuid4().hex
+            db.execute('INSERT INTO followup_cdr_evidence(id,pbx,action_id,visit_id,queue,actor,evidence,created,request_key,spec_hash) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                       (ident,self.pbx,action_id,visit_id,queue,actor,payload,time.time(),request_key,fingerprint))
+            return self._followup_evidence(db.execute('SELECT * FROM followup_cdr_evidence WHERE id=?',(ident,)).fetchone())
+
+    @staticmethod
+    def _followup_evidence(row):
+        return {key:row[key] for key in ('id','action_id','visit_id','queue','actor','created')} | {
+            'cdr':json.loads(row['evidence']),'attribution':'manual_link_same_number_not_proof_of_causation'}
+
+    def followup_evidence(self,action_id,visit_id,queue):
+        _id(action_id)
+        if not isinstance(visit_id,str) or not re.fullmatch(r'[0-9a-f]{64}',visit_id):raise ValueError('invalid_followup_visit')
+        queue=_text(queue,128,'queue')
+        with self._db() as db:
+            rows=db.execute('SELECT * FROM followup_cdr_evidence WHERE pbx=? AND queue=? AND visit_id=? AND action_id=? ORDER BY sequence DESC LIMIT 51',(self.pbx,queue,visit_id,action_id)).fetchall()
+        return dict(rows=[self._followup_evidence(row) for row in rows[:50]],limited=len(rows)>50)
 
     @staticmethod
     def _form(row):

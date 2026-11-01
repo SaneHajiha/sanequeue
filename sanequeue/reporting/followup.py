@@ -72,3 +72,30 @@ def report(archive, scope, start, end, *, window_days=7, before=None, limit=100,
         attribution='same_recorded_identity_later_authorised_queue_visit',outbound_callback_proven=False,
         window_anchor='observed_abandonment_end',
         complete_history=False)
+
+
+def outbound_candidates(archive,visit,*,window_days=7,source_key=None,now=None):
+    """Observed CDR candidates; same number does not establish causal linkage."""
+    from .cdr_queries import _phone,_functions
+    if isinstance(window_days,bool) or not isinstance(window_days,int) or not 1<=window_days<=30:
+        raise ValueError('invalid_followup_window')
+    if source_key is not None and (not isinstance(source_key,str) or not 1<=len(source_key)<=256 or not source_key.isprintable()):
+        raise ValueError('invalid_followup_cdr_key')
+    now=time.time() if now is None else float(now)
+    if not math.isfinite(now) or now<0:raise ValueError('invalid_followup_time')
+    start=visit.get('ended');caller=_phone(visit.get('caller'))
+    if (visit.get('outcome')!='abandoned' or visit.get('coverage')!='observed' or
+            start is None or caller is None or start<visit['entered'] or start>now):
+        return dict(rows=[],available=False,reason='abandonment_or_caller_evidence_incomplete')
+    end=min(now,start+window_days*86400)
+    if end<=start:return dict(rows=[],available=True,limited=False)
+    clause='c.pbx=? AND c.ts>? AND c.ts<? AND p.direction=? AND cdr_phone(c.dst)=?'
+    args=[archive.pbx,start,end,'outbound',caller]
+    if source_key is not None:clause+=' AND c.source_key=?';args.append(source_key)
+    with archive.reader() as db:
+        _functions(db)
+        rows=[dict(row) for row in db.execute('''SELECT c.source_key id,c.event_id,c.ts,c.disposition,c.duration,c.billsec,p.agent
+          FROM report_cdr c INDEXED BY rc_time JOIN report_cdr_parties p ON p.pbx=c.pbx AND p.source_key=c.source_key
+          WHERE '''+clause+' ORDER BY c.ts,c.source_key LIMIT 51',args)]
+    return dict(rows=rows[:50],available=True,limited=len(rows)>50,window_days=window_days,
+        contract='observed_outbound_cdr_same_number_not_proof_of_followup_or_person')
