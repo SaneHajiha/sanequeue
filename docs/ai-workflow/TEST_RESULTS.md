@@ -205,3 +205,6 @@ Queue outcome hourly table and CSV: 36 targeted backend tests with 20 subtests a
 On the lab, revision 76a9947 passed 29 Linux tests with Asterisk PID unchanged. Authenticated Chrome on port 5000 displayed hourly tables and downloaded both hourly CSV files; each had 14 rows and counts reconciled with the category API totals, without browser page errors. This is evidence for the selected lab archive interval, not production load or external trunk acceptance.
 
 Queue outcome weekday table/CSV: 37 targeted tests and 22 subtests passed, including Tehran day-boundary and weighted sample checks; 9 browser workbench tests passed. This fixture evidence does not establish real trunk or operational load acceptance.
+
+On the lab, revision cbef95d passed 30 Linux tests with the Asterisk PID unchanged. Authenticated Chrome on port 5000 displayed both weekday tables and downloaded both CSVs; each had four rows, and the category totals reconciled with the report API. No page errors. This verifies the chosen lab archive interval, not real external trunk behavior or production load.
+
