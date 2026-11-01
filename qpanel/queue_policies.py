@@ -261,7 +261,7 @@ class QueuePolicyStore:
                 matched=bool(selected) and (all(selected) if rules['match_mode']=='all' else any(selected))
                 tests=(('waiting_count',matched and rules['count_enabled'] and count_fired, summary['waiting'], rules['waiting_above']),
                        ('waiting_time',matched and rules['time_enabled'] and time_fired,summary['longest_wait'],rules['wait_seconds_above']),
-                       ('ready_below',summary['members']>0 and summary['status_counts']['ready']<rules['min_ready'],summary['status_counts']['ready'],rules['min_ready']))
+                       ('ready_below',isinstance(data.get('members'),dict) and summary['status_counts']['ready']<rules['min_ready'],summary['status_counts']['ready'],rules['min_ready']))
                 for typ,fired,value,limit in tests:
                     if not fired:continue
                     ident=(name,typ);current.add(ident)
