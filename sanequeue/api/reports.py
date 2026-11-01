@@ -24,6 +24,8 @@ from sanequeue.reporting import analytics
 from sanequeue.reporting import followup
 from sanequeue.reporting import agent_metrics
 from sanequeue.reporting.export_jobs import JobStore, ExportFailure, projection_watermark
+from sanequeue.reporting.agent_jobs import AgentJobStore, read_result as read_agent_summary
+from sanequeue.reporting import activity_snapshots
 from sanequeue.reporting.access_audit import AuditStore, AuditUnavailable
 from sanequeue.reporting import work_sessions
 from sanequeue.reporting import visit_snapshots
@@ -46,6 +48,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             known_agents=lambda: (), planning_path=None, shift_identity=None):
     archive = Archive(path, pbx=pbx)
     export_store = JobStore(archive.path.parent/'export-jobs.sqlite3', archive.path.parent/'private-exports')
+    agent_store = AgentJobStore(archive.path.parent/'agent-summary-jobs.sqlite3', archive.path.parent/'private-agent-summaries')
     audit_store = AuditStore(archive.path.parent/'recording-access.sqlite3')
     work_store = work_sessions.WorkSessions(archive.path.parent/'work-sessions.sqlite3', pbx=pbx)
     quality_store=QualityStore(archive.path.parent/'quality.sqlite3',pbx=pbx)
@@ -208,6 +211,63 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     def export_public(job):
         return {key: job[key] for key in ('id', 'state', 'created', 'updated', 'rows', 'bytes', 'error_code')} | {
             'format': job['spec']['format'], 'start': job['spec']['start'], 'end': job['spec']['end']}
+
+    def agent_context():
+        owner=export_context()
+        if not agent_store.path.is_file() or not agent_store.output_dir.is_dir():
+            abort(503, description='export_service_not_initialized')
+        return owner
+
+    def agent_public(job):
+        return dict(id=job['id'],state=job['state'],created=job['created'],updated=job['updated'],
+                    start=job['spec']['start'],end=job['spec']['end'],progress=job['rows'],
+                    error_code=job['error_code'],can_download=job['state']=='completed')
+
+    def authorized_agent_job(ident,owner):
+        job=agent_store.get(ident,owner)
+        if not job:abort(404)
+        if not export_permitted(job):abort(403)
+        return job
+
+    @app.route('/api/history/agent-summary-jobs', methods=['GET','POST'])
+    @login_required
+    @safe
+    def history_agent_summary_jobs():
+        owner=agent_context();scope,start,end=context()
+        if not scope.queues or not all(can_queue(queue,'report_export') for queue in scope.queues):abort(403)
+        if request.method=='GET':
+            return jsonify(jobs=[agent_public(job) for job in agent_store.list(owner,limit=50)
+                if export_permitted(job) and job['spec']['start']==start and job['spec']['end']==end
+                and set(job['spec']['scope']['queues'])==set(scope.queues)])
+        export_csrf()
+        if not request.is_json or request.content_length is not None and request.content_length>4096:abort(400)
+        raw=request.stream.read(4097)
+        if len(raw)>4096:abort(413)
+        body=json.loads(raw)
+        if not isinstance(body,dict) or set(body)!={'min_samples','top','request_key'}:raise ValueError('invalid_agent_summary_request')
+        snapshot=activity_snapshots.capture(archive)
+        ident=agent_store.create_summary(owner,scope,start,end,snapshot,min_samples=body['min_samples'],
+                                         top=body['top'],request_key=body['request_key'])
+        return jsonify(job=agent_public(authorized_agent_job(ident,owner))),202
+
+    @app.post('/api/history/agent-summary-jobs/<ident>/cancel')
+    @login_required
+    @safe
+    def history_agent_summary_cancel(ident):
+        owner=agent_context();export_csrf();authorized_agent_job(ident,owner)
+        changed=agent_store.cancel(ident,owner)
+        return jsonify(cancelled=changed)
+
+    @app.get('/api/history/agent-summary-jobs/<ident>/result')
+    @app.get('/api/history/agent-summary-jobs/<ident>/download')
+    @login_required
+    @safe
+    def history_agent_summary_result(ident):
+        owner=agent_context();authorized_agent_job(ident,owner)
+        try:result=read_agent_summary(agent_store,ident,owner)
+        except FileNotFoundError:abort(404)
+        authorized_agent_job(ident,owner)
+        return jsonify(result=result)
 
     @app.route('/api/history/export-jobs', methods=['GET', 'POST'])
     @login_required

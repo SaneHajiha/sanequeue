@@ -227,6 +227,7 @@ def _rebuild_visits(db, pbx, queue, callid, through_event_id):
 
 def project_batch(archive, *, limit=500, inventory=None):
     """Atomically advance a projection cursor; replay/restart is idempotent."""
+    from .activity_snapshots import install as install_activity_snapshots, bootstrap as bootstrap_activity_snapshots
     limit = max(1, min(1000, int(limit)))
     if inventory is None:
         inventory=read_snapshot(os.getenv('SANEQUEUE_LOCAL_INVENTORY','/run/sanequeue/inventory.json'))
@@ -238,6 +239,7 @@ def project_batch(archive, *, limit=500, inventory=None):
             db.execute('ALTER TABLE report_activity ADD COLUMN canonical_agent TEXT')
             db.execute('UPDATE report_activity SET canonical_agent=agent')
         db.execute('CREATE INDEX IF NOT EXISTS ra_canonical ON report_activity(pbx,canonical_agent,starts)')
+        install_activity_snapshots(db)
         previous = db.execute('SELECT after_id FROM report_projection WHERE pbx=?', (archive.pbx,)).fetchone()
         after = previous[0] if previous else 0
         version = db.execute('SELECT version FROM report_projection_version WHERE pbx=?', (archive.pbx,)).fetchone()
@@ -355,4 +357,5 @@ def project_batch(archive, *, limit=500, inventory=None):
         cursor = events[-1][0] if events else after
         db.execute('INSERT OR REPLACE INTO report_projection VALUES(?,?,?)', (archive.pbx, cursor, time.time()))
         bootstrap_snapshots(db, archive.pbx, limit=limit)
+        bootstrap_activity_snapshots(db, archive.pbx, limit=min(limit, 500))
     return dict(processed=len(events), after_id=cursor)

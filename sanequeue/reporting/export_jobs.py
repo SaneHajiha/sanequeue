@@ -550,11 +550,22 @@ def main():
     worker=ExportWorker(store,Archive(args.archive,pbx=args.pbx),number_key=_number_key(args.number_key_file),
         disabled_file=args.disabled_file,authorize=local_authorizer(args.accounts or state/'local_accounts.json',
             args.policies or state/'local_queue_policies.json'))
+    from .agent_jobs import AgentJobStore, AgentSummaryWorker, _Deferred as AgentDeferred
+    agent_store=AgentJobStore(state/'agent-summary-jobs.sqlite3',state/'private-agent-summaries')
+    agent_store.initialize()
+    def agent_gate():
+        # ``python -m`` can load this module as __main__ and by package name;
+        # translate the gate exception across those module identities.
+        try:worker._gate()
+        except _Deferred as error:raise AgentDeferred(str(error)) from None
+    agent_worker=AgentSummaryWorker(agent_store,worker.archive,agent_gate,worker.authorize)
     stopped=threading.Event()
     for signum in (signal.SIGINT,signal.SIGTERM):signal.signal(signum,lambda *_:stopped.set())
     try:
         while not stopped.is_set():
             result=worker.run_once()
+            if result['state']=='idle':
+                result=agent_worker.run_once()
             if args.once:print(_json(result));return
             stopped.wait(args.interval)
     finally:

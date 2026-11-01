@@ -35,7 +35,7 @@ class AggregationError(RuntimeError):
 
 
 class Budget:
-    def __init__(self, seconds, rows):
+    def __init__(self, seconds, rows, checkpoint=None):
         if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 0 < seconds <= 300:
             raise ValueError('invalid_aggregation_seconds')
         if type(rows) is not int or not 1 <= rows <= MAX_ROWS:
@@ -43,8 +43,11 @@ class Budget:
         self.deadline = time.monotonic() + seconds
         self.maximum = rows
         self.rows = 0
+        self.checkpoint = checkpoint
 
     def check(self, directory=None, count=0):
+        if self.checkpoint is not None:
+            self.checkpoint(self.rows)
         self.rows += count
         if self.rows > self.maximum:
             raise AggregationError('aggregation_row_limit')
@@ -71,16 +74,19 @@ def _reader(path, budget):
         db.close()
 
 
-def _activity(path, pbx, scope, first, last, observed, work, budget, output):
+def _activity(path, pbx, scope, first, last, observed, work, budget, output, fetch_page=None):
     after = ''
     while scope.queues and (not scope.self_only or scope.agents) and first < min(last, observed):
         budget.check(output)
         # The primary key provides a bounded continuation even for old carry-in
         # intervals. Scanned rows, including out-of-scope rows, count to the cap.
-        with _reader(path, budget) as db:
-            rows = db.execute('SELECT source_key,queue,agent,canonical_agent,state,starts,ends,on_duty,coverage '
-                              'FROM report_activity WHERE pbx=? AND source_key>? ORDER BY source_key LIMIT ?',
-                              (pbx, after, PAGE)).fetchall()
+        if fetch_page is not None:
+            rows = fetch_page(after)
+        else:
+            with _reader(path, budget) as db:
+                rows = db.execute('SELECT source_key,queue,agent,canonical_agent,state,starts,ends,on_duty,coverage '
+                                  'FROM report_activity WHERE pbx=? AND source_key>? ORDER BY source_key LIMIT ?',
+                                  (pbx, after, PAGE)).fetchall()
         budget.check(output, len(rows))
         if not rows:
             break
@@ -146,7 +152,7 @@ def _identities(work, budget):
     work.commit()
 
 
-def _visits(path, pbx, scope, first, last, work, budget, output):
+def _visits(path, pbx, scope, first, last, work, budget, output, fetch_page=None):
     agents = {}
     if first >= last:
         return agents
@@ -155,11 +161,14 @@ def _visits(path, pbx, scope, first, last, work, budget, output):
         while True:
             budget.check(output)
             clause, args = _where(pbx, Scope((queue,), scope.agents, scope.self_only, scope.not_before), first, last)
-            with _reader(path, budget) as db:
-                rows = db.execute('SELECT id,agent,entered,answered,ended,talk_seconds,coverage,outcome '
-                                  'FROM report_visits INDEXED BY rv_queue_time WHERE ' + clause +
-                                  ' AND (entered>? OR (entered=? AND id>?)) ORDER BY entered,id LIMIT ?',
-                                  (*args, entered, entered, ident, PAGE)).fetchall()
+            if fetch_page is not None:
+                rows = fetch_page(queue, (entered, ident) if ident else None)
+            else:
+                with _reader(path, budget) as db:
+                    rows = db.execute('SELECT id,agent,entered,answered,ended,talk_seconds,coverage,outcome '
+                                      'FROM report_visits INDEXED BY rv_queue_time WHERE ' + clause +
+                                      ' AND (entered>? OR (entered=? AND id>?)) ORDER BY entered,id LIMIT ?',
+                                      (*args, entered, entered, ident, PAGE)).fetchall()
             budget.check(output, len(rows))
             if not rows:
                 break
@@ -329,6 +338,78 @@ def run(bundle, destination, scope, start, end, *, pbx='primary', seconds=120,
         budget.check(output)
         if backup.verify(bundle, seconds=min(30, max(.001, budget.deadline-time.monotonic()))) != manifest:
             raise AggregationError('aggregation_source_changed')
+        budget.check(output)
+        payload = json.dumps(result, ensure_ascii=True, allow_nan=False, sort_keys=True).encode('utf-8')
+        if len(payload) > 2 * 1024**2:
+            raise AggregationError('aggregation_result_limit')
+        backup._write_json(output / 'result.json', result)
+        return result
+    finally:
+        work.close()
+
+
+def run_pinned(archive, snapshot, destination, scope, start, end, *, seconds=240,
+               max_rows=MAX_ROWS, min_samples=5, top=10, checkpoint=None):
+    """Calculate from a frozen pair of projections; caller must enforce access.
+
+    This is a worker primitive, not an authenticated API. The caller must check
+    current authorization before and throughout execution and before serving a
+    result. Each source page has its own short read transaction.
+    """
+    from . import activity_snapshots
+    if not isinstance(scope, Scope):
+        raise ValueError('invalid_aggregation_scope')
+    _where(archive.pbx, scope, start, end)
+    if (type(scope.not_before) not in (int, float) or not math.isfinite(scope.not_before)
+            or scope.not_before < 0 or type(scope.self_only) is not bool
+            or any(not isinstance(q, str) or not 0 < len(q) <= 128 for q in scope.queues)
+            or any(not isinstance(a, str) or not 0 < len(a) <= 256 for a in scope.agents)):
+        raise ValueError('invalid_aggregation_scope')
+    if type(min_samples) is not int or not 1 <= min_samples <= 100 or type(top) is not int or not 1 <= top <= 20:
+        raise ValueError('invalid_aggregation_ranking')
+    if end - start > 31 * 86400:
+        raise ValueError('aggregation_range_limit')
+    activity_snapshots.validate_pair_token(snapshot, archive.pbx)
+    with archive.reader() as db:
+        activity_snapshots.validate_pair(db, archive.pbx, snapshot)
+    budget = Budget(seconds, max_rows, checkpoint=checkpoint)
+    budget.check()
+    output = backup._private_directory(destination)
+    work = sqlite3.connect(output / 'work.sqlite3')
+    try:
+        os.chmod(output / 'work.sqlite3', 0o600)
+        work.execute('PRAGMA cache_size=-1024')
+        work.execute('PRAGMA page_size=4096')
+        work.execute('PRAGMA temp_store=MEMORY')
+        work.execute('PRAGMA max_page_count=16384')
+        work.set_progress_handler(lambda: int(time.monotonic() >= budget.deadline), 1000)
+        work.execute('CREATE TABLE activity(queue,alias,canonical,starts REAL,ends REAL,state,on_duty,coverage)')
+        first = max(float(start), scope.not_before)
+        def activity_page(after):
+            return activity_snapshots.page(archive, snapshot, scope, start, end, after=after or None)
+        def visit_page(queue, after):
+            return activity_snapshots.visit_page(archive, snapshot, scope, start, end, queue, after=after)
+        _activity(None, archive.pbx, scope, first, end, snapshot['activity_observed'], work, budget, output,
+                  fetch_page=activity_page)
+        agents = _visits(None, archive.pbx, scope, first, end, work, budget, output, fetch_page=visit_page)
+        result = dict(format='sanequeue-private-agent-background-v1', start=float(start), end=float(end),
+                      effective_start=first, pbx=archive.pbx, queues=list(scope.queues),
+                      scope=dict(agents=list(scope.agents), self_only=scope.self_only, not_before=scope.not_before),
+                      snapshot=snapshot, projection_version=snapshot['projection_version'],
+                      source_watermark=snapshot['watermark'], observed_until=snapshot['activity_observed'],
+                      rankings={metric: _rank(agents, metric, min_samples, top)
+                                for metric in ('answered_count', 'avg_queue_talk_seconds')},
+                      presence=_presence(work, first, end, budget),
+                      contract=dict(unit='queue_visit', unique_conversations=False, ranking_is_quality=False,
+                                    presence='union_observed_intervals_across_selected_queue_memberships',
+                                    aht_occupancy_included=False, missing_acw_is_zero=False,
+                                    complete_source_history=False, live_permissions_not_checked=True,
+                                    interactive_limits_unchanged=True),
+                      limits=dict(page_rows=PAGE, maximum_scanned_rows=max_rows, scanned_rows=budget.rows,
+                                  scratch_max_bytes=MAX_SCRATCH, seconds=seconds))
+        budget.check(output)
+        with archive.reader() as db:
+            activity_snapshots.validate_pair(db, archive.pbx, snapshot)
         budget.check(output)
         payload = json.dumps(result, ensure_ascii=True, allow_nan=False, sort_keys=True).encode('utf-8')
         if len(payload) > 2 * 1024**2:

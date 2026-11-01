@@ -10,7 +10,7 @@ from tests import test_reporting_queries as fixtures
 from sanequeue.reporting.store import Archive
 from sanequeue.reporting.facts import project_batch, SCHEMA
 from sanequeue.reporting.queries import Scope
-from sanequeue.reporting import visit_snapshots
+from sanequeue.reporting import visit_snapshots, activity_snapshots
 from sanequeue.reporting.export_jobs import JobStore, ExportWorker, Limits, projection_watermark
 
 
@@ -113,6 +113,56 @@ class SnapshotTests(unittest.TestCase):
         with self.archive.writer() as db:
             db.execute("UPDATE report_snapshot_meta SET generation=lower(hex(randomblob(16)))")
         with self.assertRaises(visit_snapshots.SnapshotUnavailable):self.page(token)
+
+    def test_activity_snapshot_preserves_old_queue_identity_and_carry_in(self):
+        self.seed(2)
+        self.archive.append([], checkpoint_source='activity_cache', checkpoint={'observed': 200})
+        with self.archive.writer() as db:
+            db.execute('INSERT INTO report_activity VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+                       ('primary','a',1,'8001','Local/100@from-queue/n','paused','break',50,150,1,'observed','PJSIP/100'))
+            db.execute('INSERT INTO report_activity VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+                       ('primary','b',2,'8002','Local/200@from-queue/n','available','',50,150,1,'observed','PJSIP/200'))
+        token=activity_snapshots.capture(self.archive)
+        with self.archive.writer() as db:
+            db.execute("UPDATE report_activity SET queue='8002',canonical_agent='PJSIP/changed' WHERE source_key='a'")
+            db.execute("UPDATE report_activity SET queue='8001' WHERE source_key='b'")
+            db.execute("DELETE FROM report_visits WHERE id=?",(format(1,'064x'),))
+        rows=activity_snapshots.page(self.archive,token,Scope(('8001',)),100,200)
+        self.assertEqual([(r['source_key'],r['canonical_agent']) for r in rows],[('a','PJSIP/100')])
+        visits=activity_snapshots.visit_page(self.archive,token,Scope(('8001',)),0,1000,'8001',limit=1)
+        self.assertEqual(visits[0]['id'],format(1,'064x'))
+        second=activity_snapshots.visit_page(self.archive,token,Scope(('8001',)),0,1000,'8001',after=(visits[0]['entered'],visits[0]['id']),limit=1)
+        self.assertEqual(second[0]['id'],format(2,'064x'))
+        with self.assertRaises(ValueError):
+            activity_snapshots.visit_page(self.archive,token,Scope(('8001',)),0,1000,'8002')
+
+    def test_activity_snapshot_rejects_unready_or_stale_projection(self):
+        self.seed()
+        with self.assertRaises(activity_snapshots.SnapshotUnavailable):
+            activity_snapshots.capture(self.archive)
+        self.archive.append([], checkpoint_source='activity_cache', checkpoint={'observed': 200})
+        token=activity_snapshots.capture(self.archive)
+        with self.archive.writer() as db:
+            db.execute("UPDATE report_activity_snapshot_meta SET ready=0")
+        with self.assertRaises(activity_snapshots.SnapshotUnavailable):
+            activity_snapshots.page(self.archive,token,Scope(('8001',)),0,200)
+
+    def test_activity_bootstrap_is_bounded_and_captures_changes(self):
+        with self.archive.writer() as db:
+            db.executescript(SCHEMA)
+            db.executemany('INSERT INTO report_activity VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+                [('primary',f'legacy-{i}',i,'8001','PJSIP/100','available','',0,100,1,'observed','PJSIP/100')
+                 for i in range(5)])
+        self.archive.append([],checkpoint_source='activity_cache',checkpoint={'observed':200})
+        project_batch(self.archive,limit=2)
+        with self.assertRaises(activity_snapshots.SnapshotUnavailable):activity_snapshots.capture(self.archive)
+        with self.archive.writer() as db:
+            db.execute("UPDATE report_activity SET state='paused' WHERE source_key='legacy-0'")
+        project_batch(self.archive,limit=2);project_batch(self.archive,limit=2)
+        token=activity_snapshots.capture(self.archive)
+        rows=activity_snapshots.page(self.archive,token,Scope(('8001',)),0,200)
+        self.assertEqual(len(rows),5)
+        self.assertEqual(next(r for r in rows if r['source_key']=='legacy-0')['state'],'paused')
 
 
 if __name__=='__main__':unittest.main()

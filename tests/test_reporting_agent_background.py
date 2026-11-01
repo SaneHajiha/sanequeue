@@ -6,7 +6,8 @@ import unittest
 from unittest.mock import patch
 
 from sanequeue.reporting import backup
-from sanequeue.reporting.agent_background import run, AggregationError, IDENTITY_SQL, _identities, Budget
+from sanequeue.reporting.agent_background import run, run_pinned, AggregationError, IDENTITY_SQL, _identities, Budget
+from sanequeue.reporting import activity_snapshots
 from sanequeue.reporting.agent_rankings import rank_agents
 from sanequeue.reporting.agent_metrics import report
 from sanequeue.reporting.queries import Scope
@@ -30,6 +31,32 @@ class AgentBackgroundTests(unittest.TestCase):
         path = self.root/name
         backup.backup(self.archive.path, path)
         return path
+
+    def test_pinned_background_matches_sealed_and_freezes_both_fact_types(self):
+        token = activity_snapshots.capture(self.archive)
+        expected = run(self.bundle(), self.root/'sealed', self.scope, self.first, self.last, min_samples=1)
+        with self.archive.writer() as db:
+            db.execute("UPDATE report_activity SET canonical_agent='PJSIP/changed' WHERE canonical_agent='PJSIP/100'")
+            db.execute("UPDATE report_visits SET agent='PJSIP/changed' WHERE agent LIKE 'Local/100%'")
+        actual = run_pinned(self.archive, token, self.root/'pinned', self.scope, self.first, self.last, min_samples=1)
+        self.assertEqual(actual['rankings'], expected['rankings'])
+        self.assertEqual(actual['presence'], expected['presence'])
+        self.assertEqual(actual['snapshot'], token)
+
+    def test_pinned_rechecks_generation_and_cooperative_checkpoint(self):
+        token = activity_snapshots.capture(self.archive)
+        checks = []
+        def revoke(rows):
+            checks.append(rows)
+            if len(checks) == 3:
+                raise PermissionError('revoked')
+        with self.assertRaises(PermissionError):
+            run_pinned(self.archive, token, self.root/'revoked', self.scope, self.first, self.last, checkpoint=revoke)
+        self.assertFalse((self.root/'revoked'/'result.json').exists())
+        with self.archive.writer() as db:
+            db.execute("UPDATE report_activity_snapshot_meta SET generation=lower(hex(randomblob(16)))")
+        with self.assertRaises(activity_snapshots.SnapshotUnavailable):
+            run_pinned(self.archive, token, self.root/'invalid', self.scope, self.first, self.last)
 
     def test_rank_matches_interactive_and_presence_unions_shared_memberships(self):
         result = run(self.bundle(), self.root/'result', self.scope, self.first, self.last, min_samples=1)
