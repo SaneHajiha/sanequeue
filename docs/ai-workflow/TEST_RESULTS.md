@@ -103,3 +103,5 @@ Final installed-lab check at source c6d56630705d: the real report completed, day
 
 ## Queue outcome views — 2026-11-01
 A synthetic 33,330-visit, 30-day isolated lab archive completed in 14.903 seconds at a 10% single-core CPU quota and 128 MiB memory cap: 30,000 observed entries, 20,010 answered, 6,660 unanswered, 3,330 unresolved, plus 3,330 missing entries. Totals matched day and queue aggregations. This is not a live-call load test. Final local scoped Python: 34 passed, 11 subtests; Chromium: 7 passed for FA/EN, both categories, busy guard and distinct callers. Installed-runtime acceptance remains to be run.
+
+Installed lab source 5cc8a9c0083b: 52 Linux tests passed before switching; Asterisk PID unchanged. Chrome smoke loaded both sections, their queue/day tables, four unanswered reasons and charts without page errors. On the same date/queue scope as overview, aggregates matched 491 visits, 43 answered and 448 abandoned; no entry was missing. Screenshot of the installed unanswered section was privately inspected. GitHub Tests and UI workbench both succeeded for the same source. This does not prove all report features or operational load acceptance.
