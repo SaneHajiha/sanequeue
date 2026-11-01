@@ -42,3 +42,6 @@ Store خصوصی، API گزارش دستی مبتنی بر visit، سلامت he
 
 Shared calendar/ISO date-range controls, exact time-series gaps, paged comparisons, responsive/theme redraw and real image exports are implemented locally and browser-tested. Gregorian monthly source buckets are explicitly labelled; Persian monthly grouping is not implemented by a Persian date picker. No catalog capability or telephony acceptance status is upgraded merely by these visual changes.
 
+
+## شماره‌های یکتای صف — ۲۰۲۶/۱۱/۰۱
+شمارش عددی کل بازه و به تفکیک روز و صف در گزارش صف اضافه شد؛ برای تکرار شماره، بازدیدها و تعداد یکتا از هم جدا هستند. این قابلیت ورودی خارج صف یا هویت یکتای انسان را اثبات نمی‌کند و شمارهٔ ناشناس را جدا نگه می‌دارد. سایر الزامات درخواست کاربر شامل فیلتر چندصفی/چندکارشناسی یکپارچه، گزارش‌های کامل پاسخ/بی‌پاسخ/توزیع و خروجی مستقل تمام جداول همچنان بازند.

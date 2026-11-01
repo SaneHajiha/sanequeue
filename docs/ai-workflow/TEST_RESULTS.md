@@ -93,3 +93,6 @@ Local branch `feature/realtime-operations`, base HEAD `e977516398db5b04309ddae11
 
 CUA bootstrap remains unavailable; approved standalone Playwright tests supplied browser evidence. Codex preview-open returned queued. Figma draft screenshot verification was quota-blocked. No push, server application deployment, Asterisk restart or PBX control occurred in this UI stage. See `../REPORTING_VISUAL_QA_20261028.fa.md` for scope and remaining acceptance.
 
+
+## Queue unique-number increment — 2026-11-01
+Local targeted pytest: 28 passed, 9 subtests before final edge-case addition; browser UI: 2 Chromium tests passed (FA/EN). Synthetic isolated 30-day server fixture: first attempt hit the 5-second read deadline while sorting; removing the unnecessary cross-queue sort succeeded at 10% one-core CPU / 128 MiB cgroup, 33,330 visits in 6.8 seconds including processing, 30 daily buckets. This is not a live-call or concurrency/load certification. Final targeted pytest after the edge-case and query-order changes: 29 passed, 9 subtests.

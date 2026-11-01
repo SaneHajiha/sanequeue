@@ -21,6 +21,7 @@ from sanequeue.reporting import exports
 from sanequeue.reporting import activity_queries
 from sanequeue.reporting import outbound
 from sanequeue.reporting import analytics
+from sanequeue.reporting import unique_callers
 from sanequeue.reporting import followup
 from sanequeue.reporting import agent_metrics
 from sanequeue.reporting.export_jobs import JobStore, ExportFailure, projection_watermark
@@ -461,6 +462,19 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         result['archive'] = archive.status()
         # Checkpoints can identify private source paths; expose only safe fields.
         result['archive'].pop('checkpoints', None)
+        return jsonify(result)
+
+    @app.get('/api/history/unique-callers')
+    @login_required
+    @safe
+    def history_unique_callers():
+        owner=str(current_user.get_id());scope,start,end=context()
+        if role() not in ('admin','supervisor') or not scope.queues or not all(
+                can_queue(queue,'caller_details') for queue in scope.queues):abort(403)
+        result=unique_callers.report(archive,scope,start,end)
+        current,_,_=context()
+        if (str(current_user.get_id())!=owner or current!=scope or role() not in ('admin','supervisor')
+                or not all(can_queue(queue,'caller_details') for queue in scope.queues)):abort(403)
         return jsonify(result)
 
     @app.get('/api/history/agent-rankings')

@@ -43,3 +43,6 @@ User explicitly requested better charts, Persian calendar and browser/visual tes
 
 User explicitly requested GitHub publication, deployment on the existing test server and an install script with independent module controls. This authorizes the reviewed pilot changes and release publication; it does not authorize another company's PBX or a disruptive restart. Plan: publish beta.27 on the reporting branch with exact commit instructions, back up the preview and archive, validate the projection migration on a copy, replace the preview release with rollback, and keep Asterisk/MariaDB running. CPU-heavy AI remains opt-in. Loaded production and cross-version acceptance remain explicit, not certified by lab success.
 
+
+## شمارهٔ یکتای مراجعهٔ صف — ۲۰۲۶/۱۱/۰۱
+کاربر شمارش یکتای تماس‌گیرنده و ادامهٔ گزارش‌گیری را صریحاً خواست. واحد این مرحله شمارهٔ نرمال‌شدهٔ مشاهده‌شده در مراجعه‌های صف است؛ معادل شخص، تماس ورودی کل مرکز تلفن یا ادغام شماره‌های با پیش‌شمارهٔ متفاوت نیست. برای همهٔ صف‌های انتخاب‌شده مجوز مشاهدهٔ شماره و نقش مدیر/سرپرست لازم است. پاسخ فقط آمار دارد؛ نامعلوم و ورودِ فاقد شاهد تفکیک می‌شوند. سقف تعاملی ۵۰هزار مراجعه و مهلت reader حفظ شده است؛ دادهٔ ناقصِ بالای سقف منتشر نمی‌شود. بدون polling و بدون تغییر PBX.
