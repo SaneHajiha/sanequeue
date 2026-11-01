@@ -35,3 +35,22 @@
 .module-navigation .nav-module>summary{font-size:13px}
 .module-navigation .nav-item,.module-navigation .module-shortcut{font-size:13px;min-height:44px;line-height:1.8}
 .module-navigation .module-shortcut{padding-inline-start:18px}
+
+/* Light navigation follows the surface theme instead of the dark sidebar. */
+body:not(.dark) .sidebar{background:linear-gradient(180deg,#fbfdff 0%,#f1f5ff 100%);color:#263b61;border-inline-end:1px solid #dce5f3;box-shadow:0 6px 28px #536a9a14}
+body:not(.dark) .sidebar::after{background:radial-gradient(circle at 20% 100%,#d6dfff88,transparent 72%)}
+body:not(.dark) .sidebar .brand{border-bottom-color:#dbe5f2}
+body:not(.dark) .sidebar .brand b{color:#162e58}
+body:not(.dark) .sidebar .brand small,body:not(.dark) .sidebar-foot{color:#5c7391}
+body:not(.dark) .sidebar-note{background:#f4f8ff;border-color:#d8e5f3;color:#284366}
+body:not(.dark) .sidebar-note p{color:#58718e}
+body:not(.dark) .module-navigation .nav-module{border-bottom-color:#dce6f2}
+body:not(.dark) .module-navigation .nav-module>summary,body:not(.dark) .module-navigation .report-submenu>summary{color:#344e73}
+body:not(.dark) .module-navigation .current-module>summary{color:#193a70}
+body:not(.dark) .module-navigation .nav-item,body:not(.dark) .module-navigation .module-shortcut{color:#40597d}
+body:not(.dark) .module-navigation .module-shortcut{border-inline-start-color:#d6e2f1}
+body:not(.dark) .module-navigation .nav-module>summary:hover,body:not(.dark) .module-navigation .report-submenu>summary:hover,body:not(.dark) .module-navigation .nav-item:hover,body:not(.dark) .module-navigation .module-shortcut:hover{background:#e7efff;color:#173b78}
+body:not(.dark) .module-navigation .nav-item.active,body:not(.dark) .module-navigation .nav-item.active:hover{background:#e5efff;color:#174fb3;box-shadow:inset 0 0 0 1px #bfd5fb}
+body:not(.dark) .module-navigation .module-shortcut[aria-current="location"]{color:#174fb3;background:#e5efff;border-inline-start-color:#3976d5}
+body:not(.dark) .module-navigation .nav-item b{background:#e3ebfa;color:#3f608b}
+body:not(.dark) .module-navigation :is(button,summary):focus-visible{outline-color:#1759bc}

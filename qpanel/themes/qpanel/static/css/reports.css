@@ -33,3 +33,13 @@ body[data-view="reports"] .monitor-preferences { display: none !important; }
 .history-kpi{padding:14px}
 .history-kpi strong{margin:6px 0;font-size:1.7rem}
 .history-section[hidden],#history-kpis[hidden]{display:none!important}
+
+.extension-report-shortcut{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,auto);align-items:center;gap:10px 24px;padding:18px 20px}
+.extension-report-shortcut h3{margin:0 0 5px;color:var(--ink);font-size:15px}
+.extension-report-shortcut p{margin:0;color:var(--muted);font-size:12px;line-height:1.9}
+.extension-report-controls{display:flex;align-items:end;flex-wrap:wrap;gap:8px}
+.extension-report-controls label{flex-basis:100%;font-size:12px;color:var(--ink);font-weight:650}
+.extension-report-controls input{width:140px;min-height:42px;direction:ltr}
+.extension-report-controls button{min-height:42px}
+.extension-report-shortcut .extension-report-note{grid-column:1/-1;border-top:1px solid var(--line);padding-top:9px}
+@media(max-width:760px){.extension-report-shortcut{grid-template-columns:1fr}.extension-report-controls input{flex:1;min-width:110px}}

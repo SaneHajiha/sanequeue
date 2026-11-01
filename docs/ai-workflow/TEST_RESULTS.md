@@ -228,3 +228,4 @@ Position columns in XLSX: 68 local tests and 19 subtests passed across queue pos
 
 On lab revision 9af9d07, 47 Linux tests passed and Asterisk PID remained unchanged. Authenticated browser submitted and downloaded answered and unanswered background XLSX files (43 and 448 rows). Both had Persian position headers, numeric cells, RTL, 14-column filter and no formulas; verification inspected workbook XML, not visual rendering in Excel.
 
+Extension shortcut and light theme: 16 targeted CDR/API/theme tests and 8 subtests passed; Playwright checked that exact extension search navigates to global CDR, preserves dates, clears older CDR filters and does not send the queue filter. A light/dark live visual check and explicit endpoint coverage remain separate.

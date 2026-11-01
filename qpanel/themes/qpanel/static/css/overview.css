@@ -42,3 +42,15 @@ body[data-view=queues] .detail-hero-top{padding:16px 20px}body[data-view=queues]
 @media(max-width:600px){body .queue-focus-card .queue-focus-performance{grid-template-columns:repeat(2,minmax(0,1fr))}.queue-focus-card .queue-focus-performance>div:last-child{grid-column:1/-1}.queue-focus-card .queue-focus-performance small{min-height:0}}
 
 @media(min-width:1100px){body.wallboard #wallboard-stage .wallboard-summary{grid-template-columns:repeat(8,minmax(0,1fr))}body.wallboard #wallboard-stage .wallboard-summary>div{padding:10px 5px}body.wallboard #wallboard-stage .wallboard-summary strong{font-size:28px}body.wallboard #wallboard-stage .wallboard-summary span{font-size:12px}body.wallboard #wallboard-stage .wallboard-header{margin-bottom:12px}body.wallboard #wallboard-stage .wallboard-header h2{font-size:25px}body.wallboard #wallboard-stage .wb-queue-kpis{gap:8px}}
+
+/* Quiet, high-contrast pastel KPI surfaces in light mode. */
+body:not(.dark) .metrics>.metric{background:linear-gradient(145deg,#f8f9ff,#e9edff)!important;border-color:#d8dff9!important;color:#21365d!important;box-shadow:0 7px 20px #4f6a9b12}
+body:not(.dark) .metrics>.metric:nth-child(2){background:linear-gradient(145deg,#fffaf0,#fff1d6)!important;border-color:#efddb9!important}
+body:not(.dark) .metrics>.metric:nth-child(3){background:linear-gradient(145deg,#f3fff9,#daf5e9)!important;border-color:#c8e8da!important}
+body:not(.dark) .metrics>.metric:nth-child(4){background:linear-gradient(145deg,#fff6f8,#ffe9ed)!important;border-color:#f4d4dd!important}
+body:not(.dark) .metrics>.metric:nth-child(5){background:linear-gradient(145deg,#f4fbff,#e2f2ff)!important;border-color:#cfe5f6!important}
+body:not(.dark) .metrics>.metric:nth-child(6){background:linear-gradient(145deg,#fbf6ff,#f0e7ff)!important;border-color:#e2d6f7!important}
+body:not(.dark) .metrics>.metric p,body:not(.dark) .metrics>.metric b,body:not(.dark) .metrics>.metric small{color:#20395d!important}
+body:not(.dark) .metrics>.metric small{border-top-color:#95aacc55;opacity:1}
+body:not(.dark) .metrics>.metric .icon{background:#ffffffad!important;border-color:#cddaf0!important;color:#315cab!important}
+body:not(.dark) .metrics>.metric:hover{transform:none}
