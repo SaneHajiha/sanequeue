@@ -18,7 +18,7 @@
 
 [راه‌اندازی حالت پایدار](docs/REALTIME_DEPLOYMENT.fa.md) · [نصب پایه](docs/INSTALL.fa.md) · [راهنمای کاربری](docs/USER_GUIDE.fa.md) · [جدول امکانات](docs/FEATURES.md) · [سازگاری و بار سرور](docs/COMPATIBILITY.md) · [نتیجه آزمون‌ها](docs/VALIDATION.md)
 
-[راهنمای گزارش‌ها و تطبیق قابلیت‌ها](docs/REPORTS_GUIDE.fa.md) · [جمع‌بندی پس‌زمینهٔ کارشناسان](docs/AGENT_BACKGROUND_REPORT.fa.md)
+[راهنمای گام‌به‌گام گزارش‌گیری](docs/REPORTING_USER_MANUAL.fa.md) · [تطبیق قابلیت‌ها و محدودیت‌ها](docs/REPORTS_GUIDE.fa.md) · [جمع‌بندی پس‌زمینهٔ کارشناسان](docs/AGENT_BACKGROUND_REPORT.fa.md)
 
 ```bash
 git clone https://github.com/SaneHajiha/sanequeue.git
