@@ -158,7 +158,7 @@ class SavedReports:
         if worker:value.update(worker=row['worker'],lease_until=row['lease_until'])
         return value
 
-    def save(self,owner,name,queues,outcome=None,format='xlsx',language='fa',period='yesterday',at='08:00',weekdays=None,enabled=False,ident=None,*,builder_definition=None):
+    def save(self,owner,name,queues,outcome=None,format='xlsx',language='fa',period='yesterday',at='08:00',weekdays=None,enabled=False,ident=None,*,builder_definition=None,cdr_definition=None,cdr_filters=None):
         owner=_text(owner,128,'owner');name=_text(name,120,'name')
         if not isinstance(queues,(list,tuple,set)) or not 1<=len(queues)<=256:raise ValueError('invalid_report_plan_queues')
         queues=sorted({_text(queue,128,'queue') for queue in queues})
@@ -179,6 +179,12 @@ class SavedReports:
             # Store the complete canonical definition, never a pointer to a
             # mutable template's latest version. Occurrences freeze this JSON.
             spec['builder_definition']=frozen
+        if cdr_definition is not None:
+            from types import SimpleNamespace
+            from . import cdr_builder,cdr_queries
+            if builder_definition is not None or outcome is not None:raise ValueError('report_plan_cdr_conflict')
+            spec['cdr_definition']=cdr_builder.definition(cdr_definition)
+            _,_,spec['cdr_filters']=cdr_queries._where(SimpleNamespace(pbx=self.pbx),0,86400,cdr_filters or {})
         if ident is not None:_id(ident)
         now=time.time()
         with self._db(write=True) as db:

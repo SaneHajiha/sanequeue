@@ -11,7 +11,7 @@ from qpanel.queue_policies import QueuePolicyStore
 from sanequeue.security.permissions import sections_for
 from .export_jobs import JobStore,ExportFailure,projection_watermark,_worker_lock
 from .report_plans import SavedReports
-from .queries import Scope
+from .queries import Scope,queues as archive_queues
 from .store import Archive
 from .visit_snapshots import capture,SnapshotUnavailable
 from . import builder_exports
@@ -28,12 +28,26 @@ def current_modes(owner,queues,accounts_path,policy_path):
     return {queue:'full' if policy.access(owner,role,queue,'caller_details') else 'masked' for queue in queues}
 
 
+def current_cdr_modes(spec,archive,accounts_path,policy_path):
+    account=read_accounts(accounts_path).get(spec['owner'])
+    if not account or account.get('role')!='admin' or not {'reports','users'}.issubset(sections_for('admin',account)):
+        return None
+    if set(archive_queues(archive))!=set(spec['queues']):return None
+    modes=current_modes(spec['owner'],spec['queues'],accounts_path,policy_path)
+    if modes is None:return None
+    if any(mode!='full' for mode in modes.values()) and any(key in spec.get('cdr_filters',{}) for key in ('src','dst','party','origin','outbound_cid','did','src_length','dst_length')):
+        return None
+    return modes
+
+
 class PlanWorker:
-    def __init__(self,plans,jobs,archive,authorize,*,disabled_file='/var/lib/sanequeue/module.disabled'):
-        self.plans=plans;self.jobs=jobs;self.archive=archive;self.authorize=authorize;self.disabled_file=Path(disabled_file)
+    def __init__(self,plans,jobs,archive,authorize,*,authorize_cdr=None,disabled_file='/var/lib/sanequeue/module.disabled'):
+        self.plans=plans;self.jobs=jobs;self.archive=archive;self.authorize=authorize;self.authorize_cdr=authorize_cdr;self.disabled_file=Path(disabled_file)
 
     def _modes(self,spec):
-        try:modes=self.authorize(spec['owner'],spec['queues'])
+        try:
+            if spec.get('cdr_definition') is not None:modes=self.authorize_cdr(spec) if self.authorize_cdr else None
+            else:modes=self.authorize(spec['owner'],spec['queues'])
         except Exception:return None
         if not isinstance(modes,dict) or set(modes)!=set(spec['queues']) or any(
                 mode not in ('full','masked','hidden','pseudonymous') for mode in modes.values()):return None
@@ -73,6 +87,7 @@ class PlanWorker:
                 or scope.get('self_only') is not False or scope.get('not_before')!=0
                 or any(original.get(key)!=spec[key] for key in ('start','end','outcome','format','language'))
                 or original.get('builder_definition')!=spec.get('builder_definition')
+                or original.get('cdr_definition')!=spec.get('cdr_definition') or original.get('cdr_filters')!=spec.get('cdr_filters')
                 or set(original.get('number_modes',{}))!=set(spec['queues'])):
             raise ExportFailure('export_request_conflict')
 
@@ -93,7 +108,9 @@ class PlanWorker:
                     self._validate_prior(prior,spec)
                     export_id=prior['id']
                 else:
-                    if spec.get('builder_definition') is not None:
+                    if spec.get('cdr_definition') is not None:
+                        watermark,snapshot=projection_watermark(self.archive),None
+                    elif spec.get('builder_definition') is not None:
                         frozen=builder_exports.capture(self.archive)
                         watermark,snapshot=frozen['watermark'],frozen['snapshot']
                     else:watermark=projection_watermark(self.archive);snapshot=capture(self.archive)
@@ -102,6 +119,7 @@ class PlanWorker:
                     modes,stopped=self._preflight(occurrence,worker)
                     if stopped:return stopped
                     builder={'builder_definition':spec['builder_definition']} if spec.get('builder_definition') is not None else {}
+                    if spec.get('cdr_definition') is not None:builder.update(cdr_definition=spec['cdr_definition'],cdr_filters=spec['cdr_filters'])
                     export_id=self.jobs.create(spec['owner'],Scope(tuple(spec['queues'])),spec['start'],spec['end'],
                         watermark=watermark,pbx=self.archive.pbx,number_modes=modes,
                         format=spec['format'],language=spec['language'],outcome=spec['outcome'],
@@ -136,7 +154,9 @@ def main():
     for field in ('plans','jobs','outputs','archive','accounts','policies'):parser.add_argument('--'+field,required=True)
     parser.add_argument('--disabled-file',default='/var/lib/sanequeue/module.disabled');parser.add_argument('--once',action='store_true')
     args=parser.parse_args();plans=SavedReports(args.plans);plans.initialize();jobs=JobStore(args.jobs,args.outputs);jobs.initialize()
-    worker=PlanWorker(plans,jobs,Archive(args.archive),lambda owner,queues:current_modes(owner,queues,args.accounts,args.policies),disabled_file=args.disabled_file)
+    archive=Archive(args.archive)
+    worker=PlanWorker(plans,jobs,archive,lambda owner,queues:current_modes(owner,queues,args.accounts,args.policies),
+        authorize_cdr=lambda spec:current_cdr_modes(spec,archive,args.accounts,args.policies),disabled_file=args.disabled_file)
     while True:
         result=worker.run_once()
         if args.once:print(json.dumps(result));break

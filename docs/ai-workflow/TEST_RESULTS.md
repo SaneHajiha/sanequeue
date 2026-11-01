@@ -157,4 +157,7 @@ PDF گزارش‌ساز صف برای ریز، گروه‌بندی و زمان�
 خروجی پس‌زمینهٔ CDR اکنون تعریف و فیلتر را در صف ذخیره می‌کند و یک تصویر واحد از داده را هنگام شروع کارگر می‌خواند؛ فایل ممکن است با پیش‌نمایش زودتر تفاوت داشته باشد. اطلاعات فیلتر در مرکز خروجی و فایل Excel/PDF نمایش داده می‌شوند. مجوز مدیر، سطح نمایش شماره و مجموعهٔ صف‌ها تا زمان انتشار و دریافت بازبینی می‌شود. آزمون محلی نهایی: ۸۸ آزمون و ۳۴ زیرآزمون شامل لغو دسترسی پس از خواندن؛ سه آزمون مرورگر موفق. زمان‌بندی CDR هنوز اضافه نشده است.
 
 نسخهٔ `b6796ba9ef26fc6303825f9963fb548618e31498` روی سرور آزمایشی نصب شد؛ ۱۹۲ آزمون لینوکسی موفق و PID استریسک بدون تغییر بود. در مرورگر واقعی برای گزارش CDR گروه‌بندی‌شده، Excel و PDF پس‌زمینه ساخته و دانلود شدند؛ هر کدام دو ردیف داشتند و خطای JavaScript ثبت نشد. هر دو CI همین commit موفق شدند. این آزمون معادل بار واقعی همزمان یا ترانک خارجی نیست.
+# CDR scheduled custom reports — local validation
+
+The CDR plan freezes its definition and non-date filters, rechecks global scope and current permissions, and uses the background worker-start snapshot. Local targeted reporting suite: 128 passed and 36 subtests passed; plan frontend checks and 3 browser workbench tests passed. These tests do not prove telephony-version compatibility or production load safety. The scheduled CDR feature still requires verification on the test server before release.
 

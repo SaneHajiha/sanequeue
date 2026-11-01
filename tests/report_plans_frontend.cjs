@@ -68,5 +68,12 @@ function fixture(){
  editing.requests[1].resolve({plan:custom});await settle();
  if(editing.requests[2]){editing.requests[2].resolve({plans:[custom]});await settle();}
  await oldSave;assert.equal(editing.form.hidden,false,'late save must not discard newer unsaved scheduling input');assert.equal(editing.fields.at.value,'11:00');
+ const cdr=fixture();cdr.enter();cdr.requests[0].resolve({plans:[]});await settle();
+ const originalCdr={columns:['src'],group_by:['direction']},originalFilters={direction:'outbound'};
+ cdr.events.get('sanequeue:cdr-builder-schedule')({detail:{definition:originalCdr,filters:originalFilters,format:'pdf'}});
+ originalCdr.columns.push('dst');originalFilters.direction='internal';const cdrSave=cdr.form.onsubmit({preventDefault(){}});
+ const cdrPayload=JSON.parse(cdr.requests[1].options.body);assert.deepEqual(cdrPayload.cdr_definition,{columns:['src'],group_by:['direction']});
+ assert.deepEqual(cdrPayload.cdr_filters,{direction:'outbound'});assert.deepEqual(cdrPayload.queues,['8001','8002']);assert.equal(cdrPayload.format,'pdf');assert.equal(cdrPayload.outcome,null);
+ cdr.requests[1].resolve({plan:{}});await settle();cdr.requests[2].resolve({plans:[]});await cdrSave;
  console.log('report plans frontend: custom definition preservation, clone, legacy reset, CSRF, private leave/re-entry, pending refresh and stale-save guards passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});

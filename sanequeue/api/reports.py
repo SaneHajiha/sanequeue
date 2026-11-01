@@ -369,7 +369,11 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         return result
 
     def plan_permitted(plan):
-        return plan is not None and all(can_queue(queue,cap) for queue in plan['queues'] for cap in ('view','report_export'))
+        if plan is None:return False
+        if plan.get('cdr_definition') is not None:
+            if role()!='admin' or 'users' not in sections() or set(queries.queues(archive))!=set(plan['queues']):return False
+            if any(key in plan.get('cdr_filters',{}) for key in ('src','dst','party','origin','outbound_cid','did','src_length','dst_length')) and not all(can_queue(queue,'caller_details') for queue in plan['queues']):return False
+        return all(can_queue(queue,cap) for queue in plan['queues'] for cap in ('view','report_export'))
 
     def plan_context(ident=None):
         # Plans carry their own explicit queue selection; the display filter
@@ -404,10 +408,21 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             if previous.get('builder_definition') is not None:
                 if 'builder_definition' not in body:body['builder_definition']=previous['builder_definition']
                 elif body['builder_definition'] is None:raise ValueError('invalid_report_plan')
+            if previous.get('cdr_definition') is not None:
+                if 'cdr_definition' not in body:body['cdr_definition']=previous['cdr_definition'];body['cdr_filters']=previous['cdr_filters']
+                elif body['cdr_definition'] is None:raise ValueError('invalid_report_plan')
+        if body.get('cdr_definition') is not None:
+            if role()!='admin' or 'users' not in sections() or set(queues)!=set(queries.queues(archive)):abort(403)
+            cdr_builder.definition(body['cdr_definition'])
+            _,_,cdr_filters=cdr_queries._where(archive,0,86400,body.get('cdr_filters') or {})
+            if any(key in cdr_filters for key in ('src','dst','party','origin','outbound_cid','did','src_length','dst_length')) and not all(can_queue(queue,'caller_details') for queue in queues):abort(403)
+            body['cdr_filters']=cdr_filters
         plan=plans_store.save(owner,body.get('name'),queues,outcome=body.get('outcome'),format=body.get('format','xlsx'),
             language=body.get('language','fa'),period=body.get('period','yesterday'),at=body.get('at','08:00'),
             weekdays=body.get('weekdays'),enabled=body.get('enabled',False),ident=body.get('id'),
-            **({'builder_definition':body['builder_definition']} if 'builder_definition' in body else {}))
+            **({'builder_definition':body['builder_definition']} if 'builder_definition' in body else {}),
+            **({'cdr_definition':body['cdr_definition'],'cdr_filters':body.get('cdr_filters')} if 'cdr_definition' in body else {}))
+        if not plan_permitted(plan):abort(403)
         return jsonify(plan=plan),201
 
     @app.post('/api/history/plans/<ident>/archive')
@@ -435,12 +450,14 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             return jsonify(job=export_public(previous)),202
         period=period_bounds(time.time(),plan['period'])
         modes={queue:'full' if can_queue(queue,'caller_details') else 'masked' for queue in plan['queues']}
-        pinned=builder_exports.capture(archive) if plan.get('builder_definition') is not None else dict(watermark=projection_watermark(archive),snapshot=visit_snapshots.capture(archive))
+        pinned=(dict(watermark=projection_watermark(archive),snapshot=None) if plan.get('cdr_definition') is not None else
+                builder_exports.capture(archive) if plan.get('builder_definition') is not None else dict(watermark=projection_watermark(archive),snapshot=visit_snapshots.capture(archive)))
         try:
             job_id=export_store.create(owner,queries.Scope(tuple(plan['queues'])),period['start'],period['end'],
                 watermark=pinned['watermark'],pbx=pbx,number_modes=modes,format=plan['format'],language=plan['language'],
                 outcome=plan['outcome'],snapshot=pinned['snapshot'],request_key=request_key,
-                **({'builder_definition':plan['builder_definition']} if plan.get('builder_definition') is not None else {}))
+                **({'builder_definition':plan['builder_definition']} if plan.get('builder_definition') is not None else {}),
+                **({'cdr_definition':plan['cdr_definition'],'cdr_filters':plan['cdr_filters']} if plan.get('cdr_definition') is not None else {}))
         except ExportFailure as error:
             # Another request may have won the unique key after our lookup,
             # including on the other side of midnight. It remains the original.
@@ -449,7 +466,10 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             if previous is None:raise
             if not export_permitted(previous):abort(403)
             job_id=previous['id']
-        return jsonify(job=export_public(export_store.get(job_id,owner))),202
+        job=export_store.get(job_id,owner)
+        if not plan_permitted(plan) or not export_permitted(job):
+            export_store.cancel(job_id,owner);abort(403)
+        return jsonify(job=export_public(job)),202
 
     @app.get('/api/history/plans/<ident>/runs')
     @login_required
@@ -458,7 +478,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         owner,_,_=plan_context(ident)
         runs=[]
         for run in plans_store.occurrences(ident,owner):
-            if not all(can_queue(queue,cap) for queue in run['spec']['queues'] for cap in ('view','report_export')):continue
+            if not plan_permitted(run['spec']):continue
             job=export_store.get(run['export_job_id'],owner) if run['export_job_id'] else None
             run['export_state']=job['state'] if job and export_permitted(job) else None
             runs.append(run)
