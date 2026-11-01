@@ -172,7 +172,15 @@ def install(app, cfg, backend, get_data, render):
         from sanequeue.security.permissions import ROLE_SECTIONS,ROLE_ACTIONS
         from qpanel.user_help import GUIDES
         from qpanel.product_catalog import module_catalog
+        report_extensions = ()
+        if role()=='admin' and 'users' in sections() and 'reports' in sections():
+            try:
+                report_extensions=tuple(sorted({str(value) for value in internal_extensions()
+                                                 if re.fullmatch(r'[0-9]{1,12}',str(value))})[:1000])
+            except (OSError,TypeError,ValueError):
+                report_extensions=()
         return render('operations.html', ops_config=dict(
+            report_extensions=report_extensions,
             module_catalog=module_catalog(), build_version=__import__('qpanel').__version__, test_controls_enabled=bool(app.config.get('SANEQUEUE_TEST_CONTROLS_STATUS', lambda:False)()), controls_status_url='/api/ami/control-status', controls_toggle_url='/api/ami/control-toggle', data_url=url_for('ops_data'), report_url=url_for('ops_reports'), pause_url=url_for('pause_member'), control_url=url_for('ops_control'), audit_url=url_for('ops_audit'),
             interval=max(2000, cfg.interval * 1000), csrf=csrf(), role=role(), demo_mode=str(option('demo_mode','false')).lower()=='true',
             wait_threshold=number(option('wait_threshold', 60)),

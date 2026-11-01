@@ -37,6 +37,12 @@
  <section id="live-view" class="view">
   <div class="section-label"><h2>{{ t('در یک نگاه','At a glance') }}</h2><span><span id="kpi-period-short">{{ t('شمارنده‌ها از آخرین بازنشانی صف','Counters since last queue reset') }}</span> · <span id="updated">—</span></span></div>
   <div id="metrics" class="metrics" aria-live="polite"></div>
+  <div class="insights-strip"><div class="source-caption"><span class="soft-dot"></span><b>{{ t('نمودارهای زنده','Live charts') }}</b><small>{{ t('از نمونه‌های مشاهده‌شده توسط همین مرورگر، بدون داده تاریخی ساختگی','Only browser-observed samples, no fabricated historical data') }}</small></div><button type="button" class="subtle-link" data-open="pbx">{{ t('سلامت مرکز تلفن','PBX health') }} ↗</button></div>
+  <section class="realtime-graphs" aria-label="{{ t('نمودارهای زنده','Live charts') }}">
+    <article class="panel trend-panel"><div class="panel-heading"><div><h2>{{ t('روند تماس‌های منتظر','Waiting trend') }}</h2><p>{{ t('از لحظه بازشدن صفحه','From page opening') }} · <span id="trend-points">—</span></p></div><span class="live-chip">LIVE</span></div><div id="trend-wait" class="trend-svg"></div><div class="chart-legend"><span><i class="dot busy"></i>{{ t('تعداد منتظر','Waiting') }}</span><span id="trend-time-label">—</span></div></article>
+    <article class="panel trend-panel"><div class="panel-heading"><div><h2>{{ t('ظرفیت کارشناسان','Agent capacity') }}</h2><p>{{ t('آماده / مشغول / استراحت / آفلاین','Ready / busy / paused / offline') }}</p></div></div><div class="capacity-chart"><div id="capacity-donut" class="donut"><span id="capacity-donut-label">—</span></div><div id="capacity-counts" class="capacity-stat-lines"></div></div></article>
+    <article class="panel trend-panel"><div class="panel-heading"><div><h2>{{ t('مقایسهٔ ظرفیت صف‌ها','Queue capacity comparison') }}</h2><p>{{ t('تعداد واقعی آماده و منتظر در هر صف','Live ready and waiting counts per queue') }}</p></div><span class="live-chip">LIVE</span></div><div id="trend-ready" class="trend-svg"></div><div class="chart-legend"><span><i class="dot ready"></i>{{ t('اعضای آماده','Ready') }}</span><span>{{ t('مقیاس مشترک برای همهٔ صف‌ها','Shared count scale for all queues') }}</span></div></article>
+  </section>
 
   <section class="panel ref-alerts"><div class="panel-heading"><div><h2>{{ t('هشدارهای عملیاتی','Operational alerts') }}</h2><p>{{ t('هشدارهای فعال صف و سلامت تلفن؛ برای رسیدگی وارد جزئیات شوید.','Active queue and telephony health alerts; open details to investigate.') }}</p></div><button type="button" data-open="alerts" class="subtle-link">{{ t('نمایش همه','View all') }} ↗</button></div><div id="alerts" class="ref-alert-items"></div><div class="legend"><span><i class="dot ready"></i>{{ t('آماده','Ready') }}</span><span><i class="dot busy"></i>{{ t('مشغول','Busy') }}</span><span><i class="dot paused"></i>{{ t('استراحت','Paused') }}</span><span><i class="dot offline"></i>{{ t('خارج از دسترس','Offline') }}</span></div></section>
   <div class="reference-three-panel" role="region" aria-label="{{ t('داشبورد صف و انتظار و کارشناسان','Queue, waiting and agent dashboard') }}">
@@ -55,12 +61,7 @@
 </div>
   <section class="panel sq-journey-panel"><div class="panel-heading"><div><h2>{{ t('تماس‌های انتقال‌یافته','Transferred calls') }}</h2><p>{{ t('تماس‌های مرتبط با صف، حتی پس از خروج از صف','Queue-related calls, even after transfer') }}</p></div><button class="subtle-link" type="button" data-open="calls">{{ t('تایم‌لاین کامل','Full journey') }} ↗</button></div><div id="dashboard-journey-cards" class="sq-journey-list compact" aria-live="polite"></div></section>
 
-  <div class="insights-strip"><div class="source-caption"><span class="soft-dot"></span><b>{{ t('نمودارهای زنده','Live charts') }}</b><small>{{ t('از نمونه‌های مشاهده‌شده توسط همین مرورگر، بدون داده تاریخی ساختگی','Only browser-observed samples, no fabricated historical data') }}</small></div><button type="button" class="subtle-link" data-open="pbx">{{ t('سلامت مرکز تلفن','PBX health') }} ↗</button></div>
-  <section class="realtime-graphs" aria-label="{{ t('نمودارهای زنده','Live charts') }}">
-    <article class="panel trend-panel"><div class="panel-heading"><div><h2>{{ t('روند تماس‌های منتظر','Waiting trend') }}</h2><p>{{ t('از لحظه بازشدن صفحه','From page opening') }} · <span id="trend-points">—</span></p></div><span class="live-chip">LIVE</span></div><div id="trend-wait" class="trend-svg"></div><div class="chart-legend"><span><i class="dot busy"></i>{{ t('تعداد منتظر','Waiting') }}</span><span id="trend-time-label">—</span></div></article>
-    <article class="panel trend-panel"><div class="panel-heading"><div><h2>{{ t('ظرفیت کارشناسان','Agent capacity') }}</h2><p>{{ t('آماده / مشغول / استراحت / آفلاین','Ready / busy / paused / offline') }}</p></div></div><div class="capacity-chart"><div id="capacity-donut" class="donut"><span id="capacity-donut-label">—</span></div><div id="capacity-counts" class="capacity-stat-lines"></div></div></article>
-    <article class="panel trend-panel"><div class="panel-heading"><div><h2>{{ t('مقایسهٔ ظرفیت صف‌ها','Queue capacity comparison') }}</h2><p>{{ t('تعداد واقعی آماده و منتظر در هر صف','Live ready and waiting counts per queue') }}</p></div><span class="live-chip">LIVE</span></div><div id="trend-ready" class="trend-svg"></div><div class="chart-legend"><span><i class="dot ready"></i>{{ t('اعضای آماده','Ready') }}</span><span>{{ t('مقیاس مشترک برای همهٔ صف‌ها','Shared count scale for all queues') }}</span></div></article>
-  </section>
+
  </section>
  <section id="queues-view" class="view" hidden>
   <div class="detail-hero detail-hero--queues" data-detail-view="queues">
@@ -448,7 +449,7 @@
 <script id="ops-config" type="application/json">{{ ops_config|tojson }}</script>
 <script src="{{ theme_static('js/context-help.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/module-catalog.js') }}?v=20261028-1" defer></script>
-<script src="{{ theme_static('js/operations.js') }}?v={{ current_version() }}&help=1" defer></script>
+<script src="{{ theme_static('js/operations.js') }}?v={{ current_version() }}&help=1-queue4" defer></script>
 <dialog id="activity-dialog" class="activity-dialog" aria-labelledby="activity-title"><div class="summary-dialog-head"><h2 id="activity-title">{{ t('کارکرد روزانهٔ عضویت صف','Daily queue membership activity') }}</h2><button id="activity-close" type="button" aria-label="{{ t('بستن','Close') }}">×</button></div><p class="report-note">{{ t('هر عضویت صف مستقل است؛ زمان صف‌های هم‌زمان با هم جمع نمی‌شود. فقط بازه‌هایی که شنودگر متصل بوده ثبت می‌شوند. نگهداری تا ۹۰ روز و حداکثر ۵۰۰هزار تغییر وضعیت.','Each queue membership is independent; concurrent queues are not combined as work hours. Only collector-observed intervals are recorded. Retention is up to 90 days and 500,000 transitions.') }}</p><div class="report-filters"><label>{{ t('تاریخ (شمسی)','Date (Gregorian)') }}<select id="activity-day"></select></label><label>{{ t('صف','Queue') }}<select id="activity-queue"><option value="">—</option></select></label><button id="activity-refresh" type="button">↻ {{ t('بازخوانی','Refresh') }}</button></div><p id="activity-feedback" class="report-note" role="status"></p><div id="activity-results" class="activity-results"></div></dialog>
 <script src="{{ theme_static('js/activity.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/planning.js') }}?v={{ current_version() }}" defer></script>
@@ -469,7 +470,7 @@
 <script src="{{ theme_static('js/work-reports.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/shift-reports.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/cdr-reports.js') }}?v=20261101-2" defer></script>
-<script src="{{ theme_static('js/outbound-dashboard.js') }}?v=9" defer></script>
+<script src="{{ theme_static('js/outbound-dashboard.js') }}?v=10" defer></script>
 <script src="{{ theme_static('js/cdr-builder.js') }}?v=20261101-4" defer></script>
 <script src="{{ theme_static('js/journey-reports.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/quality-reports.js') }}?v=20261026-1" defer></script>
@@ -485,4 +486,4 @@
 <script src="{{ theme_static('js/agent-summary-jobs.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/unique-callers.js') }}?v=5" defer></script>
 <script src="{{ theme_static('js/queue-outcomes.js') }}?v=11" defer></script>
-<script src="{{ theme_static('js/navigation.js') }}?v={{ current_version() }}-reports2" defer></script></body></html>
+<script src="{{ theme_static('js/navigation.js') }}?v={{ current_version() }}-filters4" defer></script></body></html>

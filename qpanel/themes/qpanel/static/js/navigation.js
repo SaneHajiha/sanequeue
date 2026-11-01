@@ -17,6 +17,15 @@
   const kpis=document.getElementById('history-kpis');
   if(kpis)kpis.hidden=target!=='history-summary-section';
   if(reportPicker)reportPicker.value=target;
+  const globalPbx=new Set(['history-cdr-section','history-outbound-dashboard-section']);
+  const queueControl=document.getElementById('history-filter-queue');
+  const pauseControl=document.getElementById('history-filter-pause');
+  const outcomeControl=document.getElementById('history-filter-outcome');
+  const extensionCard=document.getElementById('extension-report-card');
+  if(queueControl)queueControl.hidden=globalPbx.has(target);
+  if(pauseControl)pauseControl.hidden=!['history-outbound-section','history-work-section'].includes(target);
+  if(outcomeControl)outcomeControl.hidden=!['history-calls-section','history-export-jobs-section'].includes(target);
+  if(extensionCard)extensionCard.hidden=!['history-summary-section','history-cdr-section'].includes(target);
  }
  // One report at a time, using only the server-authorized navigation items.
  // Native links and the full report remain available when JavaScript is off.

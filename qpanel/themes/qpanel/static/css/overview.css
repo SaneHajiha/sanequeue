@@ -54,3 +54,19 @@ body:not(.dark) .metrics>.metric p,body:not(.dark) .metrics>.metric b,body:not(.
 body:not(.dark) .metrics>.metric small{border-top-color:#95aacc55;opacity:1}
 body:not(.dark) .metrics>.metric .icon{background:#ffffffad!important;border-color:#cddaf0!important;color:#315cab!important}
 body:not(.dark) .metrics>.metric:hover{transform:none}
+
+/* Chart-first overview with restrained light surfaces and clear labels. */
+#live-view .realtime-graphs{grid-template-columns:minmax(0,1.4fr) minmax(0,.85fr) minmax(0,1fr);gap:12px}
+#live-view .trend-svg{height:185px!important;min-height:185px!important}
+#live-view .trend-svg svg{height:175px!important;min-height:175px!important;max-height:175px!important}
+body:not(.dark) #live-view .insights-strip{background:linear-gradient(100deg,#f7faff,#eef4ff);border-color:#d6e4f5;color:#24446a}
+body:not(.dark) #live-view .source-caption small{color:#516d8c}
+body:not(.dark) #live-view .soft-dot{box-shadow:0 0 0 5px #d5f3e9}
+body:not(.dark) #live-view .capacity-chart .donut:before{background:#fff}
+body:not(.dark) #live-view .capacity-chart .donut span{color:#18395e}
+body:not(.dark) #live-view .capacity-stat-lines>div,body:not(.dark) #live-view .capacity-stat-lines b{color:#29496c}
+body:not(.dark) #live-view .compact-table th{background:#edf4ff!important;color:#294967!important}
+@media(max-width:930px){#live-view .realtime-graphs{grid-template-columns:1fr}#live-view .trend-svg{height:165px!important;min-height:165px!important}#live-view .trend-svg svg{height:155px!important;min-height:155px!important;max-height:155px!important}}
+.queue-focus-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.queue-focus-actions button{min-height:40px;padding:8px 12px;font-size:12px;background:var(--soft);color:var(--ink);border:1px solid var(--line);white-space:nowrap}
+.queue-focus-more{font-size:11px;line-height:1.8;color:var(--muted);margin:0}
