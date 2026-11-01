@@ -157,6 +157,10 @@ PDF گزارش‌ساز صف برای ریز، گروه‌بندی و زمان�
 خروجی پس‌زمینهٔ CDR اکنون تعریف و فیلتر را در صف ذخیره می‌کند و یک تصویر واحد از داده را هنگام شروع کارگر می‌خواند؛ فایل ممکن است با پیش‌نمایش زودتر تفاوت داشته باشد. اطلاعات فیلتر در مرکز خروجی و فایل Excel/PDF نمایش داده می‌شوند. مجوز مدیر، سطح نمایش شماره و مجموعهٔ صف‌ها تا زمان انتشار و دریافت بازبینی می‌شود. آزمون محلی نهایی: ۸۸ آزمون و ۳۴ زیرآزمون شامل لغو دسترسی پس از خواندن؛ سه آزمون مرورگر موفق. زمان‌بندی CDR هنوز اضافه نشده است.
 
 نسخهٔ `b6796ba9ef26fc6303825f9963fb548618e31498` روی سرور آزمایشی نصب شد؛ ۱۹۲ آزمون لینوکسی موفق و PID استریسک بدون تغییر بود. در مرورگر واقعی برای گزارش CDR گروه‌بندی‌شده، Excel و PDF پس‌زمینه ساخته و دانلود شدند؛ هر کدام دو ردیف داشتند و خطای JavaScript ثبت نشد. هر دو CI همین commit موفق شدند. این آزمون معادل بار واقعی همزمان یا ترانک خارجی نیست.
+# Last observed queue answer — test server
+
+Revision 61d11c5 adds the latest observed queue answer per agent and queue for visits entering the selected range. Targeted tests covered overlapping agent membership and different ranges; 38 passed and 2 subtests passed locally. The test server passed 236 Linux tests, Asterisk retained the same PID, and the authenticated browser displayed the column and four rows without page errors. This is not the last call across non-queue calls or evidence of complete historical coverage.
+
 # CDR scheduled custom reports — local validation
 
 The CDR plan freezes its definition and non-date filters, rechecks global scope and current permissions, and uses the background worker-start snapshot. Local targeted reporting suite: 128 passed and 36 subtests passed; plan frontend checks and 3 browser workbench tests passed. On the test server, revision 98d93d2 passed 217 Linux tests; Asterisk remained running with the same PID. The actual panel saved a disabled CDR plan, manually dispatched a grouped PDF with two rows, downloaded it, and archived the plan, without browser errors. Automatic firing at the scheduled wall-clock time was not tested in the live server. These results do not prove cross-version telephony compatibility or production load safety.
