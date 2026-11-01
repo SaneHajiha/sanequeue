@@ -191,3 +191,5 @@ Revision 61d11c5 adds the latest observed queue answer per agent and queue for v
 
 The CDR plan freezes its definition and non-date filters, rechecks global scope and current permissions, and uses the background worker-start snapshot. Local targeted reporting suite: 128 passed and 36 subtests passed; plan frontend checks and 3 browser workbench tests passed. On the test server, revision 98d93d2 passed 217 Linux tests; Asterisk remained running with the same PID. The actual panel saved a disabled CDR plan, manually dispatched a grouped PDF with two rows, downloaded it, and archived the plan, without browser errors. Automatic firing at the scheduled wall-clock time was not tested in the live server. These results do not prove cross-version telephony compatibility or production load safety.
 
+
+Outbound dashboard filters: 28 targeted backend tests and 4 subtests passed; 6 browser workbench tests passed. They use controlled fixtures and mocked downloads; they do not prove the real browser PDF download or live trunk behavior.

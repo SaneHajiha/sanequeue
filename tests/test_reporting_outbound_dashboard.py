@@ -120,6 +120,29 @@ class OutboundDashboardTests(unittest.TestCase):
             response=client.post('/api/history/cdr/outbound-dashboard/export.pdf'+self.query+'&table=origins',headers={'X-CSRF-Token':'token'})
         self.assertEqual(response.status_code,403);self.assertFalse(response.data.startswith(b'%PDF-'))
 
+    def test_filters_apply_consistently_and_are_recorded_in_export(self):
+        client=self.c.client(role='admin',menus=('reports','users'),details=True)
+        with client.session_transaction() as state:state['csrf_token']='token'
+        query=self.query+'&origin=100&disposition=ANSWERED'
+        summary=client.get('/api/history/cdr/outbound-dashboard'+query)
+        self.assertEqual(summary.status_code,200);self.assertEqual(summary.json['totals']['segments'],1)
+        result=client.post('/api/history/cdr/outbound-dashboard/export'+query+'&format=csv&table=days&lang=en',headers={'X-CSRF-Token':'token'})
+        self.assertEqual(result.status_code,200)
+        rows=list(csv.DictReader(io.StringIO(result.data.decode('utf-8-sig'))))
+        self.assertEqual(sum(int(row['segments']) for row in rows),1)
+        self.assertIn('"origin":"100"',rows[0]['filters']);self.assertIn('"disposition":"ANSWERED"',rows[0]['filters'])
+        masked=self.c.client(role='admin',menus=('reports','users'),details=False)
+        self.assertEqual(masked.get('/api/history/cdr/outbound-dashboard'+query).status_code,403)
+
+    def test_empty_filtered_export_retains_filter_and_is_not_a_zero_count(self):
+        from sanequeue.reporting.outbound_dashboard import csv_bytes,document_bytes
+        data=report(self.c.archive,self.start,self.end,{'origin':'999'},numbers=True)
+        rows=list(csv.DictReader(io.StringIO(csv_bytes(data,'origins','en').decode('utf-8-sig'))))
+        self.assertEqual(rows[0]['origin'],'No records');self.assertEqual(rows[0]['segments'],'')
+        self.assertIn('"origin":"999"',rows[0]['filters'])
+        self.assertTrue(document_bytes(data,'origins','en','xlsx').startswith(b'PK'))
+        self.assertTrue(document_bytes(data,'origins','en','pdf').startswith(b'%PDF-'))
+
 
 
 if __name__=='__main__':unittest.main()

@@ -2,6 +2,7 @@
 from datetime import datetime
 import csv
 import io
+import json
 from . import cdr_queries
 from .exports import persian_date
 from .store import QueryDeadline
@@ -71,7 +72,7 @@ def report(archive,start,end,filters=None,*,numbers=False):
         item['average_pre_answer']=item['setup_sum']/item['known_setup'] if item['known_setup'] else None
         return item
     return dict(state='available',start=float(start),end=float(end),unit='outbound_cdr_segment',scope='global_pbx',
-        timezone='Asia/Tehran',filters=clean if numbers else {},totals=finish(totals),
+        timezone='Asia/Tehran',filters=(clean if numbers else {key:value for key,value in clean.items() if key in ('match','direction','disposition','trunk','hour_from','hour_to','weekdays','duration_min','duration_max','billsec_min','billsec_max')}),totals=finish(totals),
         origins=[dict(origin=origin,**finish(group)) for origin,group in sorted(groups.items(),key=lambda pair:pair[0] or '')],
         days=[dict(day=day,**finish(group)) for day,group in sorted(days.items())],dispositions=dispositions,
         unique_destinations=len(destinations) if numbers else None,unknown_destination=unknown_destination if numbers else None,
@@ -99,13 +100,15 @@ def csv_bytes(data,table,language):
             'نمونه پیش از پاسخ','میانگین پیش از پاسخ ثانیه')
     header=['شروع تهران','پایان انحصاری تهران'] if fa else ['period_start_tehran','period_end_exclusive_tehran']
     output=io.StringIO(newline='');writer=csv.writer(output)
+    filter_label='فیلترها' if fa else 'filters'
+    filter_value=json.dumps(data.get('filters',{}),ensure_ascii=False,sort_keys=True,separators=(',',':'))
     if table=='dispositions':
-        writer.writerow(header+(['وضعیت فنی','تعداد بخش'] if fa else ['technical_status','segments']))
-        for status,count in data['dispositions'].items():writer.writerow([start,end,status,count])
+        writer.writerow(header+(['وضعیت فنی','تعداد بخش'] if fa else ['technical_status','segments'])+[filter_label])
+        for status,count in data['dispositions'].items():writer.writerow([start,end,status,count,filter_value])
     else:
         group=('داخلی ثبت‌شده' if table=='origins' else 'روز تهران') if fa else ('origin' if table=='origins' else 'day_tehran')
         tail=(['آخرین شروع تهران','سهم از بخش‌های خروجی درصد'] if fa else ['last_start_tehran','share_of_segments_percent']) if table=='origins' else []
-        writer.writerow(header+[group]+(list(labels) if fa else list(fields))+tail)
+        writer.writerow(header+[group]+(list(labels) if fa else list(fields))+tail+[filter_label])
         for row in data[table]:
             group_value=row['origin'] if table=='origins' else row['day']
             if group_value is None:group_value=''
@@ -113,7 +116,10 @@ def csv_bytes(data,table,language):
             elif fa:group_value=persian_date(datetime.fromisoformat(group_value).date())
             cells=[start,end,group_value]+['' if row[key] is None else row[key] for key in fields]
             if table=='origins':cells.extend([date(row['last_started']),100*row['segments']/data['totals']['segments'] if data['totals']['segments'] else ''])
+            cells.append(filter_value)
             writer.writerow(cells)
+        if not data[table]:
+            writer.writerow([start,end,'بدون داده' if fa else 'No records']+['']*(len(fields)+len(tail))+[filter_value])
     content=output.getvalue().encode('utf-8-sig')
     if len(content)>4*1024*1024:raise QueryDeadline('outbound_export_byte_limit')
     return content
@@ -136,6 +142,7 @@ def document_bytes(data,table,language,format):
         numeric=range(3,len(row)) if table!='dispositions' else (3,)
         for index in numeric:
             if table=='origins' and index==15:continue
+            if index==len(row)-1:continue
             if not row[index]:continue
             try:row[index]=float(row[index])
             except ValueError:raise ValueError('invalid_outbound_export_value') from None
@@ -144,7 +151,7 @@ def document_bytes(data,table,language,format):
         def label_date(stamp):
             local=datetime.fromtimestamp(stamp,cdr_queries._ZONE)
             return (persian_date(local.date()) if language=='fa' else local.date().isoformat())+local.strftime(' %H:%M:%S')
-        period=label_date(data['start'])+' → '+label_date(data['end'])+' | '+('پایان شامل نیست؛ پاسخ فنی' if language=='fa' else 'end exclusive; technical answers')
+        period=label_date(data['start'])+' → '+label_date(data['end'])+' | '+('پایان شامل نیست؛ پاسخ فنی' if language=='fa' else 'end exclusive; technical answers')+' | '+json.dumps(data.get('filters',{}),ensure_ascii=False,sort_keys=True,separators=(',',':'))
         writer=builder_exports.Workbook(target,language,headers=headers,max_bytes=4*1024*1024,max_columns=20,
             title='گزارش تماس خروجی' if language=='fa' else 'Outbound CDR report',
             period=period)
@@ -158,7 +165,8 @@ def document_bytes(data,table,language,format):
                 self._footer();self.pdf.save();self.closed=True;self.visual.cache_clear()
         writer=OutboundDocument(target,language,headers=headers,max_columns=20,grouped=True,global_cdr=True,
             start=data['start'],end=data['end'],queues=[],max_rows=100,max_pages=20,max_bytes=4*1024*1024,
-            filter_items=['پاسخ فنی اثبات تماس با انسان نیست' if language=='fa' else 'Technical answer does not prove human contact'])
+            filter_items=['پاسخ فنی اثبات تماس با انسان نیست' if language=='fa' else 'Technical answer does not prove human contact',
+                ('فیلترها: ' if language=='fa' else 'Filters: ')+json.dumps(data.get('filters',{}),ensure_ascii=False,sort_keys=True,separators=(',',':'))])
         body=[[f'{value:.2f}'.rstrip('0').rstrip('.') if isinstance(value,float) else value for value in row] for row in body]
     try:
         for index in range(0,len(body),200):writer.append(body[index:index+200])
