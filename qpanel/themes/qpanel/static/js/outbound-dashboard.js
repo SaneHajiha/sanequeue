@@ -3,6 +3,7 @@
  const $=id=>document.getElementById(id),section=$('history-outbound-dashboard-section'),filters=$('history-filters');if(!section||!filters)return;
  const fa=document.documentElement.lang==='fa',t=(a,b)=>fa?a:b,locale=fa?'fa-IR':'en-GB';
  const n=v=>v==null?'—':Number(v).toLocaleString(locale,{maximumFractionDigits:1});
+ const stamp=v=>v==null?'—':new Intl.DateTimeFormat(locale,{timeZone:'Asia/Tehran',dateStyle:'short',timeStyle:'medium'}).format(new Date(v*1000));
  const node=(tag,value)=>{const el=document.createElement(tag);if(value!=null)el.textContent=String(value);return el;};
  const button=$('outbound-dashboard-run'),feedback=$('outbound-dashboard-feedback'),summary=$('outbound-dashboard-summary'),origins=$('outbound-dashboard-origins'),days=$('outbound-dashboard-days'),statuses=$('outbound-dashboard-dispositions'),chart=$('outbound-dashboard-chart');
  let serial=0,controller=null;
@@ -16,7 +17,7 @@
  const values=row=>[n(row.segments),n(row.answered),n(row.unanswered),n(row.unknown),row.technical_answer_rate==null?'—':n(row.technical_answer_rate)+'%',n(row.average_answered_billsec),n(row.answered_known_billsec),n(row.average_pre_answer),n(row.known_setup)];
  const statusLabels={ANSWERED:t('پاسخ فنی','Technical answer'),BUSY:t('اشغال','Busy'),'NO ANSWER':t('بی‌پاسخ','No answer'),FAILED:t('ناموفق','Failed'),CONGESTION:t('ازدحام','Congestion'),CANCEL:t('لغوشده','Cancelled'),CHANUNAVAIL:t('کانال ناموجود','Channel unavailable'),OTHER:t('سایر یا نامعلوم','Other or unknown')};
  table(statuses,t('نتیجهٔ فنی بخش‌های خروجی','Outbound technical status'),[t('وضعیت ثبت‌شده','Recorded status'),t('تعداد بخش','Segments')],Object.entries(statusLabels).map(([key,label])=>[label,n(data.dispositions?.[key])]));
- table(origins,t('تفکیک داخلی آغازکننده','By originating extension'),[t('داخلی ثبت‌شده','Observed extension'),...heads],data.origins.map(row=>[row.origin||t('نامعلوم','Unknown'),...values(row)]));
+ table(origins,t('تفکیک داخلی آغازکننده','By originating extension'),[t('داخلی ثبت‌شده','Observed extension'),t('سهم از بخش‌های خروجی','Share of outbound segments'),t('آخرین شروع ثبت‌شده؛ تهران','Latest observed start; Tehran'),...heads],data.origins.map(row=>[row.origin||t('نامعلوم','Unknown'),x.segments?n(100*row.segments/x.segments)+'%':'—',stamp(row.last_started),...values(row)]));
  table(days,t('تفکیک روز؛ تهران','By day; Tehran'),[t('روز','Day'),...heads],data.days.map(row=>[window.SaneQueueReportPeriods?.display(row.day)||row.day,...values(row)]));
  window.SaneQueueReportCharts?.render(chart,{title:t('روند بخش‌های خروجی','Outbound segment trend'),subtitle:window.SaneQueueReportPeriods?.caption(p)||p.toString(),unit:t('بخش CDR','CDR segments'),labels:data.days.map(row=>window.SaneQueueReportPeriods?.display(row.day)||row.day),series:[{label:t('پاسخ فنی','Technical answers'),values:data.days.map(row=>row.answered)},{label:t('بدون پاسخ فنی','Technically unanswered'),values:data.days.map(row=>row.unanswered)}]});
  feedback.textContent=t('پاسخ فنی اثبات صحبت مشتری نیست. زمان پیش از پاسخ الزاماً زنگ نیست؛ پوشش ثبت‌نشده نامعلوم است.','Technical answer does not prove human contact. Pre-answer time is not necessarily ringing; missing coverage remains unknown.');
