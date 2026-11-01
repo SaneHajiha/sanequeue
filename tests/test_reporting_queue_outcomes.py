@@ -52,6 +52,26 @@ class QueueOutcomeTests(unittest.TestCase):
         self.assertEqual(report(self.case.archive,Scope(('8002',)),self.case.stamp,self.case.stamp+100)['totals']['abandoned'],1)
         self.assertEqual(report(self.case.archive,Scope(()),self.case.stamp,self.case.stamp+100)['totals']['visits'],0)
 
+    def test_wait_distribution_uses_half_open_boundaries_unknown_and_scope(self):
+        archive=self.case.archive
+        with archive.writer() as db:
+            for index,value in enumerate((0,10,20,30,60,None,120,300,4,9)):
+                db.execute('UPDATE report_visits SET wait_seconds=? WHERE id=?',(value,format(index+1,'064x')))
+        result=report(archive,Scope(('8001',)),self.case.stamp,self.case.stamp+100)
+        answered=result['wait_distribution']['answered'];unanswered=result['wait_distribution']['unanswered']
+        self.assertEqual([b['count'] for b in answered['buckets']],[1,1,0,0,0,0,0])
+        self.assertEqual([b['count'] for b in unanswered['buckets']],[0,0,1,1,1,0,0])
+        self.assertEqual((answered['known'],answered['unknown'],unanswered['known'],unanswered['unknown']),(2,0,3,1))
+        self.assertEqual(answered['buckets'][-1],dict(start_seconds=300,end_seconds=None,count=0))
+        self.assertEqual(result['missing_entry_visits'],1)
+        self.assertNotIn('09123456789',str(result['wait_distribution']))
+        with archive.writer() as db:
+            db.execute('UPDATE report_visits SET wait_seconds=300 WHERE id=?',(format(1,'064x'),))
+            db.execute('UPDATE report_visits SET wait_seconds=120 WHERE id=?',(format(3,'064x'),))
+        result=report(archive,Scope(('8001',)),self.case.stamp,self.case.stamp+100)
+        self.assertEqual(result['wait_distribution']['answered']['buckets'][-1]['count'],1)
+        self.assertEqual(result['wait_distribution']['unanswered']['buckets'][-2]['count'],1)
+
     def test_api_enforces_queue_scope(self):
         client=self.case.client(role='supervisor',menus=('reports',))
         response=client.get('/api/history/queue-outcomes'+self.case.dates)

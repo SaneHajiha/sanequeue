@@ -6,6 +6,7 @@ from .queries import _where
 
 MAX_VISITS=50000
 UNANSWERED=('abandoned','exitwithtimeout','exitwithkey','exitempty')
+WAIT_BOUNDARIES=(0,10,20,30,60,120,300)
 
 
 def class_clause(kind):
@@ -68,8 +69,17 @@ def report(archive,scope,start,end):
         projection=db.execute('SELECT after_id,updated FROM report_projection WHERE pbx=?',(archive.pbx,)).fetchone()
     if len(rows)>MAX_VISITS:return dict(state='limited',reason='queue_outcome_visit_limit',maximum_visits=MAX_VISITS)
     totals=_empty();queues={};hours={};days={};missing=0
+    wait_distribution={kind:dict(counts=[0]*len(WAIT_BOUNDARIES),unknown=0) for kind in ('answered','unanswered')}
     for row in rows:
         if row['coverage']=='missing_entry':missing+=1;continue
+        category=_classify(row)
+        if category in wait_distribution:
+            value=row['wait_seconds'];distribution=wait_distribution[category]
+            if type(value) not in (int,float) or not math.isfinite(value) or not 0<=value<=315360000:
+                distribution['unknown']+=1
+            else:
+                index=next((i for i in range(len(WAIT_BOUNDARIES)-1) if value<WAIT_BOUNDARIES[i+1]),len(WAIT_BOUNDARIES)-1)
+                distribution['counts'][index]+=1
         local=datetime.fromtimestamp(row['entered'],ZONE);day=local.date().isoformat();hour=local.hour
         for item in (totals,queues.setdefault(row['queue'],_empty()),hours.setdefault(hour,_empty()),days.setdefault(day,_empty())):
             _add(item,row)
@@ -78,9 +88,13 @@ def report(archive,scope,start,end):
         queues=[dict(queue=k,**_finish(v)) for k,v in sorted(queues.items())],
         hours=[dict(hour=k,**_finish(v)) for k,v in sorted(hours.items())],
         days=[dict(day=k,**_finish(v)) for k,v in sorted(days.items())],
+        wait_distribution={kind:dict(known=sum(item['counts']),unknown=item['unknown'],
+            buckets=[dict(start_seconds=lower,end_seconds=WAIT_BOUNDARIES[i+1] if i+1<len(WAIT_BOUNDARIES) else None,count=item['counts'][i])
+                     for i,lower in enumerate(WAIT_BOUNDARIES)]) for kind,item in wait_distribution.items()},
         projection=dict(projection) if projection else None,
         contract=dict(range_basis='queue_entry',answered='connected_or_completed_evidence',
                       unanswered=list(UNANSWERED),unresolved_includes_open_or_conflicting=True,
                       missing_entry_excluded=True,not_unique_conversations=True,
                       rate_denominator='answered_plus_unanswered_known_outcomes',
-                      exit_empty_is_not_proof_no_staff=True,maximum_visits=MAX_VISITS))
+                      exit_empty_is_not_proof_no_staff=True,maximum_visits=MAX_VISITS,
+                      wait_distribution='half_open_seconds_by_known_outcome_and_recorded_wait'))

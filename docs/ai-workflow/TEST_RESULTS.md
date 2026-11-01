@@ -159,6 +159,8 @@ PDF گزارش‌ساز صف برای ریز، گروه‌بندی و زمان�
 نسخهٔ `b6796ba9ef26fc6303825f9963fb548618e31498` روی سرور آزمایشی نصب شد؛ ۱۹۲ آزمون لینوکسی موفق و PID استریسک بدون تغییر بود. در مرورگر واقعی برای گزارش CDR گروه‌بندی‌شده، Excel و PDF پس‌زمینه ساخته و دانلود شدند؛ هر کدام دو ردیف داشتند و خطای JavaScript ثبت نشد. هر دو CI همین commit موفق شدند. این آزمون معادل بار واقعی همزمان یا ترانک خارجی نیست.
 # Last observed queue answer — test server
 
+Queue wait distributions: local queue outcomes/analytics/query suite 32 passed and 15 subtests, plus a boundary rerun with 9 passed and 6 subtests. Seven browser workbench tests covered Persian and English, answered and unanswered views, unknown waits, redraw and clearing on filter change. All use local synthetic data; this entry does not assert telephony or production-load acceptance.
+
 Revision 61d11c5 adds the latest observed queue answer per agent and queue for visits entering the selected range. Targeted tests covered overlapping agent membership and different ranges; 38 passed and 2 subtests passed locally. The test server passed 236 Linux tests, Asterisk retained the same PID, and the authenticated browser displayed the column and four rows without page errors. This is not the last call across non-queue calls or evidence of complete historical coverage.
 
 # CDR scheduled custom reports — local validation
