@@ -151,6 +151,11 @@ class FollowupTests(unittest.TestCase):
         retry=client.post(path,json=body,headers=headers);self.assertEqual(retry.json['evidence']['id'],result.json['evidence']['id'])
         self.assertEqual(client.post(path,json={**body,'source_key':'bogus'},headers=headers).status_code,404)
         self.assertEqual(len(client.get(path).json['rows']),1)
+        c.archive.append([Event('cdr','outbound-proof',c.stamp+40,'CDR',dict(src='100',dst='09123456789',
+            channel='PJSIP/100-aa',dstchannel='PJSIP/provider-bb',disposition='ANSWERED',duration=12,billsec=5))])
+        while project_batch(c.archive,inventory=inventory)['processed']:pass
+        self.assertEqual(client.get(path).json['rows'][0]['cdr']['billsec'],8)
+        self.assertEqual(client.post(path,json=body,headers=headers).status_code,409)
         self.assertEqual(c.client(role='supervisor',menus=('reports','users'),details=True).get(base+'/cdr-candidates'+query).status_code,403)
         self.assertEqual(c.client(role='admin',menus=('reports','users'),details=False).get(base+'/cdr-candidates'+query).status_code,403)
 
@@ -181,3 +186,4 @@ class FollowupTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
