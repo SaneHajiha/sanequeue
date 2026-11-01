@@ -1,6 +1,9 @@
 """Bounded outbound CDR analysis; technical answers are not human outcomes."""
 from datetime import datetime
+import csv
+import io
 from . import cdr_queries
+from .exports import persian_date
 from .store import QueryDeadline
 
 MAX_SEGMENTS=50000
@@ -76,3 +79,41 @@ def report(archive,start,end,filters=None,*,numbers=False):
         definitions=dict(technical_answer='cdr_answered_not_proof_of_human_contact',
             pre_answer='duration_minus_billsec_for_valid_answered_segments_not_necessarily_ringing',
             count='cdr_segments_not_unique_calls',short='answered_with_known_billsec_below_threshold'))
+
+
+def csv_bytes(data,table,language):
+    """Export one current, permission-filtered aggregate; no raw CDR rows."""
+    if table not in ('origins','days','dispositions') or language not in ('fa','en'):
+        raise ValueError('invalid_outbound_export')
+    fa=language=='fa'
+    def date(value):
+        if value is None:return ''
+        local=datetime.fromtimestamp(value,cdr_queries._ZONE)
+        return (persian_date(local.date()) if fa else local.date().isoformat())+local.strftime(' %H:%M:%S')
+    start,end=date(data['start']),date(data['end'])
+    fields=('segments','answered','unanswered','unknown','known_dispositions','technical_answer_rate',
+            'answered_known_billsec','average_answered_billsec','short_answered','short_answered_rate',
+            'known_setup','average_pre_answer')
+    labels=('بخش خروجی','پاسخ فنی','بدون پاسخ فنی','نتیجه نامعلوم','مخرج نرخ پاسخ','نرخ پاسخ فنی درصد',
+            'نمونه مکالمه معلوم','میانگین مکالمه ثانیه','پاسخ کوتاه زیر ۱۰ ثانیه','نرخ پاسخ کوتاه درصد',
+            'نمونه پیش از پاسخ','میانگین پیش از پاسخ ثانیه')
+    header=['شروع تهران','پایان انحصاری تهران'] if fa else ['period_start_tehran','period_end_exclusive_tehran']
+    output=io.StringIO(newline='');writer=csv.writer(output)
+    if table=='dispositions':
+        writer.writerow(header+(['وضعیت فنی','تعداد بخش'] if fa else ['technical_status','segments']))
+        for status,count in data['dispositions'].items():writer.writerow([start,end,status,count])
+    else:
+        group=('داخلی ثبت‌شده' if table=='origins' else 'روز تهران') if fa else ('origin' if table=='origins' else 'day_tehran')
+        tail=(['آخرین شروع تهران','سهم از بخش‌های خروجی درصد'] if fa else ['last_start_tehran','share_of_segments_percent']) if table=='origins' else []
+        writer.writerow(header+[group]+(list(labels) if fa else list(fields))+tail)
+        for row in data[table]:
+            group_value=row['origin'] if table=='origins' else row['day']
+            if group_value is None:group_value=''
+            elif table=='origins':group_value="'"+group_value
+            elif fa:group_value=persian_date(datetime.fromisoformat(group_value).date())
+            cells=[start,end,group_value]+['' if row[key] is None else row[key] for key in fields]
+            if table=='origins':cells.extend([date(row['last_started']),100*row['segments']/data['totals']['segments'] if data['totals']['segments'] else ''])
+            writer.writerow(cells)
+    content=output.getvalue().encode('utf-8-sig')
+    if len(content)>4*1024*1024:raise QueryDeadline('outbound_export_byte_limit')
+    return content

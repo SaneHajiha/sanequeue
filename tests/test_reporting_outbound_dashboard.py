@@ -1,4 +1,6 @@
 import unittest
+import csv
+import io
 from unittest.mock import patch
 from tests.test_reporting_cdr_api import CDRAPITests
 from sanequeue.reporting.outbound_dashboard import report
@@ -50,6 +52,41 @@ class OutboundDashboardTests(unittest.TestCase):
             result=original(*args,**kwargs);denied.append('caller_details');return result
         with patch('sanequeue.api.reports.outbound_dashboard.report',side_effect=revoke):
             response=client.get('/api/history/cdr/outbound-dashboard'+self.query)
+        self.assertEqual(response.status_code,403);self.assertNotIn('09123456789',response.text)
+
+    def test_export_tables_match_aggregate_and_enforce_csrf_permissions(self):
+        client=self.c.client(role='admin',menus=('reports','users'),details=True)
+        with client.session_transaction() as state:state['csrf_token']='token'
+        url='/api/history/cdr/outbound-dashboard/export.csv'+self.query
+        self.assertEqual(client.post(url+'&table=origins&lang=en').status_code,403)
+        headers={'X-CSRF-Token':'token'}
+        baseline=client.get('/api/history/cdr/outbound-dashboard'+self.query).json
+        for table in ('origins','days','dispositions'):
+            response=client.post(url+'&table='+table+'&lang=en',headers=headers)
+            self.assertEqual(response.status_code,200,response.json)
+            self.assertEqual(response.headers['X-SaneQueue-Unit'],'outbound_cdr_segment')
+            rows=list(csv.DictReader(io.StringIO(response.data.decode('utf-8-sig'))))
+            self.assertEqual(sum(int(row['segments']) for row in rows),baseline['totals']['segments'])
+            self.assertNotIn('09123456789',response.get_data(as_text=True))
+            if table=='origins':self.assertTrue(all(not row['origin'] or row['origin'].startswith("'") for row in rows))
+        self.assertEqual(client.post(url+'&table=bogus',headers=headers).status_code,400)
+        masked=self.c.client(role='admin',menus=('reports','users'),details=False)
+        with masked.session_transaction() as state:state['csrf_token']='token'
+        masked_file=masked.post(url+'&table=origins&lang=fa',headers=headers)
+        self.assertEqual(masked_file.status_code,200);self.assertNotIn("'100",masked_file.get_data(as_text=True))
+        self.assertIn('شروع تهران',masked_file.get_data(as_text=True))
+        denied=self.c.client(role='admin',menus=('reports','users'),details=True,denied=['report_export'])
+        with denied.session_transaction() as state:state['csrf_token']='token'
+        self.assertEqual(denied.post(url+'&table=origins',headers=headers).status_code,403)
+
+    def test_export_rechecks_access_after_generation(self):
+        denied=[];client=self.c.client(role='admin',menus=('reports','users'),details=True,denied=denied)
+        with client.session_transaction() as state:state['csrf_token']='token'
+        from sanequeue.reporting.outbound_dashboard import csv_bytes
+        def revoke(*args,**kwargs):
+            result=csv_bytes(*args,**kwargs);denied.append('report_export');return result
+        with patch('sanequeue.api.reports.outbound_dashboard.csv_bytes',side_effect=revoke):
+            response=client.post('/api/history/cdr/outbound-dashboard/export.csv'+self.query+'&table=origins',headers={'X-CSRF-Token':'token'})
         self.assertEqual(response.status_code,403);self.assertNotIn('09123456789',response.text)
 
 

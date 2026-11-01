@@ -749,6 +749,31 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                     row['origin']=display_number(row['origin'],mode='masked',secret=secret,tenant='default',pbx=pbx,version='1')
         return jsonify(data)
 
+    @app.post('/api/history/cdr/outbound-dashboard/export.csv')
+    @login_required
+    @safe
+    def history_outbound_dashboard_export():
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context();export_csrf()
+        queues=queries.queues(archive)
+        if not queues or not all(can_queue(queue,'report_export') for queue in queues):abort(403)
+        table=request.args.get('table','');language=request.args.get('lang','fa')
+        if table not in ('origins','days','dispositions') or language not in ('fa','en'):raise ValueError('invalid_outbound_export')
+        if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
+        try:
+            data=outbound_dashboard.report(archive,start,end,filters,numbers=numbers)
+            if not numbers:
+                secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+                for row in data['origins']:
+                    if row['origin'] is not None:
+                        row['origin']=display_number(row['origin'],mode='masked',secret=secret,tenant='default',pbx=pbx,version='1')
+            content=outbound_dashboard.csv_bytes(data,table,language)
+        finally:aggregate_gate.release()
+        if (owner!=str(current_user.get_id()) or cdr_context()!=(start,end,filters,numbers) or
+            queries.queues(archive)!=queues or not all(can_queue(queue,'report_export') for queue in queues)):abort(403)
+        return Response(content,mimetype='text/csv; charset=utf-8',headers={
+            'Content-Disposition':f'attachment; filename="sanequeue-outbound-{table}.csv"',
+            'X-SaneQueue-Unit':'outbound_cdr_segment','Cache-Control':'private, no-store'})
+
     @app.post('/api/history/cdr/builder/preview')
     @app.post('/api/history/cdr/builder/export.csv')
     @login_required

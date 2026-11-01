@@ -159,6 +159,8 @@ PDF گزارش‌ساز صف برای ریز، گروه‌بندی و زمان�
 نسخهٔ `b6796ba9ef26fc6303825f9963fb548618e31498` روی سرور آزمایشی نصب شد؛ ۱۹۲ آزمون لینوکسی موفق و PID استریسک بدون تغییر بود. در مرورگر واقعی برای گزارش CDR گروه‌بندی‌شده، Excel و PDF پس‌زمینه ساخته و دانلود شدند؛ هر کدام دو ردیف داشتند و خطای JavaScript ثبت نشد. هر دو CI همین commit موفق شدند. این آزمون معادل بار واقعی همزمان یا ترانک خارجی نیست.
 # Last observed queue answer — test server
 
+Outbound aggregate CSV export local validation: 33 tests and 11 subtests passed, including totals reconciliation for all three tables, CSRF, masking, export grant and revocation after generation; 3 browser workbench tests covered Persian/English and a CSRF-authenticated download. This does not validate external trunks or production load.
+
 Outbound dashboard local validation: 40 tests and 17 subtests passed across CDR, access, builder and theme integration, including permission revocation after archive read. Two browser workbench tests passed in Persian and English with a synthetic dataset and escaped content. These results do not validate external trunks, human contact or production load.
 
 Outbound test-server installation: 5ec1c9 passed 270 Linux tests; the UI-only follow-up 7cc317 passed 10 targeted Linux tests. Asterisk retained the same PID during both switches. The authenticated browser opened the outbound menu without page errors; the selected lab period had zero observed outbound segments, so only the empty state was validated on that archive. Non-empty arithmetic was checked using isolated synthetic fixtures; no external trunk was available.
