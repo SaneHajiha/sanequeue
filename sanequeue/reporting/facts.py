@@ -32,6 +32,9 @@ CREATE INDEX IF NOT EXISTS rv_queue_ended ON report_visits(pbx,queue,ended,enter
 CREATE INDEX IF NOT EXISTS rv_queue_open ON report_visits(pbx,queue,entered) WHERE ended IS NULL;
 CREATE INDEX IF NOT EXISTS rv_call ON report_visits(pbx,callid);
 CREATE INDEX IF NOT EXISTS rv_caller_time ON report_visits(pbx,caller,entered,id);
+CREATE TABLE IF NOT EXISTS report_visit_positions(
+ pbx TEXT,id TEXT,entry_position INTEGER,exit_position INTEGER,entry_evidence TEXT,exit_evidence TEXT,
+ PRIMARY KEY(pbx,id));
 CREATE TABLE IF NOT EXISTS report_cdr(
  pbx TEXT,source_key TEXT,event_id INTEGER,ts REAL,uid TEXT,linkedid TEXT,
  src TEXT,dst TEXT,channel TEXT,dstchannel TEXT,duration REAL,billsec REAL,
@@ -132,6 +135,15 @@ def _endpoint(value):
     return match.group(1) if match else None
 
 
+def _queue_position(values, index):
+    """Only accept an explicitly logged, bounded positive queue position."""
+    if not isinstance(values,list) or len(values)<=index:return None
+    raw=values[index]
+    if isinstance(raw,bool) or not re.fullmatch(r'[0-9]{1,7}',str(raw)):return None
+    value=int(raw)
+    return value if 1<=value<=1000000 else None
+
+
 def _rebuild_visits(db, pbx, queue, callid, through_event_id):
     # Keep the raw evidence cap even when most versions have been superseded.
     # Filtering first could hide unbounded replay/query work behind few facts.
@@ -162,7 +174,9 @@ def _rebuild_visits(db, pbx, queue, callid, through_event_id):
             current = dict(id=_visit_id(pbx, queue, callid, event_id), entered=ts,
                            answered=None, ended=None, caller=str(values[1]) if len(values) > 1 else '',
                            agent='', outcome='waiting', wait_seconds=None, talk_seconds=None,
-                           segment_ended_by=None, coverage='observed')
+                           segment_ended_by=None, coverage='observed', entry_positions=set(), exit_position=None, exit_evidence='unavailable')
+            entry_position=_queue_position(values,2)
+            if entry_position is not None:current['entry_positions'].add(entry_position)
             visits.append(current)
         elif kind in ('CONNECT', 'COMPLETECALLER', 'COMPLETEAGENT', 'ABANDON',
                       'EXITWITHTIMEOUT', 'EXITEMPTY', 'EXITWITHKEY', 'TRANSFER',
@@ -178,8 +192,20 @@ def _rebuild_visits(db, pbx, queue, callid, through_event_id):
                 current = dict(id=_visit_id(pbx, queue, callid, event_id), entered=ts,
                                answered=None, ended=None, caller='', agent='', outcome='unknown',
                                wait_seconds=None, talk_seconds=None, segment_ended_by=None,
-                               coverage='missing_entry')
+                               coverage='missing_entry', entry_positions=set(), exit_position=None, exit_evidence='unavailable')
                 visits.append(current)
+            # Original position is explicit in completion/exit records.
+            origin_index = (1 if kind in ('ABANDON','EXITWITHTIMEOUT','EXITEMPTY') else
+                            2 if kind in ('EXITWITHKEY','COMPLETECALLER','COMPLETEAGENT') else
+                            4 if kind in ('TRANSFER','BLINDTRANSFER','ATTENDEDTRANSFER') else None)
+            if origin_index is not None:
+                entry_position=_queue_position(values,origin_index)
+                if entry_position is not None:current['entry_positions'].add(entry_position)
+            exit_index = (0 if kind in ('ABANDON','EXITWITHTIMEOUT','EXITEMPTY') else
+                          1 if kind=='EXITWITHKEY' else None)
+            if exit_index is not None:
+                current['exit_position']=_queue_position(values,exit_index)
+                current['exit_evidence']=kind.lower() if current['exit_position'] is not None else 'unavailable'
             if kind == 'CONNECT':
                 current.update(answered=ts, agent=agent, outcome='connected',
                                wait_seconds=number(values[0]) if values else None)
@@ -224,9 +250,17 @@ def _rebuild_visits(db, pbx, queue, callid, through_event_id):
                        'wait_seconds', 'talk_seconds', 'segment_ended_by', 'coverage')))
         if existing.get(visit['id']) != values:
             db.execute('INSERT OR REPLACE INTO report_visits VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)', values)
+        positions=visit['entry_positions']
+        entry=next(iter(positions)) if len(positions)==1 else None
+        entry_evidence='observed' if len(positions)==1 else 'conflicting' if positions else 'unavailable'
+        db.execute('''INSERT INTO report_visit_positions VALUES(?,?,?,?,?,?)
+          ON CONFLICT(pbx,id) DO UPDATE SET entry_position=excluded.entry_position,
+          exit_position=excluded.exit_position,entry_evidence=excluded.entry_evidence,exit_evidence=excluded.exit_evidence''',
+                   (pbx,visit['id'],entry,visit['exit_position'],entry_evidence,visit['exit_evidence']))
         existing.pop(visit['id'], None)
     for ident in existing:
         db.execute('DELETE FROM report_visits WHERE pbx=? AND id=?', (pbx,ident))
+        db.execute('DELETE FROM report_visit_positions WHERE pbx=? AND id=?', (pbx,ident))
 
 
 def project_batch(archive, *, limit=500, inventory=None):

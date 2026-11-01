@@ -70,6 +70,21 @@ def overview(archive, scope, start, end, *, sla_seconds=20):
                 retention='no_automatic_deletion')
 
 
+def _attach_positions(db, pbx, rows):
+    """Attach current evidence only to already-authorized visit rows."""
+    for row in rows:
+        row.update(entry_position=None,exit_position=None,entry_position_evidence='unavailable',exit_position_evidence='unavailable')
+    if not rows or not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='report_visit_positions'").fetchone():return
+    ids=[row['id'] for row in rows]
+    data=db.execute('SELECT id,entry_position,exit_position,entry_evidence,exit_evidence FROM report_visit_positions WHERE pbx=? AND id IN ('+','.join('?' for _ in ids)+')',(pbx,*ids)).fetchall()
+    by_id={item['id']:item for item in data}
+    for row in rows:
+        item=by_id.get(row['id'])
+        if item is not None:
+            row.update(entry_position=item['entry_position'],exit_position=item['exit_position'],
+                       entry_position_evidence=item['entry_evidence'],exit_position_evidence=item['exit_evidence'])
+
+
 def visits(archive, scope, start, end, *, before=None, limit=100, queue=None, outcome=None, outcome_class=None):
     clause, args = _where(archive.pbx, scope, start, end)
     if queue:
@@ -95,6 +110,7 @@ def visits(archive, scope, start, end, *, before=None, limit=100, queue=None, ou
     with archive.reader() as db:
         rows = [dict(r) for r in db.execute('SELECT * FROM report_visits WHERE ' + clause +
                                            ' ORDER BY entered DESC,id DESC LIMIT ?', (*args, limit + 1))]
+        _attach_positions(db,archive.pbx,rows)
     more = len(rows) > limit
     rows = rows[:limit]
     return dict(rows=rows, next=[rows[-1]['entered'], rows[-1]['id']] if rows and more else None)
@@ -107,6 +123,7 @@ def detail(archive, scope, start, end, visit_id):
         if row is None:
             return None
         row = dict(row)
+        _attach_positions(db,archive.pbx,[row])
         # Return typed fields, never the raw ENTERQUEUE payload/caller number.
         events = [dict(r) for r in db.execute('''SELECT ts,kind,agent FROM report_queue_events
           WHERE pbx=? AND queue=? AND callid=? AND ts>=? AND (? IS NULL OR ts<=?)
