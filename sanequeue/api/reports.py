@@ -37,6 +37,7 @@ from sanequeue.reporting.report_builder import definition as builder_definition
 from sanequeue.reporting import adherence, adherence_source
 from sanequeue.reporting import cdr_queries
 from sanequeue.reporting import cdr_builder
+from sanequeue.reporting import outbound_dashboard
 from sanequeue.reporting import journey
 from sanequeue.reporting.quality import QualityStore, QualityConflict, QualityUnavailable
 from sanequeue.reporting.ai_jobs import AIJobs, AIConflict, AIUnavailable
@@ -730,6 +731,22 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         try:data=cdr_queries.unique_inbound(archive,start,end,filters)
         finally:aggregate_gate.release()
         if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        return jsonify(data)
+
+    @app.get('/api/history/cdr/outbound-dashboard')
+    @login_required
+    @safe
+    def history_outbound_dashboard():
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context()
+        if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
+        try:data=outbound_dashboard.report(archive,start,end,filters,numbers=numbers)
+        finally:aggregate_gate.release()
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        if not numbers:
+            secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+            for row in data['origins']:
+                if row['origin'] is not None:
+                    row['origin']=display_number(row['origin'],mode='masked',secret=secret,tenant='default',pbx=pbx,version='1')
         return jsonify(data)
 
     @app.post('/api/history/cdr/builder/preview')

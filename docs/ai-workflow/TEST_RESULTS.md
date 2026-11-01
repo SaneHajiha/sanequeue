@@ -159,6 +159,8 @@ PDF گزارش‌ساز صف برای ریز، گروه‌بندی و زمان�
 نسخهٔ `b6796ba9ef26fc6303825f9963fb548618e31498` روی سرور آزمایشی نصب شد؛ ۱۹۲ آزمون لینوکسی موفق و PID استریسک بدون تغییر بود. در مرورگر واقعی برای گزارش CDR گروه‌بندی‌شده، Excel و PDF پس‌زمینه ساخته و دانلود شدند؛ هر کدام دو ردیف داشتند و خطای JavaScript ثبت نشد. هر دو CI همین commit موفق شدند. این آزمون معادل بار واقعی همزمان یا ترانک خارجی نیست.
 # Last observed queue answer — test server
 
+Outbound dashboard local validation: 40 tests and 17 subtests passed across CDR, access, builder and theme integration, including permission revocation after archive read. Two browser workbench tests passed in Persian and English with a synthetic dataset and escaped content. These results do not validate external trunks, human contact or production load.
+
 Queue wait distributions: local queue outcomes/analytics/query suite 32 passed and 15 subtests, plus a boundary rerun with 9 passed and 6 subtests. Seven browser workbench tests covered Persian and English, answered and unanswered views, unknown waits, redraw and clearing on filter change. All use local synthetic data; this entry does not assert telephony or production-load acceptance.
 
 Ready-agent alert: 27 policy/outbox/messaging/system-alert tests and 3 subtests passed locally, including an explicitly empty member set, missing member field and transition deduplication. Actual message delivery and stale collector transitions were not tested in this increment.

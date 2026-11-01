@@ -12,7 +12,7 @@
 <details class="nav-module" data-module="reporting"><summary>{{t('گزارش‌ها و تحلیل','Reports & analytics')}}</summary><div class="module-items">
 {{item('reports','نمای کلی گزارش‌ها','Report overview')}}
 <details class="report-submenu" data-report-family="pbx" open><summary>{{t('گزارش مرکز تلفن','PBX reports')}}</summary>
-{% if user_role=='admin' and can_view_section('users') %}{{shortcut('reports','history-cdr-section','ترافیک خطوط و CDR','Trunk traffic & CDR')}}{% endif %}
+{% if user_role=='admin' and can_view_section('users') %}{{shortcut('reports','history-cdr-section','ترافیک خطوط و CDR','Trunk traffic & CDR')}}{{shortcut('reports','history-outbound-dashboard-section','عملکرد تماس‌های خروجی','Outbound call performance')}}{% endif %}
 </details>
 <details class="report-submenu" data-report-family="contact-center" open><summary>{{t('گزارش مرکز تماس و صف','Contact center & queue reports')}}</summary>
 {{shortcut('reports','history-summary-section','خلاصه و مقایسه صف‌ها','Queue summary & comparison')}}
