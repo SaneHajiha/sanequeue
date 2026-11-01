@@ -201,3 +201,6 @@ Queue outcome aggregate CSV: 36 local tests and 18 subtests passed for outcome, 
 On the lab, revision 0c51483 passed 29 Linux tests; Asterisk PID remained unchanged. An authenticated Chrome session on port 5000 downloaded five queue/day/reason CSV files for answered and unanswered visits and each file count reconciled to the API summary, with no page errors. This verifies the selected archived lab interval only, not external trunks or production load.
 
 Queue outcome hourly table and CSV: 36 targeted backend tests with 20 subtests and 9 browser workbench tests passed locally; hours reconcile to the same category totals with existing access checks. Fixture tests do not establish actual PBX load acceptance.
+
+On the lab, revision 76a9947 passed 29 Linux tests with Asterisk PID unchanged. Authenticated Chrome on port 5000 displayed hourly tables and downloaded both hourly CSV files; each had 14 rows and counts reconciled with the category API totals, without browser page errors. This is evidence for the selected lab archive interval, not production load or external trunk acceptance.
+
