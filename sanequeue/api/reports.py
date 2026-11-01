@@ -753,14 +753,15 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     @app.post('/api/history/cdr/outbound-dashboard/export.csv')
     @app.post('/api/history/cdr/outbound-dashboard/export.xlsx')
     @app.post('/api/history/cdr/outbound-dashboard/export.pdf')
+    @app.post('/api/history/cdr/outbound-dashboard/export')
     @login_required
     @safe
     def history_outbound_dashboard_export():
         owner=str(current_user.get_id());start,end,filters,numbers=cdr_context();export_csrf()
         queues=queries.queues(archive)
         if not queues or not all(can_queue(queue,'report_export') for queue in queues):abort(403)
-        table=request.args.get('table','');language=request.args.get('lang','fa');format=request.path.rsplit('.',1)[-1]
-        if table not in ('origins','days','dispositions') or language not in ('fa','en'):raise ValueError('invalid_outbound_export')
+        table=request.args.get('table','');language=request.args.get('lang','fa');format=(request.args.get('format','') if request.path.endswith('/export') else request.path.rsplit('.',1)[-1])
+        if table not in ('origins','days','dispositions') or language not in ('fa','en') or format not in ('csv','xlsx','pdf'):raise ValueError('invalid_outbound_export')
         if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
         try:
             data=outbound_dashboard.report(archive,start,end,filters,numbers=numbers)

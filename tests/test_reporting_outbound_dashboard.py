@@ -95,13 +95,13 @@ class OutboundDashboardTests(unittest.TestCase):
         with client.session_transaction() as state:state['csrf_token']='token'
         headers={'X-CSRF-Token':'token'}
         for table in ('origins','days','dispositions'):
-            xlsx=client.post('/api/history/cdr/outbound-dashboard/export.xlsx'+self.query+'&table='+table+'&lang=en',headers=headers)
+            xlsx=client.post('/api/history/cdr/outbound-dashboard/export'+self.query+'&format=xlsx&table='+table+'&lang=en',headers=headers)
             self.assertEqual(xlsx.status_code,200,xlsx.json)
             with ZipFile(io.BytesIO(xlsx.data)) as archive:
                 xml=archive.read('xl/worksheets/sheet1.xml')
                 self.assertIn(b'period_start_tehran',xml);self.assertNotIn(b'<f>',xml)
                 if table=='origins':self.assertIn(b'>100<',xml)
-            pdf=client.post('/api/history/cdr/outbound-dashboard/export.pdf'+self.query+'&table='+table+'&lang=fa',headers=headers)
+            pdf=client.post('/api/history/cdr/outbound-dashboard/export'+self.query+'&format=pdf&table='+table+'&lang=fa',headers=headers)
             self.assertEqual(pdf.status_code,200,pdf.json);self.assertTrue(pdf.data.startswith(b'%PDF-'))
         data=report(self.c.archive,self.start,self.end,numbers=True)
         data['origins']=[dict(data['origins'][0]) for _ in range(101)]

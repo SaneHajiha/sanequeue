@@ -163,6 +163,8 @@ Outbound aggregate CSV export local validation: 33 tests and 11 subtests passed,
 
 Outbound aggregate XLSX/PDF local validation: 55 tests and 23 subtests across outbound, PDF, XLSX and existing background exporters, plus a subsequent 10-test outbound rerun including PDF permission revocation. Five browser workbench tests passed for Persian/English and CSV/XLSX/PDF selection. One synthetic Persian PDF page was rendered and visually inspected. PDF is limited to 100 rows, 20 pages and 4 MiB. This evidence does not establish production load safety.
 
+On lab revision 0c1dd74, 44 targeted Linux tests passed and Asterisk remained running. Browser downloaded XLSX, but PDF fetch returned an intermediary 204 even though direct server requests returned 200. The client export path was changed to an extensionless endpoint; its local regression passed (26 tests and 4 subtests; 5 browser tests), but live browser revalidation is still required.
+
 Lab revision 301a9e5 passed 15 targeted Linux tests, preserved the Asterisk PID, and the authenticated browser downloaded all three aggregate CSV files with UTF-8 BOM and Persian headers without page errors. The selected archive period had no observed outbound segments, so nonempty values were verified only with synthetic fixtures. Both CI workflows passed for 301a9e5.
 
 Outbound dashboard local validation: 40 tests and 17 subtests passed across CDR, access, builder and theme integration, including permission revocation after archive read. Two browser workbench tests passed in Persian and English with a synthetic dataset and escaped content. These results do not validate external trunks, human contact or production load.
