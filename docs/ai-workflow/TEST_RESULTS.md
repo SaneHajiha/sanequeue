@@ -109,3 +109,8 @@ Installed lab source 5cc8a9c0083b: 52 Linux tests passed before switching; Aster
 Queue category export: 56 Python tests and 15 subtests passed across snapshot, existing export, PDF, builder API and outcome tests; XLSX/CSV/PDF counts matched summary for both categories, masked numbers remained masked, snapshot stayed stable after correction, CSRF and conflicting filters were rejected. Eight Chromium tests passed for outcome/unique interfaces including export request/CSRF. Theme rendering passed 4 tests and 2 subtests. A proposed command for a non-existent report_exports_frontend.cjs was not a test and failed with MODULE_NOT_FOUND; the actual browser/API export tests above were used. Installed-runtime export validation remains pending.
 
 Final combined regression after outcome exports: 68 passed, 26 subtests; 8 Chromium tests passed. Included category snapshot correction, format/metadata checks, CSRF and conflict rejection, and existing exports/builder/PDF compatibility. Installed-runtime acceptance pending.
+
+### آزمون سرور آزمایشی خروجی دسته‌های صف — 2026-11-01
+
+نسخهٔ کد `0356b6b9a177e9d99950fb1a4c636c2a04329f6e` روی سرور آزمایشی نصب شد؛ ۹۶ آزمون لینوکسی موفق بود و شناسهٔ فرایند Asterisk تغییر نکرد. آزمون مرورگر از خود پنل برای بازهٔ 2026-10-23 تا 2026-10-27: CSV پاسخ‌داده‌شده ۴۳ ردیف، XLSX بدون پاسخ ۴۴۸ ردیف و PDF پاسخ‌داده‌شده ۴۳ ردیف ساخت و دانلود کرد؛ خطای JavaScript صفحه مشاهده نشد. تعدادها با خلاصهٔ همان بازه مطابقت داشتند. هر دو گردش GitHub Actions برای این commit موفق شدند. این آزمون‌ها تأیید تمام سناریوها و سازگاری محیط‌های عملیاتی نیستند.
+
