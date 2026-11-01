@@ -163,6 +163,8 @@ Queue wait distributions: local queue outcomes/analytics/query suite 32 passed a
 
 Ready-agent alert: 27 policy/outbox/messaging/system-alert tests and 3 subtests passed locally, including an explicitly empty member set, missing member field and transition deduplication. Actual message delivery and stale collector transitions were not tested in this increment.
 
+On the lab server revision 734b119 passed 264 Linux tests; the existing Asterisk process remained unchanged. The authenticated browser displayed both wait distributions against the lab archive: 43 answered and 448 unanswered known waits, each reconciling with seven buckets, with no page errors. This does not demonstrate actual messaging delivery, external trunks or production load behavior.
+
 Revision 61d11c5 adds the latest observed queue answer per agent and queue for visits entering the selected range. Targeted tests covered overlapping agent membership and different ranges; 38 passed and 2 subtests passed locally. The test server passed 236 Linux tests, Asterisk retained the same PID, and the authenticated browser displayed the column and four rows without page errors. This is not the last call across non-queue calls or evidence of complete historical coverage.
 
 # CDR scheduled custom reports — local validation
