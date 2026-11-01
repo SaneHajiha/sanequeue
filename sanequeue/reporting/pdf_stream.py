@@ -239,8 +239,8 @@ class Document:
 
 class CustomDocument(Document):
     """Private builder output: every chosen column is printed for every row."""
-    def __init__(self,output,language,*,headers,grouped=False,global_cdr=False,filter_items=None,**kwargs):
-        if not isinstance(headers,list) or not 1<=len(headers)<=12:raise ValueError('invalid_pdf_columns')
+    def __init__(self,output,language,*,headers,grouped=False,global_cdr=False,filter_items=None,max_columns=12,**kwargs):
+        if not isinstance(max_columns,int) or not 1<=max_columns<=26 or not isinstance(headers,list) or not 1<=len(headers)<=max_columns:raise ValueError('invalid_pdf_columns')
         self.custom_headers=[_text(header) for header in headers]
         self.grouped=bool(grouped);self.global_cdr=bool(global_cdr)
         if filter_items is None:filter_items=[]

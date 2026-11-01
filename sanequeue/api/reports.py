@@ -33,6 +33,7 @@ from sanequeue.reporting.access_audit import AuditStore, AuditUnavailable
 from sanequeue.reporting import work_sessions
 from sanequeue.reporting import visit_snapshots
 from sanequeue.reporting import builder_exports
+from sanequeue.reporting import pdf_stream,xlsx_stream
 from sanequeue.reporting.report_builder import definition as builder_definition
 from sanequeue.reporting import adherence, adherence_source
 from sanequeue.reporting import cdr_queries
@@ -750,13 +751,15 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         return jsonify(data)
 
     @app.post('/api/history/cdr/outbound-dashboard/export.csv')
+    @app.post('/api/history/cdr/outbound-dashboard/export.xlsx')
+    @app.post('/api/history/cdr/outbound-dashboard/export.pdf')
     @login_required
     @safe
     def history_outbound_dashboard_export():
         owner=str(current_user.get_id());start,end,filters,numbers=cdr_context();export_csrf()
         queues=queries.queues(archive)
         if not queues or not all(can_queue(queue,'report_export') for queue in queues):abort(403)
-        table=request.args.get('table','');language=request.args.get('lang','fa')
+        table=request.args.get('table','');language=request.args.get('lang','fa');format=request.path.rsplit('.',1)[-1]
         if table not in ('origins','days','dispositions') or language not in ('fa','en'):raise ValueError('invalid_outbound_export')
         if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
         try:
@@ -766,12 +769,17 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                 for row in data['origins']:
                     if row['origin'] is not None:
                         row['origin']=display_number(row['origin'],mode='masked',secret=secret,tenant='default',pbx=pbx,version='1')
-            content=outbound_dashboard.csv_bytes(data,table,language)
+            try:
+                content=(outbound_dashboard.csv_bytes(data,table,language) if format=='csv' else
+                         outbound_dashboard.document_bytes(data,table,language,format))
+            except (xlsx_stream.SizeLimit,pdf_stream.PdfFailure) as error:
+                raise ExportFailure(str(error)) from None
         finally:aggregate_gate.release()
         if (owner!=str(current_user.get_id()) or cdr_context()!=(start,end,filters,numbers) or
             queries.queues(archive)!=queues or not all(can_queue(queue,'report_export') for queue in queues)):abort(403)
-        return Response(content,mimetype='text/csv; charset=utf-8',headers={
-            'Content-Disposition':f'attachment; filename="sanequeue-outbound-{table}.csv"',
+        types={'csv':'text/csv; charset=utf-8','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','pdf':'application/pdf'}
+        return Response(content,mimetype=types[format],headers={
+            'Content-Disposition':f'attachment; filename="sanequeue-outbound-{table}.{format}"',
             'X-SaneQueue-Unit':'outbound_cdr_segment','Cache-Control':'private, no-store'})
 
     @app.post('/api/history/cdr/builder/preview')

@@ -132,8 +132,8 @@ def body(rows,value,spec,number_key):
 
 class Workbook(xlsx_stream.Workbook):
     """Reuse bounded OOXML append/abort with exact custom header geometry."""
-    def __init__(self,output,language,*,headers,period='',max_bytes=32*1024*1024,title=None):
-        if not 1<=len(headers)<=12:raise BuilderFailure('builder_column_limit')
+    def __init__(self,output,language,*,headers,period='',max_bytes=32*1024*1024,title=None,max_columns=12):
+        if not 1<=max_columns<=26 or not 1<=len(headers)<=max_columns:raise BuilderFailure('builder_column_limit')
         self.language=language;self.row=0;self.xml_size=0;self.max_xml_bytes=64*1024*1024;self.closed=False;self.last_column=chr(64+len(headers))
         self.archive=ZipFile(xlsx_stream._BoundedFile(output,max_bytes),'w',ZIP_DEFLATED,compresslevel=1)
         try:

@@ -1,6 +1,7 @@
 import unittest
 import csv
 import io
+from zipfile import ZipFile
 from unittest.mock import patch
 from tests.test_reporting_cdr_api import CDRAPITests
 from sanequeue.reporting.outbound_dashboard import report
@@ -88,6 +89,35 @@ class OutboundDashboardTests(unittest.TestCase):
         with patch('sanequeue.api.reports.outbound_dashboard.csv_bytes',side_effect=revoke):
             response=client.post('/api/history/cdr/outbound-dashboard/export.csv'+self.query+'&table=origins',headers={'X-CSRF-Token':'token'})
         self.assertEqual(response.status_code,403);self.assertNotIn('09123456789',response.text)
+
+    def test_excel_and_pdf_export_all_tables_and_obey_row_limit(self):
+        client=self.c.client(role='admin',menus=('reports','users'),details=True)
+        with client.session_transaction() as state:state['csrf_token']='token'
+        headers={'X-CSRF-Token':'token'}
+        for table in ('origins','days','dispositions'):
+            xlsx=client.post('/api/history/cdr/outbound-dashboard/export.xlsx'+self.query+'&table='+table+'&lang=en',headers=headers)
+            self.assertEqual(xlsx.status_code,200,xlsx.json)
+            with ZipFile(io.BytesIO(xlsx.data)) as archive:
+                xml=archive.read('xl/worksheets/sheet1.xml')
+                self.assertIn(b'period_start_tehran',xml);self.assertNotIn(b'<f>',xml)
+                if table=='origins':self.assertIn(b'>100<',xml)
+            pdf=client.post('/api/history/cdr/outbound-dashboard/export.pdf'+self.query+'&table='+table+'&lang=fa',headers=headers)
+            self.assertEqual(pdf.status_code,200,pdf.json);self.assertTrue(pdf.data.startswith(b'%PDF-'))
+        data=report(self.c.archive,self.start,self.end,numbers=True)
+        data['origins']=[dict(data['origins'][0]) for _ in range(101)]
+        with patch('sanequeue.api.reports.outbound_dashboard.report',return_value=data):
+            limited=client.post('/api/history/cdr/outbound-dashboard/export.pdf'+self.query+'&table=origins',headers=headers)
+        self.assertEqual(limited.status_code,422);self.assertFalse(limited.data.startswith(b'%PDF-'))
+
+    def test_pdf_export_rechecks_number_permission_before_download(self):
+        denied=[];client=self.c.client(role='admin',menus=('reports','users'),details=True,denied=denied)
+        with client.session_transaction() as state:state['csrf_token']='token'
+        from sanequeue.reporting.outbound_dashboard import document_bytes
+        def revoke(*args,**kwargs):
+            value=document_bytes(*args,**kwargs);denied.append('caller_details');return value
+        with patch('sanequeue.api.reports.outbound_dashboard.document_bytes',side_effect=revoke):
+            response=client.post('/api/history/cdr/outbound-dashboard/export.pdf'+self.query+'&table=origins',headers={'X-CSRF-Token':'token'})
+        self.assertEqual(response.status_code,403);self.assertFalse(response.data.startswith(b'%PDF-'))
 
 
 if __name__=='__main__':unittest.main()

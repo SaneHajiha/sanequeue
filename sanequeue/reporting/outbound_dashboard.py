@@ -117,3 +117,52 @@ def csv_bytes(data,table,language):
     content=output.getvalue().encode('utf-8-sig')
     if len(content)>4*1024*1024:raise QueryDeadline('outbound_export_byte_limit')
     return content
+
+
+def document_bytes(data,table,language,format):
+    """Bounded exports of the same aggregate; never publish a partial file."""
+    if format not in ('xlsx','pdf'):raise ValueError('invalid_outbound_export_format')
+    from . import builder_exports,pdf_stream
+    rows=list(csv.reader(io.StringIO(csv_bytes(data,table,language).decode('utf-8-sig'))))
+    headers,body=rows[0],rows[1:]
+    if format=='pdf' and len(body)>100:raise pdf_stream.PdfFailure('pdf_row_limit')
+    # XLSX stores inline text, so no Excel formula escaping is necessary.
+    if table=='origins':
+        for row in body:
+            if row[2].startswith("'"):row[2]=row[2][1:]
+    for row in body:
+        # Preserve dates and extension identifiers as text; aggregate metrics
+        # are numeric and should remain usable for spreadsheet calculations.
+        numeric=range(3,len(row)) if table!='dispositions' else (3,)
+        for index in numeric:
+            if table=='origins' and index==15:continue
+            if not row[index]:continue
+            try:row[index]=float(row[index])
+            except ValueError:raise ValueError('invalid_outbound_export_value') from None
+    target=io.BytesIO();writer=None
+    if format=='xlsx':
+        def label_date(stamp):
+            local=datetime.fromtimestamp(stamp,cdr_queries._ZONE)
+            return (persian_date(local.date()) if language=='fa' else local.date().isoformat())+local.strftime(' %H:%M:%S')
+        period=label_date(data['start'])+' → '+label_date(data['end'])+' | '+('پایان شامل نیست؛ پاسخ فنی' if language=='fa' else 'end exclusive; technical answers')
+        writer=builder_exports.Workbook(target,language,headers=headers,max_bytes=4*1024*1024,max_columns=20,
+            title='گزارش تماس خروجی' if language=='fa' else 'Outbound CDR report',
+            period=period)
+    else:
+        class OutboundDocument(pdf_stream.CustomDocument):
+            def close(self):
+                if self.closed:return
+                self.check()
+                if not self.rows:self._draw('داده‌ای در این بازه ثبت نشده است.' if self.fa else 'No recorded data in this period.',
+                    self.width-self.margin if self.fa else self.margin,self.y-30,10,right=self.fa)
+                self._footer();self.pdf.save();self.closed=True;self.visual.cache_clear()
+        writer=OutboundDocument(target,language,headers=headers,max_columns=20,grouped=True,global_cdr=True,
+            start=data['start'],end=data['end'],queues=[],max_rows=100,max_pages=20,max_bytes=4*1024*1024,
+            filter_items=['پاسخ فنی اثبات تماس با انسان نیست' if language=='fa' else 'Technical answer does not prove human contact'])
+        body=[[f'{value:.2f}'.rstrip('0').rstrip('.') if isinstance(value,float) else value for value in row] for row in body]
+    try:
+        for index in range(0,len(body),200):writer.append(body[index:index+200])
+        writer.close()
+    except BaseException:
+        writer.abort();raise
+    return target.getvalue()
