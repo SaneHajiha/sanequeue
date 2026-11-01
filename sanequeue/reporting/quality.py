@@ -125,10 +125,18 @@ class QualityStore:
                     UNIQUE(pbx,reviewer,request_key));
                   CREATE INDEX IF NOT EXISTS qr_visit ON quality_reviews(pbx,queue,visit_id,sequence);
                   CREATE INDEX IF NOT EXISTS qr_range ON quality_reviews(pbx,queue,created);
+                  CREATE TABLE IF NOT EXISTS followup_actions(
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,pbx TEXT NOT NULL,
+                    visit_id TEXT NOT NULL,queue TEXT NOT NULL,actor TEXT NOT NULL,status TEXT NOT NULL,
+                    note TEXT NOT NULL,created REAL NOT NULL,request_key TEXT NOT NULL,spec_hash TEXT NOT NULL,
+                    UNIQUE(pbx,actor,request_key));
+                  CREATE INDEX IF NOT EXISTS fa_visit ON followup_actions(pbx,queue,visit_id,sequence);
                   CREATE TRIGGER IF NOT EXISTS qf_no_update BEFORE UPDATE ON quality_forms BEGIN SELECT RAISE(ABORT,'immutable_quality_form'); END;
                   CREATE TRIGGER IF NOT EXISTS qf_no_delete BEFORE DELETE ON quality_forms BEGIN SELECT RAISE(ABORT,'immutable_quality_form'); END;
                   CREATE TRIGGER IF NOT EXISTS qr_no_update BEFORE UPDATE ON quality_reviews BEGIN SELECT RAISE(ABORT,'immutable_quality_review'); END;
                   CREATE TRIGGER IF NOT EXISTS qr_no_delete BEFORE DELETE ON quality_reviews BEGIN SELECT RAISE(ABORT,'immutable_quality_review'); END;''')
+                db.executescript('''CREATE TRIGGER IF NOT EXISTS fa_no_update BEFORE UPDATE ON followup_actions BEGIN SELECT RAISE(ABORT,'immutable_followup_action'); END;
+                  CREATE TRIGGER IF NOT EXISTS fa_no_delete BEFORE DELETE ON followup_actions BEGIN SELECT RAISE(ABORT,'immutable_followup_action'); END;''')
                 # Constant-default ADD COLUMN does not rewrite historical rows
                 # or fire the append-only UPDATE triggers. Empty means unproven.
                 columns={row['name'] for row in db.execute('PRAGMA table_info(quality_reviews)')}
@@ -156,6 +164,33 @@ class QualityStore:
         except (OSError,sqlite3.Error):raise QualityUnavailable('quality_store_unavailable') from None
         finally:
             if db is not None:db.close()
+
+    def add_followup_action(self,visit_id,queue,actor,status,note,request_key):
+        if not isinstance(visit_id,str) or not re.fullmatch(r'[0-9a-f]{64}',visit_id):raise ValueError('invalid_followup_visit')
+        queue=_text(queue,128,'queue');actor=_text(actor,128,'actor');request_key=_text(request_key,128,'request_key')
+        if status not in ('attempted','reached','no_answer','closed'):raise ValueError('invalid_followup_action_status')
+        note=_text(note,1000,'followup_note',True)
+        fingerprint=hashlib.sha256(_json([visit_id,queue,status,note]).encode()).hexdigest()
+        with self._db(write=True) as db:
+            prior=db.execute('SELECT * FROM followup_actions WHERE pbx=? AND actor=? AND request_key=?',(self.pbx,actor,request_key)).fetchone()
+            if prior:
+                if prior['spec_hash']!=fingerprint:raise QualityConflict('followup_request_key_reused')
+                return self._followup_action(prior)
+            ident=uuid.uuid4().hex
+            db.execute('INSERT INTO followup_actions(id,pbx,visit_id,queue,actor,status,note,created,request_key,spec_hash) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                       (ident,self.pbx,visit_id,queue,actor,status,note,time.time(),request_key,fingerprint))
+            return self._followup_action(db.execute('SELECT * FROM followup_actions WHERE id=?',(ident,)).fetchone())
+
+    @staticmethod
+    def _followup_action(row):
+        return {key:row[key] for key in ('id','visit_id','queue','actor','status','note','created')} | {'evidence':'user_reported','outbound_call_proven':False}
+
+    def followup_actions(self,visit_id,queue):
+        if not isinstance(visit_id,str) or not re.fullmatch(r'[0-9a-f]{64}',visit_id):raise ValueError('invalid_followup_visit')
+        queue=_text(queue,128,'queue')
+        with self._db() as db:
+            rows=db.execute('SELECT * FROM followup_actions WHERE pbx=? AND queue=? AND visit_id=? ORDER BY sequence DESC LIMIT 101',(self.pbx,queue,visit_id)).fetchall()
+        return dict(rows=[self._followup_action(row) for row in rows[:100]],limited=len(rows)>100)
 
     @staticmethod
     def _form(row):

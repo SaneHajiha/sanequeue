@@ -567,6 +567,32 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         result['rows']=[protect_number(row) for row in result['rows']]
         return jsonify(result)
 
+    @app.route('/api/history/followup/<visit_id>/actions',methods=['GET','POST'])
+    @login_required
+    @safe
+    def history_followup_actions(visit_id):
+        owner=str(current_user.get_id());scope,_,_=context()
+        if role() not in ('admin','supervisor'):abort(403)
+        if not quality_ready:raise QualityUnavailable('quality_storage_unavailable')
+        detail=authorized_detail(visit_id);visit=detail['visit'];queue=visit['queue']
+        if visit['outcome']!='abandoned':abort(404)
+        if not can_queue(queue,'caller_details'):abort(403)
+        if request.method=='POST':
+            export_csrf()
+            if not request.is_json:raise ValueError('invalid_followup_action_body')
+            if request.content_length is not None and request.content_length>4096:abort(413)
+            raw=request.stream.read(4097)
+            if len(raw)>4096:abort(413)
+            body=json.loads(raw)
+            if not isinstance(body,dict) or set(body)!={'status','note','request_key'}:raise ValueError('invalid_followup_action_body')
+            if str(current_user.get_id())!=owner or role() not in ('admin','supervisor') or context()[0]!=scope or not can_queue(queue,'caller_details'):abort(403)
+            result=quality_store.add_followup_action(visit_id,queue,owner,body['status'],body['note'],body['request_key'])
+            if str(current_user.get_id())!=owner or role() not in ('admin','supervisor') or context()[0]!=scope or not can_queue(queue,'caller_details'):abort(403)
+            return jsonify(action=result),201
+        result=quality_store.followup_actions(visit_id,queue)
+        if str(current_user.get_id())!=owner or role() not in ('admin','supervisor') or context()[0]!=scope or not can_queue(queue,'caller_details'):abort(403)
+        return jsonify(result)
+
     def cdr_context():
         scope,start,end=context()
         # Global CDR is deliberately separate from queue-scoped reporting.

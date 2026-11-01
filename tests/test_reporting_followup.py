@@ -52,6 +52,32 @@ class FollowupTests(unittest.TestCase):
             response=client.get('/api/history/followup'+self.case.dates)
         self.assertEqual(response.status_code,403);self.assertNotIn('09123456789',response.get_data(as_text=True))
 
+    def test_manual_actions_require_caller_permission_and_csrf_are_idempotent_and_not_call_proof(self):
+        self.seed();c=self.case
+        visit=report(c.archive,Scope(('8001',)),c.stamp,c.stamp+6,now=c.stamp+100)['rows'][0]['id']
+        path='/api/history/followup/'+visit+'/actions'+c.dates
+        restricted=c.client(role='supervisor',details=False);self.assertEqual(restricted.get(path).status_code,403)
+        client=c.client(role='supervisor',details=True)
+        with client.session_transaction() as session:session['csrf_token']='token'
+        body=dict(status='reached',note='declared contact',request_key='request-one')
+        self.assertEqual(client.post(path,json=body).status_code,403)
+        response=client.post(path,json=body,headers={'X-CSRF-Token':'token'})
+        self.assertEqual(response.status_code,201,response.json);action=response.json['action']
+        self.assertEqual(action['evidence'],'user_reported');self.assertFalse(action['outbound_call_proven'])
+        retry=client.post(path,json=body,headers={'X-CSRF-Token':'token'})
+        self.assertEqual(retry.json['action']['id'],action['id'])
+        conflict=client.post(path,json={**body,'status':'closed'},headers={'X-CSRF-Token':'token'})
+        self.assertEqual(conflict.status_code,409)
+        history=client.get(path);self.assertEqual(history.status_code,200);self.assertEqual(len(history.json['rows']),1)
+        self.assertEqual(c.client(role='agent',details=True).get(path).status_code,403)
+        self.assertEqual(client.get(path+'&queue=8002').status_code,403)
+        self.assertNotIn('09123456789',history.get_data(as_text=True))
+        with self.assertRaises(Exception):
+            with c.client(role='supervisor',details=True).application.app_context():
+                from sanequeue.reporting.quality import QualityStore
+                store=QualityStore(c.root/'quality.sqlite3')
+                with store._db(write=True) as db:db.execute('DELETE FROM followup_actions')
+
     def test_deadline_and_no_matching_unproven_boundary(self):
         self.seed();c=self.case
         self.assertEqual(report(c.archive,Scope(('8001',)),c.stamp,c.stamp+6,now=c.stamp+6)['rows'][0]['first_reentry'],None)
