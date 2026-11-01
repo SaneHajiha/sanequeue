@@ -123,7 +123,7 @@ def distribution_csv(result,kind,language,queues):
 
 def aggregate_csv(result, kind, table, language, queues):
     """Export the displayed aggregates with scope, denominators and missing data."""
-    if (kind not in ('answered', 'unanswered') or table not in ('queues', 'days', 'reasons')
+    if (kind not in ('answered', 'unanswered') or table not in ('queues', 'days', 'hours', 'reasons')
             or table == 'reasons' and kind != 'unanswered' or language not in ('fa', 'en')
             or result.get('state') != 'available'):
         raise ValueError('invalid_queue_aggregate_export')
@@ -146,13 +146,13 @@ def aggregate_csv(result, kind, table, language, queues):
             value=result['totals'][name]
             writer.writerow(common+[(labels[name] if fa else name),value,total,100*value/total if total else ''])
     else:
-        dimension=('صف' if table=='queues' else 'روز') if fa else ('queue' if table=='queues' else 'day')
+        dimension=({'queues':'صف','days':'روز','hours':'ساعت ورود تهران'} if fa else {'queues':'queue','days':'day','hours':'entry_hour_tehran'})[table]
         headers=['تعداد','مخرج نتایج معلوم','درصد از نتایج معلوم','میانگین انتظار ثانیه','نمونه انتظار معلوم'] if fa else ['visits','known_outcomes_denominator','percent_known_outcomes','mean_wait_seconds','known_wait_samples']
         if kind=='answered':headers+=['میانگین مکالمه ثانیه','نمونه مکالمه معلوم'] if fa else ['mean_talk_seconds','known_talk_samples']
         writer.writerow(base+[dimension]+headers)
         rows=result[table]
         for row in rows:
-            value=row['queue' if table=='queues' else 'day']
+            value=row[{'queues':'queue','days':'day','hours':'hour'}[table]]
             if table=='days' and fa:
                 value=persian_date(datetime.fromisoformat(value).date())
             fields=[row[kind],row['known_outcomes'],row[kind+'_percent_of_known'],row['average_'+kind+'_wait_seconds'],row[kind+'_wait_samples']]

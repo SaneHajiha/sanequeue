@@ -69,7 +69,7 @@ class QueueOutcomeTests(unittest.TestCase):
         with client.session_transaction() as state:state['csrf_token']='token'
         base='/api/history/queue-outcomes/aggregate.csv'+self.case.dates+'&lang=en'
         self.assertEqual(client.post(base+'&kind=answered&table=queues').status_code,403)
-        for kind,table,expected in [('answered','queues',2),('unanswered','days',4),('unanswered','reasons',4)]:
+        for kind,table,expected in [('answered','queues',2),('answered','hours',2),('unanswered','hours',4),('unanswered','days',4),('unanswered','reasons',4)]:
             with self.subTest(kind=kind,table=table):
                 response=client.post(base+'&kind='+kind+'&table='+table,headers={'X-CSRF-Token':'token'})
                 self.assertEqual(response.status_code,200)
