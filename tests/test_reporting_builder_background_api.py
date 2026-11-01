@@ -24,17 +24,23 @@ class BuilderBackgroundAPITests(unittest.TestCase):
         self.assertEqual(spec['number_modes'],{'8001':'masked'})
         self.assertEqual(spec['format'],'xlsx');self.assertIn('snapshot',spec)
 
-    def test_invalid_unknown_queue_pdf_conflicting_outcome_and_missing_csrf_fail(self):
+    def test_invalid_unknown_queue_conflicting_outcome_and_missing_csrf_fail(self):
         for url,body,headers,status in (
             (self.url,{'builder_definition':self.spec},{},403),
             (self.url,{'builder_definition':{**self.spec,'queues':['9999']}},self.headers,403),
-            (self.url.replace('xlsx','pdf'),{'builder_definition':self.spec},self.headers,400),
             (self.url+'&outcome=answered',{'builder_definition':self.spec},self.headers,400),
             (self.url,{'builder_definition':{**self.spec,'columns':['raw_sql']}},self.headers,400)):
             with self.subTest(url=url,body=body):
                 response=self.client.post(url,json=body,headers=headers)
                 self.assertEqual(response.status_code,status,response.json)
         self.assertEqual(self.jobs.list('test'),[])
+
+    def test_pdf_builder_job_freezes_definition_and_scope(self):
+        response=self.client.post(self.url.replace('xlsx','pdf'),json={'builder_definition':self.spec},headers=self.headers)
+        self.assertEqual(response.status_code,202,response.json)
+        spec=self.jobs.get(response.json['id'],'test')['spec']
+        self.assertEqual(spec['format'],'pdf');self.assertEqual(spec['number_modes'],{'8001':'masked'})
+        self.assertEqual(spec['builder_definition'],self.spec);self.assertIn('snapshot',spec)
 
     def test_private_plan_run_freezes_definition_and_edits_do_not_mutate_job(self):
         body=dict(name='Exact grouped',queues=['8001'],format='csv',language='fa',period='yesterday',enabled=False,builder_definition=self.spec)

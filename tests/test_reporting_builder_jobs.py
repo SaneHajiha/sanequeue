@@ -108,12 +108,29 @@ class BuilderJobTests(unittest.TestCase):
 
     def test_requires_snapshot_matching_queues_supported_format_and_request_identity(self):
         self.case.seed()
-        for kwargs in ({'snapshot':None},{'format':'pdf'},{'outcome':'answered'},{'scope':fixtures.Scope(('8001','8002')),'modes':{'8001':'masked','8002':'masked'}}):
+        for kwargs in ({'snapshot':None},{'format':'html'},{'outcome':'answered'},{'scope':fixtures.Scope(('8001','8002')),'modes':{'8001':'masked','8002':'masked'}}):
             with self.subTest(kwargs=kwargs),self.assertRaises(ValueError):self.create(**kwargs)
         ident=self.create(request_key='custom-one')
         self.assertEqual(self.create(request_key='custom-one'),ident)
         with self.assertRaises(ExportFailure):self.create({**self.spec,'columns':['queue']},request_key='custom-one')
         self.assertEqual(self.case.store.get(ident,'alice')['spec']['builder_definition'],self.spec)
+
+    def test_custom_pdf_detail_and_grouped_are_private_and_bounded(self):
+        self.case.seed(3)
+        for language in ('en','fa'):
+            for grouped in (False,True):
+                with self.subTest(language=language,grouped=grouped):
+                    selected={**self.spec,'group_by':['queue'] if grouped else []}
+                    ident=self.create(selected,format='pdf',language=language)
+                    result=self.run_job(limits=Limits(page_size=2,min_free_bytes=0,max_load_per_cpu=0))
+                    self.assertEqual(result['state'],'completed',result);self.assertEqual(result['rows'],1 if grouped else 3)
+                    data=self.read_bytes(ident);self.assertTrue(data.startswith(b'%PDF-'));self.assertTrue(data.rstrip().endswith(b'%%EOF'))
+                    self.assertIn(b'/FontFile2',data)
+                    for action in (b'/URI',b'/JavaScript',b'/OpenAction'):self.assertNotIn(action,data)
+        ident=self.create(format='pdf')
+        result=self.run_job(limits=Limits(max_bytes=100,min_free_bytes=0,max_load_per_cpu=0))
+        self.assertEqual(result['error'],'pdf_byte_limit')
+        with self.assertRaises(FileNotFoundError):self.read_bytes(ident)
 
     def test_row_and_group_limits_reject_without_publishing_partial(self):
         self.case.seed(5)

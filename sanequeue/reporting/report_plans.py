@@ -176,7 +176,6 @@ class SavedReports:
             frozen=definition(builder_definition)
             if frozen['queues']!=queues:raise ValueError('report_plan_builder_scope_mismatch')
             if outcome is not None:raise ValueError('report_plan_builder_outcome_in_definition')
-            if format not in ('csv','xlsx'):raise ValueError('report_plan_builder_format_unsupported')
             # Store the complete canonical definition, never a pointer to a
             # mutable template's latest version. Occurrences freeze this JSON.
             spec['builder_definition']=frozen

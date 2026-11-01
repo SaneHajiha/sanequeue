@@ -455,9 +455,11 @@ class ExportWorker:
                             self._gate(deadline);self._check(spec)
                             if not self.store._update(ident,worker,rows=rows_written,size=output.tell(),lease_seconds=self.limits.lease_seconds):
                                 raise _Cancelled('cancelled')
-                        document=pdf_stream.Document(output,spec['language'],start=spec['start'],end=spec['end'],
+                        pdf_type=pdf_stream.CustomDocument if builder else pdf_stream.Document
+                        custom_options=dict(headers=builder_exports.headers(builder,spec['language']),grouped=bool(groups)) if builder else {}
+                        document=pdf_type(output,spec['language'],start=spec['start'],end=spec['end'],
                             queues=spec['scope']['queues'],outcome=spec['outcome'],outcome_class=spec.get('outcome_class'),check=pdf_check,
-                            max_rows=min(self.limits.max_rows,pdf_stream.MAX_ROWS),max_bytes=min(self.limits.max_bytes,pdf_stream.MAX_BYTES))
+                            max_rows=min(self.limits.max_rows,pdf_stream.MAX_ROWS),max_bytes=min(self.limits.max_bytes,pdf_stream.MAX_BYTES),**custom_options)
                         cleanup.callback(document.abort)
                     else:
                         write(b'\xef\xbb\xbf')
@@ -498,6 +500,7 @@ class ExportWorker:
                             self._gate(deadline);self._check(spec)
                             body=builder_exports.body(aggregate[offset:offset+self.limits.page_size],builder,spec,self.number_key)
                             if workbook:workbook.append(body);size=output.tell()
+                            elif document:document.append(body);size=output.tell()
                             else:
                                 for values in body:line(values)
                             rows_written+=len(body)

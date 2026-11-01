@@ -62,7 +62,7 @@ class BuilderPlanStoreTests(BuilderPlanFixtures,unittest.TestCase):
     def test_standard_plan_shape_preserved_and_custom_invalid_contracts_rejected(self):
         standard=self.plans.save('owner','Legacy PDF',['8001'],format='pdf')
         self.assertNotIn('builder_definition',standard)
-        for changes in (dict(queues=['8002']),dict(outcome='answered'),dict(format='pdf'),
+        for changes in (dict(queues=['8002']),dict(outcome='answered'),dict(format='html'),
                         dict(builder_definition=custom(dataset='cdr')),dict(builder_definition=custom(columns=['secret_sql'])),
                         dict(builder_definition=custom(filters={'sql':'1=1'}))):
             with self.subTest(changes=changes),self.assertRaises(ValueError):self.save(**changes)
@@ -90,6 +90,21 @@ class BuilderPlanWorkerTests(BuilderPlanFixtures,unittest.TestCase):
             disabled_file=self.disabled)
 
     def occurrence(self,plan):return self.plans.occurrences(plan['id'],'owner')[0]
+
+    def test_scheduled_custom_pdf_is_rendered_from_frozen_definition(self):
+        entered=self.stamp-86400+3600
+        with self.archive.writer() as db:
+            db.execute('INSERT INTO report_visits VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                ('primary','a'*64,'first','8001',entered,entered+1,entered+4,'00000000000','100','answered',1,3,'caller','observed'))
+        plan=self.save(format='pdf',builder_definition=custom(columns=['queue','caller'],filters={}))
+        dispatched=self.worker.run_once();self.assertEqual(dispatched['state'],'dispatched')
+        ident=dispatched['export_job_id'];self.save(ident=plan['id'],format='csv',builder_definition=custom(columns=['agent'],filters={}))
+        worker=ExportWorker(self.jobs,self.archive,authorize=lambda spec:True,
+            limits=Limits(min_free_bytes=0,max_load_per_cpu=0),disabled_file=self.disabled)
+        result=worker.run_once();self.assertEqual(result['state'],'completed',result);self.assertEqual(result['rows'],1)
+        fd,_=self.jobs.open_output(ident,'owner')
+        with os.fdopen(fd,'rb') as stream:self.assertTrue(stream.read().startswith(b'%PDF-'))
+        self.assertEqual(self.jobs.get(ident,'owner')['spec']['format'],'pdf')
 
     def test_queued_occurrence_runs_its_frozen_columns_groups_filters_after_plan_edit(self):
         original=custom(group_by=['queue','outcome']);plan=self.save(builder_definition=original)

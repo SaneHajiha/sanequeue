@@ -41,7 +41,7 @@ function fixture(){
 (async()=>{
  const f=fixture();f.enter();f.requests[0].resolve({plans:[custom,legacy]});await settle();
  assert.ok(f.node('report-plan-list').innerHTML.includes('&lt;img'));assert.ok(!f.node('report-plan-list').innerHTML.includes('<img'));
- await f.click('planEdit',custom);assert.equal(f.fields.queues.disabled,true);assert.equal(f.fields.outcome.disabled,true);assert.equal(f.fields.format.options[2].disabled,true);
+ await f.click('planEdit',custom);assert.equal(f.fields.queues.disabled,true);assert.equal(f.fields.outcome.disabled,true);assert.equal(f.fields.format.options[2].disabled,false);
  f.fields.at.value='09:30';const save=f.form.onsubmit({preventDefault(){}});const payload=JSON.parse(f.requests[1].options.body);
  assert.deepEqual(payload.builder_definition,definition);assert.deepEqual(payload.queues,['8001','8002']);assert.equal(payload.outcome,null);assert.equal(payload.at,'09:30');
  assert.equal(f.requests[1].options.headers['X-CSRF-Token'],'synthetic-csrf');
@@ -51,8 +51,8 @@ function fixture(){
  const standard=f.form.onsubmit({preventDefault(){}});assert.ok(!Object.hasOwn(JSON.parse(f.requests[3].options.body),'builder_definition'));
  f.requests[3].resolve({plan:legacy});await settle();f.requests[4].resolve({plans:[custom,legacy]});await standard;
  f.node('history-plan-section').hidden=true;const original=clone(definition);f.events.get('sanequeue:builder-schedule')({detail:{definition:original,name:'Frozen custom'}});original.filters.talk_min=999;assert.equal(f.node('history-plan-section').hidden,false,'builder scheduling navigates to the visible plan section');
- const scheduled=f.form.onsubmit({preventDefault(){}});const frozen=JSON.parse(f.requests[5].options.body);
- assert.deepEqual(frozen.builder_definition,definition);assert.equal(frozen.format,'xlsx');assert.equal(frozen.name,'Frozen custom');
+ assert.equal(f.fields.format.options[2].disabled,false);f.fields.format.value='pdf';const scheduled=f.form.onsubmit({preventDefault(){}});const frozen=JSON.parse(f.requests[5].options.body);
+ assert.deepEqual(frozen.builder_definition,definition);assert.equal(frozen.format,'pdf');assert.equal(frozen.name,'Frozen custom');
  f.requests[5].resolve({plan:custom});await settle();f.requests[6].resolve({plans:[custom]});await scheduled;
  // A late history response must not re-publish private content after leaving.
  const history=f.click('planHistory',custom);const inFlight=f.requests[7];f.leave();assert.equal(inFlight.options.signal.aborted,true);

@@ -85,6 +85,20 @@ class PdfDocumentTests(unittest.TestCase):
         with patch('sanequeue.reporting.pdf_stream._dependencies',side_effect=pdf_stream.PdfFailure('pdf_dependency_unavailable')):
             with self.assertRaisesRegex(pdf_stream.PdfFailure,'^pdf_dependency_unavailable$'):self.document()
 
+    def test_custom_pdf_prints_each_selected_field_and_repeats_page_header(self):
+        for language in ('fa','en'):
+            with self.subTest(language=language):
+                output=io.BytesIO();document=pdf_stream.CustomDocument(output,language,start=1792886400,end=1792972800,
+                    queues=['8001'],headers=['Caller','Agent','Wait'],grouped=False)
+                document.append([['0912***6789','PJSIP/100',15]])
+                commands=document.pdf.getCurrentPageContent()
+                for value in ('Caller','0912***6789','Agent','PJSIP/100','Wait','15'):self.assertIn(value,commands)
+                document.close();self.assertTrue(output.getvalue().startswith(b'%PDF-'))
+        output=io.BytesIO();document=pdf_stream.CustomDocument(output,'en',start=1792886400,end=1792972800,
+            queues=['8001'],headers=['Value'],max_pages=1)
+        with self.assertRaisesRegex(pdf_stream.PdfFailure,'^pdf_page_limit$'):document.append([['x']]*30)
+        document.abort()
+
 
 class PdfWorkerTests(unittest.TestCase):
     setUp=export_fixtures.ExportJobTests.setUp

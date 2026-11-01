@@ -38,7 +38,7 @@ def validate(spec):
     if value!=spec['builder_definition']:raise BuilderFailure('builder_definition_not_canonical')
     if set(value['queues'])!=set(spec['scope']['queues']):raise BuilderFailure('builder_scope_mismatch')
     if spec.get('snapshot') is None:raise BuilderFailure('builder_snapshot_required')
-    if spec['format'] not in ('csv','xlsx') or spec.get('outcome') is not None:raise BuilderFailure('builder_export_format_or_filter')
+    if spec['format'] not in ('csv','xlsx','pdf') or spec.get('outcome') is not None:raise BuilderFailure('builder_export_format_or_filter')
     if spec['end']-spec['start']>31*86400:raise BuilderFailure('builder_range_limit')
     return value
 

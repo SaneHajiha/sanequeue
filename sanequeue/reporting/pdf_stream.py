@@ -235,3 +235,54 @@ class Document:
     def abort(self):
         self.closed=True
         if hasattr(self,'visual'):self.visual.cache_clear()
+
+
+class CustomDocument(Document):
+    """Private builder output: every chosen column is printed for every row."""
+    def __init__(self,output,language,*,headers,grouped=False,**kwargs):
+        if not isinstance(headers,list) or not 1<=len(headers)<=12:raise ValueError('invalid_pdf_columns')
+        self.custom_headers=[_text(header) for header in headers]
+        self.grouped=bool(grouped)
+        super().__init__(output,language,**kwargs)
+
+    def _footer(self):
+        unit=('گروه' if self.grouped else 'ردیف') if self.fa else ('groups' if self.grouped else 'rows')
+        label=('صفحه ' if self.fa else 'Page ')+str(self.pages)+' | '+str(self.rows)+' '+unit
+        self._draw(label,self.width-self.margin if self.fa else self.margin,23,7,'#607386',right=self.fa)
+        self._draw('SaneQueue',self.margin if self.fa else self.width-self.margin,23,7,'#607386',right=not self.fa)
+
+    def _new_page(self):
+        self.check()
+        if self.pages:self._footer();self.pdf.showPage()
+        if self.pages>=self.max_pages:raise PdfFailure('pdf_page_limit')
+        self.pages+=1;pdf=self.pdf;pdf.setFillColor('#10283f');pdf.rect(0,self.height-75,self.width,75,fill=1,stroke=0)
+        edge=self.width-self.margin if self.fa else self.margin
+        self._draw('گزارش سفارشی صف' if self.fa else 'Custom queue report',edge,self.height-35,17,'#ffffff',right=self.fa)
+        self._draw('آمار گروهی' if self.fa and self.grouped else 'ریز مراجعه‌ها' if self.fa else 'Grouped results' if self.grouped else 'Visit details',edge,self.height-57,9,'#d5e3ef',right=self.fa)
+        if self.fa:
+            self._draw('شروع:',edge,self.height-98,8,right=True);self._draw(self._stamp(self.start),edge-34,self.height-98,8,right=True)
+            self._draw('پایان (شامل نیست):',edge-270,self.height-98,8,right=True);self._draw(self._stamp(self.end),edge-370,self.height-98,8,right=True)
+        else:self._draw(self._stamp(self.start)+' to '+self._stamp(self.end)+' | End exclusive',edge,self.height-98,8)
+        queue_text=', '.join(self.queues)
+        for index,line in enumerate(self._lines(('صف‌ها: ' if self.fa else 'Queues: ')+queue_text,self.width-2*self.margin,8,2)):
+            self._draw(line,edge,self.height-115-index*12,8,right=self.fa)
+        self.y=self.height-145
+
+    def append(self,body):
+        if self.closed:raise ValueError('pdf_document_closed')
+        if len(body)>200:raise PdfFailure('pdf_batch_limit')
+        if self.rows+len(body)>self.max_rows:raise PdfFailure('pdf_row_limit')
+        width=self.width-2*self.margin;edge=self.width-self.margin if self.fa else self.margin
+        for row in body:
+            if len(row)!=len(self.custom_headers):raise ValueError('invalid_pdf_row')
+            if self.y-24<self.bottom:self._new_page()
+            self.pdf.setFillColor('#e6eef5');self.pdf.rect(self.margin,self.y-20,width,20,fill=1,stroke=0)
+            self._draw(('گروه ' if self.grouped else 'ردیف ') + str(self.rows+1) if self.fa else ('Group ' if self.grouped else 'Row ')+str(self.rows+1),edge-5 if self.fa else edge+5,self.y-14,8,right=self.fa)
+            self.y-=25
+            for header,value in zip(self.custom_headers,row):
+                lines=self._lines(header+': '+_text(value),width-12,8,3)
+                height=max(18,len(lines)*11+5)
+                if self.y-height<self.bottom:self._new_page()
+                for offset,line in enumerate(lines):self._draw(line,edge-5 if self.fa else edge+5,self.y-11-offset*11,8,right=self.fa)
+                self.y-=height
+            self.y-=8;self.rows+=1
