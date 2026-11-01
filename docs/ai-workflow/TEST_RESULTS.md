@@ -212,3 +212,4 @@ EXITWITHKEY queue_log parser fix: 49 tests and 22 subtests passed locally across
 
 On the test server revision 6030d6a passed 50 Linux tests including the EXITWITHKEY parser regression. The Asterisk PID remained unchanged. No EXITWITHKEY events existed in the lab archive when inspected, so a live queue-exit scenario and remediation for older projections remain open.
 
+Bounded EXITWITHKEY repair: 37 targeted tests and 17 subtests passed locally; tests cover continuation, small batch caps, failure rollback and pinned historical export snapshot. No automatic background full replay is started. Production load, upgrade scheduling and cross-version PBX behavior are not established.
