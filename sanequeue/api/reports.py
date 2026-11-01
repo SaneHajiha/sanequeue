@@ -214,7 +214,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
 
     def export_public(job):
         return {key: job[key] for key in ('id', 'state', 'created', 'updated', 'rows', 'bytes', 'error_code')} | {
-            'format': job['spec']['format'], 'start': job['spec']['start'], 'end': job['spec']['end']}
+            'format': job['spec']['format'], 'start': job['spec']['start'], 'end': job['spec']['end'],
+            'outcome_class':job['spec'].get('outcome_class')}
 
     def agent_context():
         owner=export_context()
@@ -295,6 +296,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             if not isinstance(body,dict):raise ValueError('invalid_report_request')
             if 'builder_definition' in body:custom=builder_definition(body['builder_definition'])
         scope, start, end = context(restrict_queue=custom is None)
+        outcome_class=request.args.get('outcome_class') or None
+        if outcome_class is not None and custom is not None:raise ValueError('conflicting_outcome_filters')
         if custom is not None:
             if not set(custom['queues']).issubset(scope.queues):abort(403)
             scope=queries.Scope(tuple(custom['queues']),scope.agents,scope.self_only,scope.not_before)
@@ -306,6 +309,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                                     number_modes=modes, language=request.args.get('lang', 'en'),
                                     outcome=request.args.get('outcome'), format=request.args.get('format', 'csv'),
                                     snapshot=pinned['snapshot'],
+                                    outcome_class=outcome_class,
                                     **({'builder_definition':custom} if custom is not None else {}))
         app.logger.info('report export queued user=%r job=%s', owner, ident)
         return jsonify(export_public(export_store.get(ident, owner))), 202
@@ -349,10 +353,11 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             finally:
                 stream.close()
         extension=job['spec']['format']
+        prefix='sanequeue-'+job['spec']['outcome_class'] if job['spec'].get('outcome_class') else 'sanequeue'
         mime={'xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','pdf':'application/pdf',
               'csv':'text/csv; charset=utf-8'}[extension]
         result = Response(chunks(), mimetype=mime, headers={
-            'Content-Length': str(size), 'Content-Disposition': f'attachment; filename="sanequeue-{ident}.{extension}"'})
+            'Content-Length': str(size), 'Content-Disposition': f'attachment; filename="{prefix}-{ident}.{extension}"'})
         result.call_on_close(stream.close)
         app.logger.info('report export downloaded user=%r job=%s rows=%s', owner, ident, job['rows'])
         return result

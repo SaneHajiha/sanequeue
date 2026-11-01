@@ -37,7 +37,7 @@ def capture(archive):
     return dict(generation=state[0],sequence=sequence)
 
 
-def page(db, pbx, token, scope, start, end, *, before=None, outcome=None, limit=200):
+def page(db, pbx, token, scope, start, end, *, before=None, outcome=None, outcome_class=None, limit=200):
     validate(db,pbx,token)
     clause,args = _where(pbx,scope,start,end)
     # Scope and range refer to the historical version. A newer version outside
@@ -47,6 +47,10 @@ def page(db, pbx, token, scope, start, end, *, before=None, outcome=None, limit=
                            'exitwithtimeout','exitempty','exitwithkey','unknown','reentered_without_end'):
             raise ValueError('invalid_report_outcome')
         clause+=' AND outcome=?';args.append(outcome)
+    if outcome_class is not None:
+        if outcome is not None:raise ValueError('conflicting_outcome_filters')
+        from .queue_outcomes import class_clause
+        clause+=class_clause(outcome_class)
     if before:
         if (not isinstance(before,(list,tuple)) or len(before)!=2
                 or not math.isfinite(float(before[0])) or not re.fullmatch('[0-9a-f]{64}',str(before[1]))):

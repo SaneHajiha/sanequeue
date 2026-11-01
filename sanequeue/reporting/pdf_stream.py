@@ -79,7 +79,7 @@ class Document:
     at each PDF page and at final serialization. No source query is issued here.
     ``body`` rows use exports.table's 12-field contract and are already masked.
     """
-    def __init__(self,output,language,*,start,end,queues,outcome=None,check=None,
+    def __init__(self,output,language,*,start,end,queues,outcome=None,outcome_class=None,check=None,
                  max_bytes=MAX_BYTES,max_rows=MAX_ROWS,max_pages=MAX_PAGES):
         if language not in ('fa','en'):raise ValueError('invalid_pdf_language')
         if not 1<=max_bytes<=MAX_BYTES or not 1<=max_rows<=MAX_ROWS or not 1<=max_pages<=MAX_PAGES:raise ValueError('invalid_pdf_limits')
@@ -91,6 +91,10 @@ class Document:
         self.queues=tuple(queues);self.outcome=outcome
         self.outcome_label=(table([dict(queue='',id='',entered=start,outcome=outcome,coverage='observed')],language)[1][0][3]
                             if outcome else ('همه' if self.fa else 'all'))
+        if outcome_class is not None:
+            if outcome_class not in ('answered','unanswered') or outcome is not None:raise ValueError('invalid_pdf_outcome_class')
+            self.outcome_label=({'answered':'پاسخ‌داده با شاهد','unanswered':'خروج بدون پاسخ'} if self.fa else
+                                {'answered':'answered with evidence','unanswered':'unanswered exits'})[outcome_class]
         self.check()
         Canvas,self.metrics,self.reshape,self.bidi=_dependencies()
         self.visual=lru_cache(maxsize=2048)(self._visual)

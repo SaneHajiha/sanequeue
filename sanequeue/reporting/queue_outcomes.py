@@ -8,6 +8,18 @@ MAX_VISITS=50000
 UNANSWERED=('abandoned','exitwithtimeout','exitwithkey','exitempty')
 
 
+def class_clause(kind):
+    """SQL equivalent of _classify, restricted to observed queue entries."""
+    if kind=='answered':
+        return (" AND COALESCE(coverage,'')<>'missing_entry' AND COALESCE(outcome,'') NOT IN "
+                "('abandoned','exitwithtimeout','exitwithkey','exitempty') "
+                "AND (answered IS NOT NULL OR outcome='answered')")
+    if kind=='unanswered':
+        return (" AND COALESCE(coverage,'')<>'missing_entry' AND outcome IN "
+                "('abandoned','exitwithtimeout','exitwithkey','exitempty') AND answered IS NULL")
+    raise ValueError('invalid_queue_outcome_class')
+
+
 def _empty():
     return dict(visits=0,answered=0,unanswered=0,unresolved=0,
                 abandoned=0,exitwithtimeout=0,exitwithkey=0,exitempty=0,

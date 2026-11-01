@@ -41,3 +41,5 @@ A bounded, explicitly requested aggregate over scoped queue visits counts distin
 
 ## Queue outcome views — 2026-11-01
 Separate answered and unanswered queue-visit views provide entry-hour charts, per-day/per-queue aggregates, explicit exit reasons and known-outcome denominators. Unknown, conflicting, open and missing-entry evidence is not labelled as an abandonment. One concurrent calculation per web process, 50,000-row cap, no AMI or PBX SQL. Full category-specific detail and export remain open.
+
+Queue outcome views can queue private snapshot-pinned CSV/XLSX/PDF visit-detail jobs using the same classification and existing current-permission checks. Export and prior displayed aggregate may differ if source data changes before the new snapshot. Per-table aggregate export and full in-view detail remain open.

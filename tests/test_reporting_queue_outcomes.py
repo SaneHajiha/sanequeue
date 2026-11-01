@@ -1,10 +1,16 @@
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
+import csv
+import io
+import os
+from zipfile import ZipFile
 from unittest.mock import patch
 from tests import test_reporting_queries as fixtures
 from sanequeue.reporting.queries import Scope
 from sanequeue.reporting.queue_outcomes import report
+from sanequeue.reporting import visit_snapshots
+from sanequeue.reporting.export_jobs import JobStore,ExportWorker,Limits,projection_watermark
 
 
 class QueueOutcomeTests(unittest.TestCase):
@@ -72,6 +78,59 @@ class QueueOutcomeTests(unittest.TestCase):
                 self.assertEqual(response.json['error'],'report_aggregate_busy')
             finally:release.set()
             self.assertEqual(running.result().status_code,200)
+
+    def test_category_export_matches_summary_and_masks_numbers(self):
+        archive=self.case.archive;scope=Scope(('8001',));start=self.case.stamp;end=start+100
+        snapshot=visit_snapshots.capture(archive);totals=report(archive,scope,start,end)['totals']
+        store=JobStore(self.case.root/'jobs.db',self.case.root/'private');store.initialize()
+        worker=ExportWorker(store,archive,limits=Limits(min_free_bytes=0,max_load_per_cpu=0),authorize=lambda spec:True,
+                            disabled_file=self.case.root/'disabled')
+        for kind in ('answered','unanswered'):
+            for fmt in ('csv','xlsx','pdf'):
+                with self.subTest(kind=kind,format=fmt):
+                    ident=store.create('test',scope,start,end,watermark=projection_watermark(archive),
+                        number_modes={'8001':'masked'},snapshot=snapshot,format=fmt,language='en',outcome_class=kind)
+                    result=worker.run_once();self.assertEqual(result['state'],'completed',result)
+                    self.assertEqual(result['rows'],totals[kind]);fd,_=store.open_output(ident,'test')
+                    with os.fdopen(fd,'rb') as stream:data=stream.read()
+                    self.assertNotIn(b'09123456789',data)
+                    if fmt=='csv':
+                        rows=list(csv.reader(io.StringIO(data.decode('utf-8-sig'))))
+                        self.assertEqual(len(rows),totals[kind]+1)
+                        self.assertEqual({r[3] for r in rows[1:]},{'answered','transferred'} if kind=='answered' else {'abandoned','exitwithtimeout','exitwithkey','exitempty'})
+                    elif fmt=='xlsx':
+                        with ZipFile(io.BytesIO(data)) as book:
+                            sheet=book.read('xl/worksheets/sheet1.xml')
+                            self.assertIn(('answered with evidence' if kind=='answered' else 'unanswered exits').encode(),sheet)
+                    else:self.assertTrue(data.startswith(b'%PDF-'))
+        with self.assertRaises(ValueError):
+            store.create('test',scope,start,end,watermark=0,number_modes={'8001':'masked'},snapshot=snapshot,outcome='answered',outcome_class='unanswered')
+
+    def test_category_export_api_checks_csrf_and_conflicts(self):
+        JobStore(self.case.root/'export-jobs.sqlite3',self.case.root/'private-exports').initialize()
+        client=self.case.client(role='admin',menus=('reports',),details=False)
+        with client.session_transaction() as state:state['csrf_token']='token'
+        url='/api/history/export-jobs'+self.case.dates+'&format=csv&outcome_class=unanswered'
+        self.assertEqual(client.post(url).status_code,403)
+        response=client.post(url,headers={'X-CSRF-Token':'token'})
+        self.assertEqual(response.status_code,202,response.json)
+        self.assertEqual(response.json['outcome_class'],'unanswered')
+        self.assertEqual(client.post(url+'&outcome=abandoned',headers={'X-CSRF-Token':'token'}).status_code,400)
+
+    def test_category_export_pins_old_facts_even_after_correction(self):
+        archive=self.case.archive;scope=Scope(('8001',));start=self.case.stamp;end=start+100
+        snapshot=visit_snapshots.capture(archive);before=report(archive,scope,start,end)['totals']['unanswered']
+        store=JobStore(self.case.root/'jobs.db',self.case.root/'private');store.initialize()
+        ident=store.create('test',scope,start,end,watermark=projection_watermark(archive),number_modes={'8001':'masked'},
+                           snapshot=snapshot,format='csv',outcome_class='unanswered')
+        with archive.writer() as db:db.execute("UPDATE report_visits SET outcome='answered',answered=entered+1 WHERE queue='8001'")
+        worker=ExportWorker(store,archive,limits=Limits(min_free_bytes=0,max_load_per_cpu=0),authorize=lambda spec:True,
+                            disabled_file=self.case.root/'disabled')
+        result=worker.run_once();self.assertEqual(result['state'],'completed',result)
+        self.assertEqual(result['rows'],before)
+        fd,_=store.open_output(ident,'test')
+        with os.fdopen(fd,'rb') as stream:rows=list(csv.reader(io.StringIO(stream.read().decode('utf-8-sig'))))
+        self.assertEqual(len(rows)-1,before)
 
 
 if __name__=='__main__':unittest.main()

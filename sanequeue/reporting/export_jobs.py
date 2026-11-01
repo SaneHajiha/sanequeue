@@ -182,13 +182,17 @@ class JobStore:
         finally:db.close()
 
     def create(self,owner,scope,start,end,*,watermark,pbx='primary',number_modes,
-               language='en',outcome=None,format='csv',snapshot=None,request_key=None,builder_definition=None):
+               language='en',outcome=None,format='csv',snapshot=None,request_key=None,builder_definition=None,outcome_class=None):
         if not isinstance(owner,str) or not 1<=len(owner)<=128:raise ValueError('invalid_export_owner')
         _where(pbx,scope,start,end)
         if not scope.queues:raise ValueError('empty_export_scope')
         if not isinstance(watermark,int) or isinstance(watermark,bool) or watermark<0:raise ValueError('invalid_export_watermark')
         if format not in ('csv','xlsx','pdf') or language not in ('fa','en'):raise ValueError('unsupported_export_format_or_language')
         if outcome is not None and outcome not in _OUTCOMES:raise ValueError('invalid_report_outcome')
+        if outcome_class is not None:
+            from .queue_outcomes import class_clause
+            class_clause(outcome_class)
+            if outcome is not None or builder_definition is not None or snapshot is None:raise ValueError('conflicting_outcome_filters')
         queues=tuple(dict.fromkeys(scope.queues));agents=tuple(dict.fromkeys(scope.agents))
         if any(not isinstance(v,str) or not 1<=len(v)<=256 for v in (*queues,*agents)):
             raise ValueError('invalid_export_scope')
@@ -201,6 +205,7 @@ class JobStore:
                   number_modes=dict(number_modes),language=language,outcome=outcome,format=format,
                   unit='queue_visit',number_policy_version='1')
         if snapshot is not None:spec['snapshot']=dict(snapshot)
+        if outcome_class is not None:spec['outcome_class']=outcome_class
         if builder_definition is not None:
             from .report_builder import definition
             spec['builder_definition']=definition(builder_definition)
@@ -332,6 +337,11 @@ class ExportWorker:
     def _check(self,spec):
         if not self.authorize(spec):raise ExportFailure('export_access_revoked')
         if spec['pbx']!=self.archive.pbx:raise ExportFailure('export_pbx_mismatch')
+        if spec.get('outcome_class') is not None:
+            from .queue_outcomes import class_clause
+            class_clause(spec['outcome_class'])
+            if spec.get('outcome') is not None or spec.get('builder_definition') is not None or spec.get('snapshot') is None:
+                raise ExportFailure('export_outcome_class_invalid')
         if spec.get('builder_definition') is not None:builder_exports.validate(spec)
         if 'pseudonymous' in spec['number_modes'].values() and (not isinstance(self.number_key,bytes) or len(self.number_key)<32):
             raise ExportFailure('export_number_key_unavailable')
@@ -361,7 +371,7 @@ class ExportWorker:
             if spec.get('snapshot') is not None:
                 try:
                     return visit_snapshots.page(db,self.archive.pbx,spec['snapshot'],scope,spec['start'],
-                        spec['end'],before=before,outcome=spec['outcome'],limit=self.limits.page_size)
+                        spec['end'],before=before,outcome=spec['outcome'],outcome_class=spec.get('outcome_class'),limit=self.limits.page_size)
                 except visit_snapshots.SnapshotUnavailable as error:
                     raise ExportFailure(str(error)) from None
             watermark=db.execute('SELECT after_id FROM report_projection WHERE pbx=?',(self.archive.pbx,)).fetchone()
@@ -435,6 +445,8 @@ class ExportWorker:
                     if spec['format']=='xlsx':
                         zone=ZoneInfo('Asia/Tehran')
                         period=datetime.fromtimestamp(spec['start'],zone).isoformat()+' .. '+datetime.fromtimestamp(spec['end'],zone).isoformat()+' [end exclusive]'
+                        if spec.get('outcome_class'):
+                            period+=' | '+({'answered':'پاسخ‌داده با شاهد','unanswered':'خروج بدون پاسخ'} if spec['language']=='fa' else {'answered':'answered with evidence','unanswered':'unanswered exits'})[spec['outcome_class']]
                         workbook=(builder_exports.Workbook(output,spec['language'],headers=builder_exports.headers(builder,spec['language']),period=period,max_bytes=self.limits.max_bytes)
                                   if builder else xlsx_stream.Workbook(output,spec['language'],period=period,max_bytes=self.limits.max_bytes))
                         cleanup.callback(workbook.abort)
@@ -444,7 +456,7 @@ class ExportWorker:
                             if not self.store._update(ident,worker,rows=rows_written,size=output.tell(),lease_seconds=self.limits.lease_seconds):
                                 raise _Cancelled('cancelled')
                         document=pdf_stream.Document(output,spec['language'],start=spec['start'],end=spec['end'],
-                            queues=spec['scope']['queues'],outcome=spec['outcome'],check=pdf_check,
+                            queues=spec['scope']['queues'],outcome=spec['outcome'],outcome_class=spec.get('outcome_class'),check=pdf_check,
                             max_rows=min(self.limits.max_rows,pdf_stream.MAX_ROWS),max_bytes=min(self.limits.max_bytes,pdf_stream.MAX_BYTES))
                         cleanup.callback(document.abort)
                     else:
