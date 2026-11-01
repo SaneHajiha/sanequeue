@@ -17,5 +17,7 @@ const table=el('table'),head=el('thead'),header=el('tr');for(const label of [t('
 window.SaneQueueReportCharts?.render($('unique-callers-chart'),{title:t('شماره‌های یکتا در هر روز','Distinct numbers per day'),subtitle:(window.SaneQueueReportPeriods?.caption(p)||p.toString())+' · '+t('فقط مراجعه‌های صف','Queue visits only'),unit:t('شماره','numbers'),labels:data.by_day.map(row=>row.day),series:[{label:t('شمارهٔ یکتا','Distinct numbers'),values:data.by_day.map(row=>row.unique_numbers)}]});
 $('unique-callers-feedback').textContent=t('محاسبه بر اساس شواهد ثبت‌شده انجام شد؛ جمع روزها و صف‌ها لزوماً برابر عدد یکتای کل نیست.','Calculated from recorded evidence; daily and queue sums need not equal the period total.');
 }catch(error){if(stamp===revision&&error.name!=='AbortError')$('unique-callers-feedback').textContent=error.message==='denied'?t('برای این محاسبه مجوز مشاهدهٔ شمارهٔ همهٔ صف‌های انتخاب‌شده لازم است.','Permission to view numbers in every selected queue is required.'):t('محاسبه انجام نشد؛ بازه، دسترسی و وضعیت آرشیو را بررسی کنید.','Calculation failed; check the period, access and archive status.');}finally{if(pending===controller){pending=null;button.disabled=false;}}});
-dates.addEventListener('input',clear);dates.addEventListener('change',clear);dates.addEventListener('submit',clear);document.addEventListener('sanequeue:reports-loaded',clear);
+// The main report may finish after this independent calculation. Date input
+// and submit events already invalidate old results; its completion must not.
+dates.addEventListener('input',clear);dates.addEventListener('change',clear);dates.addEventListener('submit',clear);
 })();

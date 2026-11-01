@@ -7,5 +7,6 @@ for(const locale of ['fa','en'])test(`distinct callers ${locale}`,async({page})=
  await page.route('**/api/history/unique-callers?**',route=>route.fulfill({json:{state:'available',total_unique:1,known_number_visits:10,unknown_number_visits:1,missing_entry_visits:0,by_day:[{day:'2026-10-01',unique_numbers:1,known_number_visits:10}],by_queue:[{queue:'8001',unique_numbers:1,known_number_visits:10}]}}));
  await page.addScriptTag({path:resolve('../../qpanel/themes/qpanel/static/js/report-charts.js')});await page.addScriptTag({path:resolve('../../qpanel/themes/qpanel/static/js/unique-callers.js')});
  await page.locator('#unique-callers-run').click();await expect(page.locator('#unique-callers-chart svg')).toBeVisible();await expect(page.locator('#unique-callers-table table')).toHaveCount(2);await expect(page.locator('#unique-callers-table')).toContainText('8001');
+ await page.evaluate(()=>document.dispatchEvent(new Event('sanequeue:reports-loaded')));await expect(page.locator('#unique-callers-table table')).toHaveCount(2);
  await page.locator('[name=from]').fill('2026-10-02');await expect(page.locator('#unique-callers-table table')).toHaveCount(0);expect(errors).toEqual([]);
 });
