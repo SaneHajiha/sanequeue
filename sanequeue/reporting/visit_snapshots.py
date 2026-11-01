@@ -58,8 +58,19 @@ def page(db, pbx, token, scope, start, end, *, before=None, outcome=None, outcom
         clause+=' AND (entered<? OR (entered=? AND id<?))'
         args.extend((float(before[0]),float(before[0]),str(before[1])))
     fields=','.join('v.'+field for field in FIELDS)
-    return [dict(row) for row in db.execute('SELECT '+fields+' FROM report_visit_versions v WHERE '+clause+'''
+    rows=[dict(row) for row in db.execute('SELECT '+fields+' FROM report_visit_versions v WHERE '+clause+'''
       AND v.seq<=? AND v.deleted=0 AND NOT EXISTS (
         SELECT 1 FROM report_visit_versions newer WHERE newer.pbx=v.pbx AND newer.id=v.id
         AND newer.seq>v.seq AND newer.seq<=?)
       ORDER BY v.entered DESC,v.id DESC LIMIT ?''',(*args,token['sequence'],token['sequence'],max(1,min(200,int(limit)))))]
+    has_positions=db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='report_position_versions'").fetchone() is not None
+    for row in rows:
+        if not has_positions:
+            row['entry_position']=row['exit_position']=None
+            continue
+        position=db.execute('''SELECT entry_position,exit_position FROM report_position_versions
+          WHERE pbx=? AND id=? AND seq<=? ORDER BY seq DESC LIMIT 1''',
+          (pbx,row['id'],token['sequence'])).fetchone()
+        row['entry_position']=position['entry_position'] if position else None
+        row['exit_position']=position['exit_position'] if position else None
+    return rows

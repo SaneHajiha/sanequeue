@@ -507,7 +507,9 @@ class ExportWorker:
                         write(b'\xef\xbb\xbf')
                         if cdr:headers=cdr_builder.headers(cdr_data['columns'],spec['language'])
                         elif builder:headers=builder_exports.headers(builder,spec['language'])
-                        else:headers,_=table([],spec['language'])
+                        else:
+                            headers,_=table([],spec['language'])
+                            headers += (['جایگاه ورود','جایگاه خروج'] if spec['language']=='fa' else ['Entry position','Exit position'])
                         line(headers)
                     before=None;rows_scanned=0
                     while not cdr:
@@ -527,6 +529,8 @@ class ExportWorker:
                                 row['caller']=display_number(row['caller'],spec['number_modes'][row['queue']],
                                     secret=self.number_key,tenant='default',pbx=spec['pbx'],version=spec['number_policy_version'])
                             _,body=table(rows,spec['language'])
+                            if spec['format']=='csv':
+                                body=[values+[row.get('entry_position'),row.get('exit_position')] for values,row in zip(body,rows)]
                         if workbook:
                             workbook.append(body);size=output.tell()
                         elif document:

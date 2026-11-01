@@ -49,6 +49,56 @@ class QueuePositionTests(unittest.TestCase):
         self.assertEqual({(r['entry_position'],r['exit_position']) for r in rows},{(5,2),(7,3)})
         self.assertEqual(step(c.archive)['rebuilt_calls'],0)
 
+    def test_snapshot_and_csv_preserve_positions_as_of_request(self):
+        import csv,io,os
+        from sanequeue.reporting import visit_snapshots
+        from sanequeue.reporting.export_jobs import JobStore,ExportWorker,Limits,projection_watermark
+        c=self.case;c.archive.append([c.event('a','8001','ENTERQUEUE',0,['','100','5']),
+            c.event('a','8001','EXITWITHKEY',25,['9','2','5','25'])])
+        while project_batch(c.archive,limit=2)['processed']:pass
+        old=visit_snapshots.capture(c.archive)
+        store=JobStore(c.root/'jobs.db',c.root/'private');store.initialize()
+        ident=store.create('test',Scope(('8001',)),c.stamp,c.stamp+100,watermark=projection_watermark(c.archive),
+                           number_modes={'8001':'masked'},snapshot=old,format='csv',language='en',outcome_class='unanswered')
+        with c.archive.writer() as db:db.execute('UPDATE report_visit_positions SET entry_position=9,exit_position=1')
+        new=visit_snapshots.capture(c.archive)
+        self.assertGreater(new['sequence'],old['sequence'])
+        with c.archive.reader() as db:
+            old_rows=visit_snapshots.page(db,c.archive.pbx,old,Scope(('8001',)),c.stamp,c.stamp+100)
+            new_rows=visit_snapshots.page(db,c.archive.pbx,new,Scope(('8001',)),c.stamp,c.stamp+100)
+        self.assertEqual((old_rows[0]['entry_position'],old_rows[0]['exit_position']),(5,2))
+        self.assertEqual((new_rows[0]['entry_position'],new_rows[0]['exit_position']),(9,1))
+        worker=ExportWorker(store,c.archive,limits=Limits(min_free_bytes=0,max_load_per_cpu=0),authorize=lambda spec:True,disabled_file=c.root/'disabled')
+        result=worker.run_once();self.assertEqual(result['state'],'completed',result)
+        fd,_=store.open_output(ident,'test')
+        with os.fdopen(fd,'rb') as stream:rows=list(csv.DictReader(io.StringIO(stream.read().decode('utf-8-sig'))))
+        self.assertEqual((rows[0]['Entry position'],rows[0]['Exit position']),('5','2'))
+
+    def test_snapshot_reader_handles_archive_before_position_version_migration(self):
+        from sanequeue.reporting import visit_snapshots
+        c=self.case;c.archive.append([c.event('a','8001','ENTERQUEUE',0,['','100','5'])])
+        while project_batch(c.archive,limit=2)['processed']:pass
+        token=visit_snapshots.capture(c.archive)
+        with c.archive.writer() as db:db.execute('DROP TABLE report_position_versions')
+        with c.archive.reader() as db:rows=visit_snapshots.page(db,c.archive.pbx,token,Scope(('8001',)),c.stamp,c.stamp+100)
+        self.assertIsNone(rows[0]['entry_position']);self.assertIsNone(rows[0]['exit_position'])
+
+    def test_bootstrap_versions_existing_positions_without_overwriting_snapshot(self):
+        from sanequeue.reporting import visit_snapshots
+        from sanequeue.reporting.snapshot_schema import bootstrap_positions
+        c=self.case;c.archive.append([c.event('a','8001','ENTERQUEUE',0,['','100','5'])])
+        while project_batch(c.archive,limit=2)['processed']:pass
+        with c.archive.writer() as db:
+            db.execute('DELETE FROM report_position_versions')
+            db.execute('DELETE FROM report_position_snapshot_meta')
+        old=visit_snapshots.capture(c.archive)
+        with c.archive.writer() as db:bootstrap_positions(db,c.archive.pbx,limit=1)
+        new=visit_snapshots.capture(c.archive)
+        with c.archive.reader() as db:
+            before=visit_snapshots.page(db,c.archive.pbx,old,Scope(('8001',)),c.stamp,c.stamp+100)
+            after=visit_snapshots.page(db,c.archive.pbx,new,Scope(('8001',)),c.stamp,c.stamp+100)
+        self.assertIsNone(before[0]['entry_position']);self.assertEqual(after[0]['entry_position'],5)
+
     def test_reentry_does_not_mix_positions_and_rebuild_removes_old(self):
         c=self.case
         c.archive.append([c.event('a','8001','ENTERQUEUE',0,['','100','5']),

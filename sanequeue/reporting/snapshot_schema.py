@@ -22,6 +22,42 @@ for operation, prefix in (('INSERT','NEW'), ('DELETE','OLD'), ('UPDATE','NEW')):
       INSERT INTO report_visit_versions({COLUMNS},deleted) VALUES({values},{int(operation=='DELETE')});
       END;'''
 
+# Position facts have their own immutable versions, linked to the same global
+# sequence as visit snapshots. A correction advances the visit sequence too.
+SCHEMA += """
+CREATE TABLE IF NOT EXISTS report_position_snapshot_meta(
+ pbx TEXT PRIMARY KEY,ready INTEGER NOT NULL DEFAULT 0,bootstrap_after TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS report_position_versions(
+ seq INTEGER PRIMARY KEY,pbx TEXT,id TEXT,entry_position INTEGER,exit_position INTEGER,
+ entry_evidence TEXT,exit_evidence TEXT);
+CREATE INDEX IF NOT EXISTS rpv_identity ON report_position_versions(pbx,id,seq DESC);
+"""
+for operation, prefix in (('INSERT','NEW'),('UPDATE','NEW'),('DELETE','OLD')):
+    values=(','.join(prefix+'.'+field for field in ('entry_position','exit_position','entry_evidence','exit_evidence'))
+            if operation!='DELETE' else "NULL,NULL,'unavailable','unavailable'")
+    SCHEMA += f"""CREATE TRIGGER IF NOT EXISTS report_position_snapshot_{operation.lower()}
+      AFTER {operation} ON report_visit_positions BEGIN
+      INSERT INTO report_visit_versions({COLUMNS},deleted)
+        SELECT {COLUMNS},0 FROM report_visits WHERE pbx={prefix}.pbx AND id={prefix}.id;
+      INSERT INTO report_position_versions(seq,pbx,id,entry_position,exit_position,entry_evidence,exit_evidence)
+        SELECT last_insert_rowid(),{prefix}.pbx,{prefix}.id,{values}
+        WHERE EXISTS (SELECT 1 FROM report_visits WHERE pbx={prefix}.pbx AND id={prefix}.id);
+      END;"""
+
+
+def bootstrap_positions(db,pbx,*,limit=100):
+    """Version one bounded page of position facts created before this migration."""
+    db.execute('INSERT OR IGNORE INTO report_position_snapshot_meta(pbx) VALUES(?)',(pbx,))
+    ready,after=db.execute('SELECT ready,bootstrap_after FROM report_position_snapshot_meta WHERE pbx=?',(pbx,)).fetchone()
+    if ready:return
+    size=max(1,min(500,int(limit)))
+    rows=db.execute('SELECT id FROM report_visit_positions WHERE pbx=? AND id>? ORDER BY id LIMIT ?', (pbx,after,size)).fetchall()
+    for (ident,) in rows:
+        if not db.execute('SELECT 1 FROM report_position_versions WHERE pbx=? AND id=? LIMIT 1',(pbx,ident)).fetchone():
+            db.execute('UPDATE report_visit_positions SET entry_position=entry_position WHERE pbx=? AND id=?',(pbx,ident))
+    db.execute('UPDATE report_position_snapshot_meta SET ready=?,bootstrap_after=? WHERE pbx=?',
+               (int(len(rows)<size),rows[-1][0] if rows else after,pbx))
+
 # Identity changes are unusual but must invalidate the old identity as well.
 SCHEMA += f'''CREATE TRIGGER IF NOT EXISTS report_snapshot_identity_change
  AFTER UPDATE ON report_visits WHEN OLD.pbx<>NEW.pbx OR OLD.id<>NEW.id BEGIN

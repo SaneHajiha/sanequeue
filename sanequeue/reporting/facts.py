@@ -11,7 +11,7 @@ import time
 import os
 import unicodedata
 from .identity import parties, canonical
-from .snapshot_schema import SCHEMA as SNAPSHOT_SCHEMA, bootstrap as bootstrap_snapshots
+from .snapshot_schema import SCHEMA as SNAPSHOT_SCHEMA, bootstrap as bootstrap_snapshots, bootstrap_positions
 from sanequeue.realtime.local_inventory import read_snapshot
 
 
@@ -255,7 +255,11 @@ def _rebuild_visits(db, pbx, queue, callid, through_event_id):
         entry_evidence='observed' if len(positions)==1 else 'conflicting' if positions else 'unavailable'
         db.execute('''INSERT INTO report_visit_positions VALUES(?,?,?,?,?,?)
           ON CONFLICT(pbx,id) DO UPDATE SET entry_position=excluded.entry_position,
-          exit_position=excluded.exit_position,entry_evidence=excluded.entry_evidence,exit_evidence=excluded.exit_evidence''',
+          exit_position=excluded.exit_position,entry_evidence=excluded.entry_evidence,exit_evidence=excluded.exit_evidence
+          WHERE report_visit_positions.entry_position IS NOT excluded.entry_position
+             OR report_visit_positions.exit_position IS NOT excluded.exit_position
+             OR report_visit_positions.entry_evidence IS NOT excluded.entry_evidence
+             OR report_visit_positions.exit_evidence IS NOT excluded.exit_evidence''',
                    (pbx,visit['id'],entry,visit['exit_position'],entry_evidence,visit['exit_evidence']))
         existing.pop(visit['id'], None)
     for ident in existing:
@@ -395,5 +399,6 @@ def project_batch(archive, *, limit=500, inventory=None):
         cursor = events[-1][0] if events else after
         db.execute('INSERT OR REPLACE INTO report_projection VALUES(?,?,?)', (archive.pbx, cursor, time.time()))
         bootstrap_snapshots(db, archive.pbx, limit=limit)
+        bootstrap_positions(db, archive.pbx, limit=min(limit,100))
         bootstrap_activity_snapshots(db, archive.pbx, limit=min(limit, 500))
     return dict(processed=len(events), after_id=cursor)

@@ -220,3 +220,4 @@ Queue positions: 40 local tests and 17 subtests passed for explicit entry/exit, 
 
 On the lab, revision 6988731 passed 36 Linux tests with Asterisk PID unchanged. Authenticated Chrome displayed entry/exit column headings in both queue outcome detail views with no page errors. Bounded historical position repair was started and checkpointed on the lab archive in small batches; it was not yet complete at the end of this run. Individual legacy positions and production-scale completion remain unverified.
 
+Position snapshot CSV: 45 targeted tests and 17 subtests passed; snapshot/export compatibility suite 60 passed, 1 skipped and 11 subtests passed. Included legacy bootstrap, corrections after snapshot and pinned CSV. SQLite version migration is bounded; XLSX/PDF positions and production-scale performance remain open. Lab historical repair completed at target 17613, with 491 position rows for 491 recorded visits; row presence does not mean every position has evidence.
