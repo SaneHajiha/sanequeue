@@ -231,3 +231,6 @@ On lab revision 9af9d07, 47 Linux tests passed and Asterisk PID remained unchang
 Extension shortcut and light theme: 16 targeted CDR/API/theme tests and 8 subtests passed; Playwright checked that exact extension search navigates to global CDR, preserves dates, clears older CDR filters and does not send the queue filter. A light/dark live visual check and explicit endpoint coverage remain separate.
 
 Contextual report filters and queue card navigation: 25 local backend tests and 33 subtests passed, plus navigation harness and 8 browser workbench cases. Queue selection is hidden for global PBX reports without narrowing CDR, retained for queue reports; actual listen controls continue to require normal authorization. Full live visual acceptance and PBX operation acceptance are separate.
+
+On lab revision 1a9f0e8, 42 Linux tests passed and Asterisk PID was unchanged. Chrome inspected light operation, queue and report screens; global CDR search for a test extension returned results without queue parameter, three extension suggestions were shown, contextual queue visibility switched correctly, and the queue card opened the selected waiting view. No live monitoring command was issued. Screenshots cover selected desktop/mobile states, not a full accessibility or Voiping parity audit.
+
