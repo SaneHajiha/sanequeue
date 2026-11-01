@@ -103,6 +103,7 @@ class OutboundDashboardTests(unittest.TestCase):
                 if table=='origins':self.assertIn(b'>100<',xml)
             pdf=client.post('/api/history/cdr/outbound-dashboard/export'+self.query+'&format=pdf&table='+table+'&lang=fa',headers=headers)
             self.assertEqual(pdf.status_code,200,pdf.json);self.assertTrue(pdf.data.startswith(b'%PDF-'))
+            self.assertEqual(pdf.mimetype,'application/pdf')
         data=report(self.c.archive,self.start,self.end,numbers=True)
         data['origins']=[dict(data['origins'][0]) for _ in range(101)]
         with patch('sanequeue.api.reports.outbound_dashboard.report',return_value=data):

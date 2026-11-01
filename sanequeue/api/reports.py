@@ -778,7 +778,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         finally:aggregate_gate.release()
         if (owner!=str(current_user.get_id()) or cdr_context()!=(start,end,filters,numbers) or
             queries.queues(archive)!=queues or not all(can_queue(queue,'report_export') for queue in queues)):abort(403)
-        types={'csv':'text/csv; charset=utf-8','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','pdf':'application/octet-stream'}
+        types={'csv':'text/csv; charset=utf-8','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','pdf':'application/pdf'}
         return Response(content,mimetype=types[format],headers={
             'Content-Disposition':f'attachment; filename="sanequeue-outbound-{table}.{format}"',
             'X-SaneQueue-Unit':'outbound_cdr_segment','Cache-Control':'private, no-store'})
