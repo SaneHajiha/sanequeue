@@ -1,0 +1,14 @@
+{% macro outcomes(kind, title_fa, title_en, note_fa, note_en) %}
+<section id="history-{{kind}}-section" class="panel history-section" data-queue-outcome="{{kind}}">
+ <div class="panel-heading"><div><h2>{{t(title_fa,title_en)}}</h2><p class="report-note">{{t(note_fa,note_en)}}</p></div><button type="button" data-outcome-run>{{t('محاسبه گزارش','Calculate report')}}</button></div>
+ <p role="status" aria-live="polite" data-outcome-feedback></p>
+ <div class="history-kpis" data-outcome-summary></div>
+ <div data-outcome-chart></div>
+ <div class="table-wrap" data-outcome-queues></div>
+ <div class="table-wrap" data-outcome-days></div>
+ {% if kind=='unanswered' %}<div class="table-wrap" data-outcome-reasons></div>{% endif %}
+ <details><summary>{{t('تعریف و محدودیت آمار','Metric definition and limits')}}</summary><p>{{t('واحد شمارش، مراجعهٔ صف است، نه مکالمه یا مشتری یکتا. فقط مراجعه‌هایی که ورودشان ثبت شده در جمع آمده‌اند؛ حالت باز یا شواهد متناقض نامعلوم می‌ماند. خروج از صف خالی به‌تنهایی اثبات غیبت کارشناس نیست. زمان‌های بدون شاهد در میانگین شرکت نمی‌کنند. مبنای درصد فقط پاسخ‌داده و بدون‌پاسخِ معلوم است؛ موارد باز یا نامعلوم در آن نیست. فیلتر نتیجهٔ بالای صفحه روی این گزارش اثر ندارد.','The unit is a queue visit, not a unique conversation or customer. Totals require observed entry; open or conflicting evidence remains unresolved. Exit-empty alone does not prove staff absence. Unknown durations are excluded from averages. The percentage denominator is answered plus known unanswered, excluding open or unresolved visits. The outcome filter above does not change this report.')}}</p></details>
+</section>
+{% endmacro %}
+{{outcomes('answered','مراجعه‌های پاسخ‌داده‌شده','Answered queue visits','تماس متصل یا تکمیل‌شده با شواهد پاسخ؛ انتقالِ دارای شاهد اتصال نیز در این گروه است.','Connected or completed visits with answer evidence; transfers with a proven connection are included.')}}
+{{outcomes('unanswered','مراجعه‌های پایان‌یافته بدون پاسخ','Unanswered queue exits','انصراف، پایان زمان انتظار، خروج با کلید و خروج صف خالی جدا از زنگ بی‌پاسخ کارشناس هستند.','Abandonment, timeout, key exit and empty-queue exit are distinct from an agent’s unanswered ring attempt.')}}

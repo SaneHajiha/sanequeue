@@ -38,3 +38,6 @@ Shared report charts now support paged bar/time-series views, honest gaps, respo
 
 ## Queue unique-number increment — 2026-11-01
 A bounded, explicitly requested aggregate over scoped queue visits counts distinct normalized caller numbers per range/day/queue. It requires caller-details permission for every queue and never returns a number. Country-prefix equivalence, non-queue inbound calls and person identity are not inferred. Above 50,000 visits it refuses partial results. A separate synthetic month tested 33,330 visits under a 10% CPU quota; no live data were modified. Remaining report filters, full unanswered/answered workflows and table-level exports are not complete.
+
+## Queue outcome views — 2026-11-01
+Separate answered and unanswered queue-visit views provide entry-hour charts, per-day/per-queue aggregates, explicit exit reasons and known-outcome denominators. Unknown, conflicting, open and missing-entry evidence is not labelled as an abandonment. One concurrent calculation per web process, 50,000-row cap, no AMI or PBX SQL. Full category-specific detail and export remain open.

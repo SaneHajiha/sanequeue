@@ -100,3 +100,6 @@ Local targeted pytest: 28 passed, 9 subtests before final edge-case addition; br
 Installed-panel smoke uncovered a report-loaded race that cleared the independent result; the handler now invalidates on filter changes/submit, not on another request completing. Regression: 2 Chromium FA/EN cases passed including delayed report completion; 4 targeted backend tests passed.
 
 Final installed-lab check at source c6d56630705d: the real report completed, day/queue tables and localized chart rendered; the main-report completion race was reproduced and fixed, then exercised twice in the installed Chrome harness. Queue fixture and real lab data remain private. Latest code was deployed only to the authorized laboratory; Asterisk PID was unchanged.
+
+## Queue outcome views — 2026-11-01
+A synthetic 33,330-visit, 30-day isolated lab archive completed in 14.903 seconds at a 10% single-core CPU quota and 128 MiB memory cap: 30,000 observed entries, 20,010 answered, 6,660 unanswered, 3,330 unresolved, plus 3,330 missing entries. Totals matched day and queue aggregations. This is not a live-call load test. Final local scoped Python: 34 passed, 11 subtests; Chromium: 7 passed for FA/EN, both categories, busy guard and distinct callers. Installed-runtime acceptance remains to be run.

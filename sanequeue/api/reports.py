@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 import sqlite3
 import time
+from threading import BoundedSemaphore
 from zoneinfo import ZoneInfo
 
 from flask import abort, jsonify, request, Response, g, session
@@ -22,6 +23,7 @@ from sanequeue.reporting import activity_queries
 from sanequeue.reporting import outbound
 from sanequeue.reporting import analytics
 from sanequeue.reporting import unique_callers
+from sanequeue.reporting import queue_outcomes
 from sanequeue.reporting import followup
 from sanequeue.reporting import agent_metrics
 from sanequeue.reporting.export_jobs import JobStore, ExportFailure, projection_watermark
@@ -48,6 +50,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             recording_root='/var/spool/asterisk/monitor', pbx='primary',reason_label=lambda queue,reason:reason,
             known_agents=lambda: (), planning_path=None, shift_identity=None):
     archive = Archive(path, pbx=pbx)
+    aggregate_gate = BoundedSemaphore(1)
     export_store = JobStore(archive.path.parent/'export-jobs.sqlite3', archive.path.parent/'private-exports')
     agent_store = AgentJobStore(archive.path.parent/'agent-summary-jobs.sqlite3', archive.path.parent/'private-agent-summaries')
     audit_store = AuditStore(archive.path.parent/'recording-access.sqlite3')
@@ -471,10 +474,25 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         owner=str(current_user.get_id());scope,start,end=context()
         if role() not in ('admin','supervisor') or not scope.queues or not all(
                 can_queue(queue,'caller_details') for queue in scope.queues):abort(403)
-        result=unique_callers.report(archive,scope,start,end)
+        if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
+        try:result=unique_callers.report(archive,scope,start,end)
+        finally:aggregate_gate.release()
         current,_,_=context()
         if (str(current_user.get_id())!=owner or current!=scope or role() not in ('admin','supervisor')
                 or not all(can_queue(queue,'caller_details') for queue in scope.queues)):abort(403)
+        return jsonify(result)
+
+    @app.get('/api/history/queue-outcomes')
+    @login_required
+    @safe
+    def history_queue_outcomes():
+        owner=str(current_user.get_id());scope,start,end=context()
+        if not aggregate_gate.acquire(blocking=False):
+            return jsonify(error='queue_outcomes_busy'),429
+        try:result=queue_outcomes.report(archive,scope,start,end)
+        finally:aggregate_gate.release()
+        current,_,_=context()
+        if str(current_user.get_id())!=owner or current!=scope:abort(403)
         return jsonify(result)
 
     @app.get('/api/history/agent-rankings')

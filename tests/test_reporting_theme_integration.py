@@ -23,7 +23,7 @@ class ReportingThemeTests(unittest.TestCase):
                 html=render_theme_template('qpanel','reports.html',t=lambda fa,en:fa if lang=='fa' else en,
                     user_role='admin',can_view_section=lambda key:True,
                     ops_config={'allowed_sections':['reports','audit','shifts','users']})
-                for name in ('history-customer-segments-section','history-builder-section','history-transcript-section','history-ring-attempts-section','history-agent-rankings-section'):
+                for name in ('history-customer-segments-section','history-builder-section','history-transcript-section','history-ring-attempts-section','history-agent-rankings-section','history-answered-section','history-unanswered-section'):
                     self.assertIn('id="'+name+'"',html)
 
     def test_report_family_navigation_retains_rankings_and_role_gates(self):
@@ -35,6 +35,8 @@ class ReportingThemeTests(unittest.TestCase):
         admin=render('admin')
         for family in ('pbx','contact-center','shared'):self.assertIn('data-report-family="'+family+'"',admin)
         self.assertIn('data-module-target="history-agent-rankings-section"',admin)
+        self.assertIn('data-module-target="history-answered-section"',admin)
+        self.assertIn('data-module-target="history-unanswered-section"',admin)
         self.assertNotIn('history-cdr-section',render('agent'))
         self.assertNotIn('history-plan-section',render('agent'))
         self.assertNotIn('history-agent-rankings-section',render('admin',False))
