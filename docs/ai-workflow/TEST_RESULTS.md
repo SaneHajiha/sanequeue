@@ -171,6 +171,8 @@ Revision 5f928cd passed 14 targeted Linux tests and both CI workflows; Asterisk 
 
 An additional native-form browser PDF download attempt on b7938d5 did not resolve the issue; it was reverted, preserving the original header-based CSRF contract and visible failure feedback. Wait-distribution CSV was added for authorized admin/supervisor scope; 34 targeted tests and 10 subtests and 13 browser workbench tests passed locally, including aggregate reconciliation, CSRF and revoked-export permission. Lab verification remains pending.
 
+Lab revision 107b5e2 passed 25 targeted Linux tests with Asterisk PID unchanged. Authenticated browser downloaded both answered and unanswered wait CSVs; each contained seven buckets plus the unknown row and produced no page errors. This does not resolve the separately documented browser PDF response issue.
+
 Lab revision 301a9e5 passed 15 targeted Linux tests, preserved the Asterisk PID, and the authenticated browser downloaded all three aggregate CSV files with UTF-8 BOM and Persian headers without page errors. The selected archive period had no observed outbound segments, so nonempty values were verified only with synthetic fixtures. Both CI workflows passed for 301a9e5.
 
 Outbound dashboard local validation: 40 tests and 17 subtests passed across CDR, access, builder and theme integration, including permission revocation after archive read. Two browser workbench tests passed in Persian and English with a synthetic dataset and escaped content. These results do not validate external trunks, human contact or production load.
