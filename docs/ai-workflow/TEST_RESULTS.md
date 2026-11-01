@@ -208,3 +208,4 @@ Queue outcome weekday table/CSV: 37 targeted tests and 22 subtests passed, inclu
 
 On the lab, revision cbef95d passed 30 Linux tests with the Asterisk PID unchanged. Authenticated Chrome on port 5000 displayed both weekday tables and downloaded both CSVs; each had four rows, and the category totals reconciled with the report API. No page errors. This verifies the chosen lab archive interval, not real external trunk behavior or production load.
 
+EXITWITHKEY queue_log parser fix: 49 tests and 22 subtests passed locally across queries, outcomes, archive, analytics. Four-field EXITWITHKEY uses recorded wait, missing fourth field stays unknown, timeout and empty-queue events remain correctly parsed. Lab read-only inspection found zero EXITWITHKEY rows; pre-existing projections on other installations require controlled remediation, not an automatic full replay. Source format: https://docs.asterisk.org/Operation/Logging/Queue-Logs/

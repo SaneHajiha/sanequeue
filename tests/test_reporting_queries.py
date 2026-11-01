@@ -78,6 +78,28 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(visits(self.archive, Scope(()), self.stamp, self.stamp + 100)['rows'], [])
         self.assertEqual(visits(self.archive, Scope(('8001',), (), True), self.stamp, self.stamp + 100)['rows'], [])
 
+    def test_queue_exit_key_wait_uses_fourth_field_and_preserves_missing(self):
+        self.archive.append([
+            self.event('key','8001','ENTERQUEUE',0,['','200','4']),
+            self.event('key','8001','EXITWITHKEY',25,['9','2','4','25']),
+            self.event('incomplete','8001','ENTERQUEUE',30,['','201','4']),
+            self.event('incomplete','8001','EXITWITHKEY',35,['9','2','4']),
+            self.event('timeout','8001','ENTERQUEUE',40,['','202','3']),
+            self.event('timeout','8001','EXITWITHTIMEOUT',52,['1','3','12']),
+            self.event('empty','8001','ENTERQUEUE',60,['','203','2']),
+            self.event('empty','8001','EXITEMPTY',68,['1','2','8']),
+        ])
+        while project_batch(self.archive,limit=2)['processed']:pass
+        rows=visits(self.archive,Scope(('8001',)),self.stamp,self.stamp+100)['rows']
+        values={row['caller']:row['wait_seconds'] for row in rows}
+        self.assertEqual(values,{'200':25,'201':None,'202':12,'203':8})
+        from sanequeue.reporting.queue_outcomes import report
+        result=report(self.archive,Scope(('8001',)),self.stamp,self.stamp+100)
+        self.assertEqual(result['totals']['unanswered'],4)
+        self.assertEqual(result['totals']['unanswered_wait_samples'],3)
+        self.assertEqual(result['totals']['average_unanswered_wait_seconds'],15)
+        self.assertEqual(project_batch(self.archive)['processed'],0)
+
     def test_last_observed_answer_is_per_queue_and_within_selected_entry_range(self):
         self.seed()
         self.archive.append([

@@ -191,7 +191,11 @@ def _rebuild_visits(db, pbx, queue, callid, through_event_id):
             elif kind == 'ABANDON':
                 current.update(ended=ts, outcome='abandoned', wait_seconds=number(values[2]) if len(values) > 2 else None)
             elif kind in ('EXITWITHTIMEOUT', 'EXITEMPTY', 'EXITWITHKEY'):
-                current.update(ended=ts, outcome=kind.lower(), wait_seconds=number(values[2]) if len(values) > 2 else None)
+                # EXITWITHKEY(key, position, original position, wait) has one
+                # extra leading field compared with the other exit events.
+                wait_index = 3 if kind == 'EXITWITHKEY' else 2
+                current.update(ended=ts, outcome=kind.lower(),
+                               wait_seconds=number(values[wait_index]) if len(values) > wait_index else None)
             else:
                 # Transfer ends this queue segment; it does not identify who
                 # eventually hung up the entire transferred conversation.
