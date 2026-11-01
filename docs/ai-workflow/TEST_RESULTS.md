@@ -193,3 +193,6 @@ The CDR plan freezes its definition and non-date filters, rechecks global scope 
 
 
 Outbound dashboard filters: 28 targeted backend tests and 4 subtests passed; 6 browser workbench tests passed. They use controlled fixtures and mocked downloads; they do not prove the real browser PDF download or live trunk behavior.
+
+On the lab, revision 60f396e passed 27 Linux tests with the Asterisk PID unchanged. An authenticated Chrome session on port 5000 applied origin/status filters and downloaded the days CSV with filter metadata and no page errors. The selected range had zero outbound segments, so nonempty real-trunk data and real browser PDF export remain unverified.
+
