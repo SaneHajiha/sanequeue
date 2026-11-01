@@ -197,11 +197,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             abort(503, description='export_service_not_initialized')
         return str(current_user.get_id())
 
-    def export_csrf(*,allow_form=False):
+    def export_csrf():
         token = request.headers.get('X-CSRF-Token', '')
-        if not token and allow_form and request.mimetype=='application/x-www-form-urlencoded':
-            if request.content_length is None or request.content_length>4096:abort(403)
-            token=request.form.get('csrf_token','')
         if not token or not session.get('csrf_token') or not hmac.compare_digest(token, session['csrf_token']):
             abort(403)
 
@@ -531,6 +528,26 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if str(current_user.get_id())!=owner or current!=scope:abort(403)
         return jsonify(result)
 
+    @app.post('/api/history/queue-outcomes/wait-distribution.csv')
+    @login_required
+    @safe
+    def history_queue_wait_distribution_csv():
+        owner=str(current_user.get_id());scope,start,end=context();export_csrf()
+        if role() not in ('admin','supervisor') or not scope.queues or not all(can_queue(q,'report_export') for q in scope.queues):abort(403)
+        kind=request.args.get('kind','');language=request.args.get('lang','fa')
+        if kind not in ('answered','unanswered') or language not in ('fa','en'):raise ValueError('invalid_wait_distribution_export')
+        if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
+        try:
+            result=queue_outcomes.report(archive,scope,start,end)
+            if result['state']!='available':raise QueryDeadline('queue_outcome_visit_limit')
+            content=queue_outcomes.distribution_csv(result,kind,language,scope.queues)
+        finally:aggregate_gate.release()
+        current,_,_=context()
+        if owner!=str(current_user.get_id()) or current!=scope or role() not in ('admin','supervisor') or not all(can_queue(q,'report_export') for q in scope.queues):abort(403)
+        return Response(content,mimetype='text/csv; charset=utf-8',headers={
+            'Content-Disposition':f'attachment; filename="sanequeue-{kind}-wait-distribution.csv"',
+            'X-SaneQueue-Unit':'queue_visit','Cache-Control':'private, no-store'})
+
     @app.get('/api/history/agent-rankings')
     @login_required
     @safe
@@ -765,7 +782,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if not queues or not all(can_queue(queue,'report_export') for queue in queues):abort(403)
         table=request.args.get('table','');language=request.args.get('lang','fa');format=(request.args.get('format','') if request.path.endswith('/export') else request.path.rsplit('.',1)[-1])
         if table not in ('origins','days','dispositions') or language not in ('fa','en') or format not in ('csv','xlsx','pdf'):raise ValueError('invalid_outbound_export')
-        export_csrf(allow_form=(format=='pdf'))
+        export_csrf()
         if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
         try:
             data=outbound_dashboard.report(archive,start,end,filters,numbers=numbers)

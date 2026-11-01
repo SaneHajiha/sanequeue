@@ -167,6 +167,10 @@ On lab revision 0c1dd74, 44 targeted Linux tests passed and Asterisk remained ru
 
 Revisions f051b8e and d0e5dfa each passed targeted Linux tests and preserved the Asterisk PID. Browser PDF fetch still returned an intermediary 204 with both the extensionless route and generic attachment MIME; direct authenticated requests returned a valid PDF. This is not accepted as a successful browser PDF download. The standard PDF MIME was restored; the cause in the browser/network path remains unconfirmed.
 
+Revision 5f928cd passed 14 targeted Linux tests and both CI workflows; Asterisk PID remained unchanged. On the lab browser, all three CSV and all three XLSX files downloaded. Authenticated direct requests returned valid PDF signatures for all three tables; browser PDF fetch remained unaccepted due to the previously recorded 204. The selected period had no recorded outbound segments, so non-empty values remain validated with synthetic fixtures only.
+
+An additional native-form browser PDF download attempt on b7938d5 did not resolve the issue; it was reverted, preserving the original header-based CSRF contract and visible failure feedback. Wait-distribution CSV was added for authorized admin/supervisor scope; 34 targeted tests and 10 subtests and 13 browser workbench tests passed locally, including aggregate reconciliation, CSRF and revoked-export permission. Lab verification remains pending.
+
 Lab revision 301a9e5 passed 15 targeted Linux tests, preserved the Asterisk PID, and the authenticated browser downloaded all three aggregate CSV files with UTF-8 BOM and Persian headers without page errors. The selected archive period had no observed outbound segments, so nonempty values were verified only with synthetic fixtures. Both CI workflows passed for 301a9e5.
 
 Outbound dashboard local validation: 40 tests and 17 subtests passed across CDR, access, builder and theme integration, including permission revocation after archive read. Two browser workbench tests passed in Persian and English with a synthetic dataset and escaped content. These results do not validate external trunks, human contact or production load.

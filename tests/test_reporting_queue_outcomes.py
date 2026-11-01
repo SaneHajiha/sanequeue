@@ -52,6 +52,28 @@ class QueueOutcomeTests(unittest.TestCase):
         self.assertEqual(report(self.case.archive,Scope(('8002',)),self.case.stamp,self.case.stamp+100)['totals']['abandoned'],1)
         self.assertEqual(report(self.case.archive,Scope(()),self.case.stamp,self.case.stamp+100)['totals']['visits'],0)
 
+    def test_wait_distribution_csv_matches_summary_and_checks_permissions(self):
+        denied=[];client=self.case.client(role='supervisor',menus=('reports',),denied=denied)
+        with client.session_transaction() as state:state['csrf_token']='token'
+        url='/api/history/queue-outcomes/wait-distribution.csv'+self.case.dates+'&kind=unanswered&lang=en'
+        self.assertEqual(client.post(url).status_code,403)
+        result=client.post(url,headers={'X-CSRF-Token':'token'});self.assertEqual(result.status_code,200)
+        rows=list(csv.DictReader(io.StringIO(result.data.decode('utf-8-sig'))))
+        self.assertEqual(len(rows),8);self.assertEqual(sum(int(row['visits']) for row in rows),4)
+        self.assertTrue(all(row['queues'].startswith("'") for row in rows))
+        self.assertNotIn('09123456789',result.get_data(as_text=True))
+        denied.append('report_export');self.assertEqual(client.post(url,headers={'X-CSRF-Token':'token'}).status_code,403)
+
+    def test_wait_distribution_csv_rechecks_revoked_export_grant(self):
+        denied=[];client=self.case.client(role='supervisor',menus=('reports',),denied=denied)
+        with client.session_transaction() as state:state['csrf_token']='token'
+        from sanequeue.reporting.queue_outcomes import distribution_csv
+        def revoke(*args,**kwargs):
+            value=distribution_csv(*args,**kwargs);denied.append('report_export');return value
+        with patch('sanequeue.api.reports.queue_outcomes.distribution_csv',side_effect=revoke):
+            result=client.post('/api/history/queue-outcomes/wait-distribution.csv'+self.case.dates+'&kind=answered',headers={'X-CSRF-Token':'token'})
+        self.assertEqual(result.status_code,403);self.assertNotIn('09123456789',result.get_data(as_text=True))
+
     def test_wait_distribution_uses_half_open_boundaries_unknown_and_scope(self):
         archive=self.case.archive
         with archive.writer() as db:

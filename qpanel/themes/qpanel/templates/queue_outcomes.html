@@ -7,7 +7,7 @@
  <div data-outcome-daily-chart></div>
  <div data-outcome-weekday-chart></div>
  <div data-outcome-duration-chart></div>
- <section><h3>{{t('توزیع زمان انتظار','Wait time distribution')}}</h3><p class="report-note">{{t('بازه‌ها شامل حد پایین و فاقد حد بالایند؛ انتظار نامعلوم جدا شمرده می‌شود. هر مورد یک مراجعهٔ صف است.','Buckets include the lower bound and exclude the upper; unknown waits are counted separately. Each item is one queue visit.')}}</p><div data-outcome-wait-chart></div><div class="table-wrap" data-outcome-wait-table></div></section>
+ <section><h3>{{t('توزیع زمان انتظار','Wait time distribution')}}</h3><p class="report-note">{{t('بازه‌ها شامل حد پایین و فاقد حد بالایند؛ انتظار نامعلوم جدا شمرده می‌شود. هر مورد یک مراجعهٔ صف است.','Buckets include the lower bound and exclude the upper; unknown waits are counted separately. Each item is one queue visit.')}}</p>{% if user_role in ('admin','supervisor') %}<button type="button" data-outcome-wait-export>{{t('دریافت CSV توزیع انتظار','Download wait distribution CSV')}}</button><p class="report-note">{{t('فایل هنگام درخواست دوباره محاسبه می‌شود و می‌تواند با نمودار قبلی تفاوت داشته باشد.','The file is recalculated at request time and can differ from the earlier chart.')}}</p>{% endif %}<div data-outcome-wait-chart></div><div class="table-wrap" data-outcome-wait-table></div></section>
  <div class="table-wrap" data-outcome-queues></div>
  <div class="table-wrap" data-outcome-days></div>
  {% if kind=='unanswered' %}<div class="table-wrap" data-outcome-reasons></div>{% endif %}

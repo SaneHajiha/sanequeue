@@ -1,5 +1,7 @@
 """Bounded, evidence-based queue visit outcomes, not PBX-wide calls."""
 from datetime import datetime
+import csv
+import io
 import math
 from .analytics import ZONE
 from .queries import _where
@@ -98,3 +100,22 @@ def report(archive,scope,start,end):
                       rate_denominator='answered_plus_unanswered_known_outcomes',
                       exit_empty_is_not_proof_no_staff=True,maximum_visits=MAX_VISITS,
                       wait_distribution='half_open_seconds_by_known_outcome_and_recorded_wait'))
+
+
+def distribution_csv(result,kind,language,queues):
+    if kind not in ('answered','unanswered') or language not in ('fa','en') or result.get('state')!='available':
+        raise ValueError('invalid_wait_distribution_export')
+    from .exports import persian_date
+    def stamp(value):
+        local=datetime.fromtimestamp(value,ZONE)
+        return (persian_date(local.date()) if language=='fa' else local.date().isoformat())+local.strftime(' %H:%M:%S')
+    fa=language=='fa';item=result['wait_distribution'][kind];output=io.StringIO(newline='');writer=csv.writer(output)
+    headers=(['شروع تهران','پایان انحصاری تهران','صف‌های انتخابی','دسته','از ثانیه شامل','تا ثانیه غیرشامل','تعداد مراجعه','مخرج انتظار معلوم','درصد از انتظار معلوم'] if fa else
+             ['period_start_tehran','period_end_exclusive_tehran','queues','category','start_inclusive_seconds','end_exclusive_seconds','visits','known_wait_denominator','percent_known_wait'])
+    writer.writerow(headers);queue_text="'"+','.join(queues)
+    category=('پاسخ‌داده' if kind=='answered' else 'بدون پاسخ') if fa else kind
+    common=[stamp(result['start']),stamp(result['end']),queue_text,category]
+    for bucket in item['buckets']:
+        writer.writerow(common+[bucket['start_seconds'],bucket['end_seconds'] if bucket['end_seconds'] is not None else '',bucket['count'],item['known'],100*bucket['count']/item['known'] if item['known'] else ''])
+    writer.writerow(common+[('نامعلوم' if fa else 'unknown'),'',item['unknown'],item['known'],''])
+    return output.getvalue().encode('utf-8-sig')

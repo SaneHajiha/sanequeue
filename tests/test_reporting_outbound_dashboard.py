@@ -120,14 +120,6 @@ class OutboundDashboardTests(unittest.TestCase):
             response=client.post('/api/history/cdr/outbound-dashboard/export.pdf'+self.query+'&table=origins',headers={'X-CSRF-Token':'token'})
         self.assertEqual(response.status_code,403);self.assertFalse(response.data.startswith(b'%PDF-'))
 
-    def test_pdf_form_post_requires_csrf_and_is_not_allowed_for_csv(self):
-        client=self.c.client(role='admin',menus=('reports','users'),details=True)
-        with client.session_transaction() as state:state['csrf_token']='token'
-        base='/api/history/cdr/outbound-dashboard/export'+self.query+'&table=days'
-        self.assertEqual(client.post(base+'&format=pdf',data={'csrf_token':'wrong'}).status_code,403)
-        self.assertEqual(client.post(base+'&format=csv',data={'csrf_token':'token'}).status_code,403)
-        result=client.post(base+'&format=pdf',data={'csrf_token':'token'})
-        self.assertEqual(result.status_code,200);self.assertTrue(result.data.startswith(b'%PDF-'))
 
 
 if __name__=='__main__':unittest.main()
