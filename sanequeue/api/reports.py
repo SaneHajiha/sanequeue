@@ -558,10 +558,12 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     @login_required
     @safe
     def history_followup():
-        scope,start,end=context()
+        owner=str(current_user.get_id());scope,start,end=context()
         if role() not in ('admin','supervisor'):abort(403)
         before=(request.args['before_time'],request.args.get('before_id')) if request.args.get('before_time') else None
         result=followup.report(archive,scope,start,end,window_days=int(request.args.get('window_days',7)),before=before)
+        current,_,_=context()
+        if str(current_user.get_id())!=owner or current!=scope or role() not in ('admin','supervisor'):abort(403)
         result['rows']=[protect_number(row) for row in result['rows']]
         return jsonify(result)
 

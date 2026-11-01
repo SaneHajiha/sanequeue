@@ -44,6 +44,14 @@ class FollowupTests(unittest.TestCase):
         self.assertEqual(c.client(role='agent').get('/api/history/followup'+c.dates).status_code,403)
         self.assertEqual(c.client().get('/api/history/followup'+c.dates+'&window_days=31').status_code,400)
 
+    def test_access_revocation_during_query_never_returns_old_followup_rows(self):
+        self.seed();denied=[];client=self.case.client(role='supervisor',denied=denied)
+        def revoke(*args,**kwargs):
+            value=report(*args,**kwargs);denied.append('view');return value
+        with patch('sanequeue.api.reports.followup.report',side_effect=revoke):
+            response=client.get('/api/history/followup'+self.case.dates)
+        self.assertEqual(response.status_code,403);self.assertNotIn('09123456789',response.get_data(as_text=True))
+
     def test_deadline_and_no_matching_unproven_boundary(self):
         self.seed();c=self.case
         self.assertEqual(report(c.archive,Scope(('8001',)),c.stamp,c.stamp+6,now=c.stamp+6)['rows'][0]['first_reentry'],None)
