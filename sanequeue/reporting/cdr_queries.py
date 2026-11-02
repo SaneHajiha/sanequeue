@@ -19,7 +19,7 @@ _ZONE=ZoneInfo('Asia/Tehran')
 _NUMBER_FIELDS={'src':'c.src','dst':'c.dst','origin':'e.internal_caller_ext',
                 'outbound_cid':'e.outbound_cid','did':'e.did'}
 _KEYS=set(_NUMBER_FIELDS)|{'party','match','src_length','dst_length','direction','disposition','trunk',
-    'hour_from','hour_to','weekdays','duration_min','duration_max','billsec_min','billsec_max'}
+    'hour_from','hour_to','time_from','time_to','weekdays','duration_min','duration_max','billsec_min','billsec_max'}
 _DIRECTION="COALESCE(p.direction,'unknown')"
 _DISPOSITION="CASE WHEN TRIM(COALESCE(c.disposition,''))='' THEN 'UNKNOWN' ELSE UPPER(TRIM(c.disposition)) END"
 _JOIN='''FROM report_cdr c LEFT JOIN report_cdr_parties p ON p.pbx=c.pbx AND p.source_key=c.source_key
@@ -104,6 +104,16 @@ def _where(archive,start,end,filters):
         clean.update(hour_from=begin,hour_to=finish)
         clause+=' AND (cdr_hour(c.ts)>=? '+('AND' if begin<=finish else 'OR')+' cdr_hour(c.ts)<=?)'
         args.extend((begin,finish))
+    if 'time_from' in clean or 'time_to' in clean:
+        def seconds(key, default):
+            value=clean.get(key,default)
+            if not isinstance(value,str) or not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?',value):
+                raise ValueError('invalid_cdr_time_filter')
+            parts=[int(x) for x in value.split(':')]
+            return parts[0]*3600+parts[1]*60+(parts[2] if len(parts)==3 else (59 if key=='time_to' else 0))
+        begin,finish=seconds('time_from','00:00:00'),seconds('time_to','23:59:59')
+        clause+=' AND (cdr_second(c.ts)>=? '+('AND' if begin<=finish else 'OR')+' cdr_second(c.ts)<=?)'
+        args.extend((begin,finish))
     if 'weekdays' in clean:
         days=clean['weekdays']
         if isinstance(days,str):days=days.split(',')
@@ -125,6 +135,7 @@ def _where(archive,start,end,filters):
 def _functions(db):
     db.create_function('cdr_phone',1,_phone,deterministic=True)
     db.create_function('cdr_hour',1,lambda stamp:datetime.fromtimestamp(stamp,_ZONE).hour,deterministic=True)
+    db.create_function('cdr_second',1,lambda stamp:(lambda d:d.hour*3600+d.minute*60+d.second)(datetime.fromtimestamp(stamp,_ZONE)),deterministic=True)
     db.create_function('cdr_weekday',1,lambda stamp:(datetime.fromtimestamp(stamp,_ZONE).weekday()+2)%7,deterministic=True)
 
 

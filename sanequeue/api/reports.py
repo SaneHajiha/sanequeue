@@ -37,6 +37,7 @@ from sanequeue.reporting import pdf_stream,xlsx_stream
 from sanequeue.reporting.report_builder import definition as builder_definition
 from sanequeue.reporting import adherence, adherence_source
 from sanequeue.reporting import cdr_queries
+from sanequeue.reporting import cdr_trend
 from sanequeue.reporting import cdr_builder
 from sanequeue.reporting import outbound_dashboard
 from sanequeue.reporting import journey
@@ -716,7 +717,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if not all(can_queue(queue,'view') for queue in all_queues):abort(403)
         numbers=bool(all_queues) and all(can_queue(queue,'caller_details') for queue in all_queues)
         keys=('src','dst','party','origin','outbound_cid','did','match','src_length','dst_length',
-              'direction','disposition','trunk','hour_from','hour_to','duration_min','duration_max',
+              'direction','disposition','trunk','hour_from','hour_to','time_from','time_to','duration_min','duration_max',
               'billsec_min','billsec_max')
         filters={key:request.args[key] for key in keys if request.args.get(key) not in (None,'')}
         if request.args.get('weekdays'):
@@ -740,9 +741,30 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             for key in ('src','dst','internal_caller_ext','outbound_cid','did'):
                 if row.get(key) is not None:
                     row[key]=display_number(row[key],mode='full' if numbers else 'masked',secret=secret,tenant='default',pbx=pbx,version='1')
+            for key,capability in (('can_play','recording_play'),('can_download','recording_download')):
+                row[key]=bool(row['has_recording'] and recording_permitted(archive,row['id'],capability,can_queue))
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        data['audio_granted']=any(row['can_play'] or row['can_download'] for row in data['rows'])
         data['can_search_numbers']=numbers
         data['filters']={} if not numbers else data['filters']
         return jsonify(data)
+
+    @app.get('/api/history/cdr/<path:recording_id>/recording')
+    @login_required
+    @safe
+    def history_cdr_recording(recording_id):
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context()
+        download=request.args.get('download')=='1'
+        capability='recording_download' if download else 'recording_play'
+        clause,args,_=cdr_queries._where(archive,start,end,filters)
+        with archive.reader() as db:
+            cdr_queries._functions(db)
+            row=db.execute('SELECT c.recording,c.ts '+cdr_queries._JOIN+' WHERE '+clause+
+                           ' AND c.source_key=?',(*args,recording_id)).fetchone()
+        if not row or not row['recording']:abort(404)
+        if not recording_permitted(archive,recording_id,capability,can_queue):abort(403)
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        return serve_recording(row,recording_id,download)
 
     @app.get('/api/history/cdr/summary')
     @login_required
@@ -762,6 +784,19 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                     row['did']=display_number(row['did'],mode='masked',secret=secret,tenant='default',pbx=pbx,version='1')
         data['can_search_numbers']=numbers
         data['filters']={} if not numbers else data['filters']
+        return jsonify(data)
+
+    @app.get('/api/history/cdr/trend')
+    @login_required
+    @safe
+    def history_cdr_trend():
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context()
+        bucket=request.args.get('bucket','day');calendar=request.args.get('calendar','gregorian')
+        if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
+        try:data=cdr_trend.report(archive,start,end,filters,bucket=bucket,calendar=calendar)
+        finally:aggregate_gate.release()
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        if not numbers:data['filters']={}
         return jsonify(data)
 
     @app.get('/api/history/cdr/unique-inbound')

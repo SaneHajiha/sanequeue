@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from tests import test_reporting_queries as fixtures
 from sanequeue.reporting.store import Event
@@ -12,7 +13,7 @@ class CDRAPITests(unittest.TestCase):
         case.archive.append([Event('cdr','segment',case.stamp+10,'CDR',dict(
             src='02199999999',dst='09123456789',channel='PJSIP/100-000000aa',
             dstchannel='PJSIP/provider-000000ab',uniqueid='private',linkedid='private',
-            outbound_cnum='02112345678',did='02188888888',duration=30,billsec=20,disposition='ANSWERED'))])
+            outbound_cnum='02112345678',did='02188888888',duration=30,billsec=20,disposition='ANSWERED',recordingfile='test.wav'))])
         project_batch(case.archive,inventory=dict(observed_at=case.stamp,endpoints=[
             dict(technology='PJSIP',endpoint='100',category='extension'),
             dict(technology='PJSIP',endpoint='provider',category='trunk')]))
@@ -28,6 +29,33 @@ class CDRAPITests(unittest.TestCase):
         # prevents global CDR access even when the selected request is 8001.
         client=self.case.client(role='admin',menus=('reports','users'),details=True)
         self.assertEqual(client.get('/api/history/cdr'+self.query).status_code,403)
+
+    def test_recording_requires_current_proof_and_separate_grants(self):
+        with self.case.archive.writer() as db:db.execute("DELETE FROM report_visits WHERE queue='8002'")
+        audio=self.case.root/'audio';audio.mkdir();(audio/'test.wav').write_bytes(b'RIFF0123456789')
+        client=self.case.client(role='admin',menus=('reports','users'),details=True)
+        url='/api/history/cdr/segment/recording'+self.query
+        with patch('sanequeue.api.reports.recording_ownership',return_value=frozenset({'8001'})):
+            page=client.get('/api/history/cdr'+self.query).json
+            self.assertTrue(page['rows'][0]['can_play'])
+            self.assertTrue(page['rows'][0]['can_download'])
+            self.assertEqual(client.get(url).status_code,200)
+            denied=self.case.client(role='admin',menus=('reports','users'),details=True,denied=('recording_play',))
+            self.assertEqual(denied.get(url).status_code,403)
+            self.assertEqual(denied.get(url+'&download=1').status_code,200)
+            self.assertEqual(client.get(url+'&origin=999').status_code,404)
+        with patch('sanequeue.api.reports.recording_ownership',return_value=False):
+            self.assertFalse(client.get('/api/history/cdr'+self.query).json['rows'][0]['can_play'])
+            self.assertEqual(client.get(url).status_code,403)
+        self.assertEqual(self.case.client(role='supervisor',menus=('reports','users')).get(url).status_code,403)
+
+    def test_trend_uses_global_access_and_filters(self):
+        self.assertEqual(self.case.client(role='supervisor',menus=('reports','users')).get('/api/history/cdr/trend'+self.query).status_code,403)
+        with self.case.archive.writer() as db:db.execute("DELETE FROM report_visits WHERE queue='8002'")
+        client=self.case.client(role='admin',menus=('reports','users'),details=True)
+        response=client.get('/api/history/cdr/trend'+self.query+'&bucket=day&direction=outbound')
+        self.assertEqual(response.status_code,200,response.json)
+        self.assertEqual(sum(row['outbound'] for row in response.json['rows']),1)
 
     def test_masked_output_search_gate_and_global_aggregate_alignment(self):
         # Restrict the synthetic archive to a single authorized queue.

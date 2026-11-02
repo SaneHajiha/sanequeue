@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from sanequeue.reporting.store import Archive, Event, QueryDeadline
 from sanequeue.reporting.facts import project_batch
 from sanequeue.reporting.cdr_queries import page, summary, unique_inbound
+from sanequeue.reporting.cdr_trend import report as trend
 
 
 class CDRTests(unittest.TestCase):
@@ -79,6 +80,25 @@ class CDRTests(unittest.TestCase):
             limited=unique_inbound(self.archive,stamp,stamp+2*86400)
         self.assertEqual(limited['state'],'limited');self.assertNotIn('total_unique',limited)
 
+    def test_trend_buckets_directions_and_limits(self):
+        stamp=datetime(2026,10,24,9,tzinfo=ZoneInfo('Asia/Tehran')).timestamp()
+        self.seed(self.event('out',stamp),self.event('in',stamp+3600,
+            channel='PJSIP/provider-main-000000af',dstchannel='SIP/200-000000ae'),
+            self.event('unclassified',stamp+86400,channel='unknown',dstchannel=''))
+        hourly=trend(self.archive,stamp,stamp+2*86400,bucket='hour')
+        self.assertEqual([row['outbound'] for row in hourly['rows']],[1,0,0])
+        self.assertEqual([row['inbound'] for row in hourly['rows']],[0,1,0])
+        self.assertEqual(hourly['rows'][-1]['unknown'],1)
+        self.assertEqual(len(trend(self.archive,stamp,stamp+2*86400,bucket='day')['rows']),2)
+        self.assertEqual(trend(self.archive,stamp,stamp+2*86400,bucket='week')['rows'][0]['period'],'2026-10-24')
+        self.assertEqual(trend(self.archive,stamp,stamp+2*86400,bucket='month')['rows'][0]['period'],'2026-10')
+        self.assertEqual(trend(self.archive,stamp,stamp+2*86400,bucket='month',calendar='persian')['rows'][0]['period'],'1405/08')
+        with self.assertRaises(ValueError):trend(self.archive,stamp,stamp+86400,bucket='year')
+        with patch('sanequeue.reporting.cdr_trend.MAX_SEGMENTS',2),self.assertRaises(QueryDeadline):
+            trend(self.archive,stamp,stamp+2*86400)
+        with patch('sanequeue.reporting.cdr_trend.MAX_BUCKETS',1),self.assertRaises(QueryDeadline):
+            trend(self.archive,stamp,stamp+2*86400,bucket='hour')
+
     def test_numeric_filters_normalize_unicode_and_never_interpolate(self):
         self.seed(self.event('a', outbound_cnum='02177777777', did='8001'),
                   self.event('b', 160, src='123', dst='444'))
@@ -121,6 +141,15 @@ class CDRTests(unittest.TestCase):
         result = page(self.archive, stamp, stamp+86400, dict(hour_from=23,hour_to=2,weekdays=[0]))
         self.assertEqual([r['id'] for r in result['rows']], ['saturday'])
         self.assertEqual(page(self.archive, stamp, stamp+7200)['rows'][0]['id'], 'saturday')
+
+    def test_daily_time_filter_is_inclusive_and_handles_overnight(self):
+        stamp=datetime(2026,10,24,9,30,0,tzinfo=ZoneInfo('Asia/Tehran')).timestamp()
+        self.seed(self.event('first',stamp),self.event('later',stamp+90),self.event('night',stamp+14*3600))
+        result=page(self.archive,stamp,stamp+86400,dict(time_from='09:30',time_to='09:30'))
+        self.assertEqual([r['id'] for r in result['rows']],['first'])
+        result=page(self.archive,stamp,stamp+86400,dict(time_from='23:00',time_to='09:30'))
+        self.assertEqual({r['id'] for r in result['rows']},{'first','night'})
+        with self.assertRaises(ValueError):page(self.archive,stamp,stamp+86400,dict(time_from='25:00'))
 
     def test_exact_inventory_frozen_across_replay_and_late_version(self):
         first = self.event('a')
