@@ -234,3 +234,6 @@ Contextual report filters and queue card navigation: 25 local backend tests and 
 
 On lab revision 1a9f0e8, 42 Linux tests passed and Asterisk PID was unchanged. Chrome inspected light operation, queue and report screens; global CDR search for a test extension returned results without queue parameter, three extension suggestions were shown, contextual queue visibility switched correctly, and the queue card opened the selected waiting view. No live monitoring command was issued. Screenshots cover selected desktop/mobile states, not a full accessibility or Voiping parity audit.
 
+
+## PBX call-report redesign — 2026-11-02
+Base: `e0a4fd355543eaa4528a969d86ab1e37fc893de0` (published reporting branch). Local targeted results: 42 pytest cases and 8 subtests passed (`test_reporting_cdr`, `test_reporting_cdr_api`, `test_reporting_theme_integration`, `test_reporting_queries`). Node harnesses passed for charts, navigation, reporting and Persian date picker. Chromium synthetic-data preview exercised the report, advanced filters, trend bucket buttons, clear action, dark mode and 390px viewport without document overflow. Screenshot uses synthetic report data and is kept outside the repository. No multi-version PBX, live load, unit-scope, or full WCAG conformance is certified.

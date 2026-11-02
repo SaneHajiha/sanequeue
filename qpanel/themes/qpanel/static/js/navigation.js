@@ -35,6 +35,7 @@
   if(extensionCard)extensionCard.hidden=target!=='history-summary-section';
   const heading=document.getElementById('history-cdr-heading');if(heading)heading.hidden=target!=='history-cdr-section';
   document.body.dataset.reportTarget=target;
+  if(target==='history-cdr-section'){const family=nav.querySelector('[data-report-family="contact-center"]');if(family)family.open=false;}
  }
  // One report at a time, using only the server-authorized navigation items.
  // Native links and the full report remain available when JavaScript is off.

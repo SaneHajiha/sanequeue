@@ -52,3 +52,6 @@ User explicitly requested GitHub publication, deployment on the existing test se
 
 ## خروجی ریز پاسخ و خروج بدون پاسخ — ۲۰۲۶/۱۱/۰۱
 خروجی CSV/XLSX/PDF از پردازشگر خصوصی موجود و نسخهٔ ثابت مراجعه‌ها استفاده می‌کند. فیلتر دسته همان قرارداد طبقه‌بندی نمایش است؛ وضعیت کار و دانلود فقط با مجوز جاری تمام صف‌ها انجام می‌شود. خروجی هنگام درخواست snapshot تازه می‌گیرد و تغییر داده پس از نمایش می‌تواند عدد را تغییر دهد. برای PDF سقف اختصاصی و برای Excel/CSV سقف‌های قبلی برقرار است. خروجی ریز جای خروجی تجمیعی هر جدول نیست.
+
+## PBX call report — selected visual reference (2026-11-02)
+The user approved the light RTL PBX call report reference and requested paired Persian dates followed by paired times, a grouped filter panel, five factual metrics, trend and extension charts, and separate duration and recording columns. Preserve current queue reports and do not invent unit access, call reasons, individual identity or audio ownership. The reference is a layout target, not a source of production values.

@@ -26,6 +26,21 @@ class ReportingThemeTests(unittest.TestCase):
                 for name in ('history-customer-segments-section','history-builder-section','history-transcript-section','history-ring-attempts-section','history-agent-rankings-section','history-answered-section','history-unanswered-section'):
                     self.assertIn('id="'+name+'"',html)
 
+    def test_pbx_report_keeps_temporal_controls_and_collapsed_export(self):
+        root=Path(__file__).resolve().parents[1]
+        app=Flask('pbx-theme-contract',root_path=str(root/'qpanel'));setup_themes(app)
+        with app.test_request_context('/'):
+            html=render_theme_template('qpanel','reports.html',t=lambda fa,en:fa,
+                user_role='admin',can_view_section=lambda key:True,
+                ops_config={'allowed_sections':['reports','users'],'report_extensions':[]})
+        self.assertIn('<details class="history-cdr-advanced" open>',html)
+        self.assertIn('id="history-cdr-export-options"',html)
+        self.assertIn('<details class="history-cdr-secondary">',html)
+        self.assertEqual(html.count('data-trend-bucket='),4)
+        self.assertLess(html.index('name="from"'),html.index('name="to"'))
+        self.assertLess(html.index('name="to"'),html.index('name="time_from"'))
+        self.assertLess(html.index('name="time_from"'),html.index('name="time_to"'))
+
     def test_report_family_navigation_retains_rankings_and_role_gates(self):
         from jinja2 import Environment,FileSystemLoader
         root=Path(__file__).resolve().parents[1]
