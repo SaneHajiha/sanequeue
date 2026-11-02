@@ -55,6 +55,13 @@ async function reporting(){
  obsolete[0].reject(Error('late_failure'));await settle();
  assert.equal(element('history-feedback').textContent,feedback,'old failure must not overwrite current results');
 
+ state.fields.queue.value='8001';state.fields.outcome.value='answered';
+ element('history-filter-queue').hidden=true;element('history-filter-outcome').hidden=true;
+ const beforeHidden=pending.length;submit();
+ const query=new URL('https://example.test'+pending[beforeHidden].url).searchParams;
+ assert.equal(query.has('queue'),false,'hidden queue must not filter the request');
+ assert.equal(query.has('outcome'),false,'hidden outcome must not filter the request');
+
  const trigger={dataset:{historyDetail:'opaque-id'},disabled:false};
  const detail=element('history-table').onclick({target:{closest:()=>trigger}});
  const request=pending[pending.length-1];submit();request.resolve({});await detail;

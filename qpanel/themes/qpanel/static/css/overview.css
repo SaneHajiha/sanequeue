@@ -126,3 +126,11 @@ body:not(.dark) .urgent .wb-queue-status{background:#ffeadf;color:#994123}
 body:not(.dark) .wb-journey-area .sq-journey-card,body:not(.dark) .wallboard-stage .wb-journey-area .journey-card{background:#f3f8fe;color:#183553;border-color:#d4e2f1}
 body:not(.dark) .wb-journey-area :is(.sq-journey-card small,.sq-journey-secondary,.sq-timeline time){color:#4b6985}
 #history-filters[hidden]{display:none!important}
+
+/* Shared table and diagnostic surfaces must also follow light mode. */
+body:not(.dark) .panel th{background:#edf4ff!important;color:#294967!important;border-color:#d4e2f1!important}
+body:not(.dark) .panel td{border-color:#d4e2f1}
+body:not(.dark) .settings-panel .snapshot-box{background:#f2f7fd;color:#234663;border-color:#cbddeb}
+body:not(.dark) .ami-feedback{background:#f2f7fd;color:#234663;border-color:#cbddeb}
+body:not(.dark) .ami-feedback.success{background:#e4f7ee;color:#086145;border-color:#a9d8bf}
+body:not(.dark) .ami-feedback.error{background:#fff0f2;color:#982e49;border-color:#e4b7c2}

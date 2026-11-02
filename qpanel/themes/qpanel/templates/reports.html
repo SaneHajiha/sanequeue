@@ -8,7 +8,7 @@
   <label id="history-filter-queue">{{ t('صف','Queue') }}<select name="queue"><option value="">{{ t('همهٔ صف‌های مجاز','All authorized queues') }}</option></select></label>
   <label id="history-filter-pause">{{ t('نوع تماس حین توقف','Pause call type') }}<select name="pause_direction"><option value="outbound">{{ t('بیرونی از ترانک','External via trunk') }}</option><option value="internal">{{ t('داخلی به داخلی','Extension to extension') }}</option></select></label>
   <label id="history-filter-outcome">{{ t('نتیجه','Outcome') }}<select name="outcome"><option value="">{{ t('همه','All') }}</option><option value="answered">{{ t('پاسخ‌داده','Answered') }}</option><option value="abandoned">{{ t('رهاشده','Abandoned') }}</option><option value="transferred">{{ t('منتقل‌شده','Transferred') }}</option></select></label>
-  <div class="history-filter-actions"><button type="submit" class="primary">{{ t('نمایش گزارش','Run report') }}</button></div>
+  <div id="history-filter-actions" class="history-filter-actions"><button type="submit" class="primary">{{ t('نمایش گزارش','Run report') }}</button></div>
  </form>
  {% if user_role == 'admin' and 'users' in ops_config.allowed_sections %}
  <section id="extension-report-card" class="panel extension-report-shortcut" aria-labelledby="extension-report-title">

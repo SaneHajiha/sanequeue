@@ -53,4 +53,5 @@ body[data-view="reports"] .monitor-preferences { display: none !important; }
 .report-scope-info summary{cursor:pointer;color:var(--ink);font-weight:650}
 .report-scope-info p{margin:8px 0 0}
 .report-scope-info summary:focus-visible{outline:2px solid #3b82f6;outline-offset:4px}
+.history-filter-actions[hidden]{display:none!important}
 @media(max-width:600px){.reports-workspace .history-navigation>label{align-items:stretch;flex-direction:column}.reports-workspace .history-navigation select{width:100%;flex:auto}}

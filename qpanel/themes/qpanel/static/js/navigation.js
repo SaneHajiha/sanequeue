@@ -20,11 +20,14 @@
   // These views either use PBX-wide filters or provide their own queue selector.
   const globalPbx=new Set(['history-cdr-section','history-outbound-dashboard-section','history-builder-section','history-transcript-section']);
   const filterForm=document.getElementById('history-filters');
+  const filterActions=document.getElementById('history-filter-actions');
   const queueControl=document.getElementById('history-filter-queue');
   const pauseControl=document.getElementById('history-filter-pause');
   const outcomeControl=document.getElementById('history-filter-outcome');
   const extensionCard=document.getElementById('extension-report-card');
   if(filterForm)filterForm.hidden=target==='history-transcript-section';
+  // These sections have their own explicit run or preview controls.
+  if(filterActions)filterActions.hidden=['history-cdr-section','history-outbound-dashboard-section','history-builder-section'].includes(target);
   if(queueControl)queueControl.hidden=globalPbx.has(target);
   if(pauseControl)pauseControl.hidden=!['history-outbound-section','history-work-section'].includes(target);
   if(outcomeControl)outcomeControl.hidden=!['history-calls-section','history-export-jobs-section'].includes(target);
