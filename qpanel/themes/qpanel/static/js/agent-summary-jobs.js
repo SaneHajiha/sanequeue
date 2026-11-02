@@ -9,7 +9,7 @@ const key=()=>JSON.stringify([dates.elements.from.value,dates.elements.to.value,
 const fresh=(stamp,selection)=>stamp===generation&&selection===key()&&shown();
 const n=value=>typeof value==='number'&&Number.isFinite(value)?new Intl.NumberFormat(locale,{maximumFractionDigits:2}).format(value):'—';
 const stamp=value=>typeof value==='number'&&Number.isFinite(value)?new Date(value*1000).toLocaleString(locale,{timeZone:'Asia/Tehran'}):'—';
-const period=data=>t('شروع: ','Start: ')+stamp(data.start)+' · '+t('پایان انحصاری: ','Exclusive end: ')+stamp(data.end)+' · '+t('تهران','Tehran');
+const period=data=>t('شروع: ','Start: ')+stamp(data.start)+' · '+t('پایان انحصاری: ','Exclusive end: ')+stamp(data.end);
 const node=(tag,value)=>{const item=document.createElement(tag);if(value!==undefined)item.textContent=value===null?'—':String(value);return item;};
 function controls(){create.disabled=busy||denied||!cfg.csrf;refresh.disabled=busy;}
 function clearResult(){for(const id of charts)window.SaneQueueReportCharts?.clear($(id));for(const id of ['agent-summary-job-answers-table','agent-summary-job-talk-table','agent-summary-job-presence'])$(id).replaceChildren();$('agent-summary-job-result').hidden=true;$('agent-summary-job-period').textContent='';$('agent-summary-job-source').textContent='';}

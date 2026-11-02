@@ -8,7 +8,7 @@ function bind(form,from,to){if(!form||!from||!to||bound.has(form)||!window.SaneQ
  const presets=[['today',t('امروز','Today')],['yesterday',t('دیروز','Yesterday')],['week',t('۷ روز اخیر','Last 7 days')],['month',t('۳۰ روز اخیر','Last 30 days')],['calendar',t('این ماه شمسی','This month')],['previous',t('ماه شمسی قبل','Previous month')]];
  function update(){const a=dates.parseISO(from.value),b=dates.parseISO(to.value),days=a&&b?Math.round((b-a)/86400000)+1:0;
   const message=!a||!b?t('تاریخ آغاز و پایان را انتخاب کنید.','Choose both dates.'):days<1?t('تاریخ پایان باید پس از آغاز یا برابر آن باشد.','End date must be on or after the start.'):days>366?t('بازهٔ گزارش حداکثر ۳۶۶ روز است.','Reports may cover at most 366 days.'):'';
-  to.setCustomValidity(!a||!b?'':message);status.textContent=message||t('بازهٔ انتخاب‌شده: ','Selected period: ')+dates.formatISO(from.value)+' '+t('تا','to')+' '+dates.formatISO(to.value)+' · '+new Intl.NumberFormat(fa?'fa-IR':'en').format(days)+' '+t('روز، ساعت تهران','days, Tehran time');
+  to.setCustomValidity(!a||!b?'':message);status.textContent=message||t('بازهٔ انتخاب‌شده: ','Selected period: ')+dates.formatISO(from.value)+' '+t('تا','to')+' '+dates.formatISO(to.value)+' · '+new Intl.NumberFormat(fa?'fa-IR':'en').format(days)+' '+t('روز','days');
   status.classList.toggle('is-error',!!message);for(const input of [from,to])dates.enhance(input)?.sync();
  }
  function select(key){const today=dates.todayISO();let first=today,last=today;

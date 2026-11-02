@@ -4,7 +4,7 @@ const DAY=86400000,fa=()=>document.documentElement.lang==='fa';
 function date(iso){if(typeof iso!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(iso))return null;const value=new Date(iso+'T12:00:00Z');return Number.isFinite(value.getTime())&&value.toISOString().slice(0,10)===iso?value:null;}
 function display(iso){if(!date(iso))return '—';return window.SaneQueueDates?.formatISO(iso,{style:'short'})||new Intl.DateTimeFormat(fa()?'fa-IR-u-ca-persian':'en-GB',{timeZone:'UTC',dateStyle:'short'}).format(date(iso));}
 function period(first,last){return display(first)+(fa()?' تا ':' – ')+display(last);}
-function caption(params){const queue=params.get('queue');const extra=[...params.entries()].filter(([key,value])=>value&&!['from','to','queue','lang','limit','before','before_id','before_time'].includes(key));return period(params.get('from'),params.get('to'))+(fa()?' · تهران · صف: ':' · Tehran · Queue: ')+(queue||(fa()?'همهٔ صف‌های مجاز':'All authorised queues'))+(extra.length?(fa()?' · با فیلترهای تکمیلیِ فرم':' · Additional form filters applied'):'');}
+function caption(params){const queue=params.get('queue');const extra=[...params.entries()].filter(([key,value])=>value&&!['from','to','queue','lang','limit','before','before_id','before_time'].includes(key));return period(params.get('from'),params.get('to'))+(fa()?' · صف: ':' · Queue: ')+(queue||(fa()?'همهٔ صف‌های مجاز':'All authorised queues'))+(extra.length?(fa()?' · با فیلترهای تکمیلیِ فرم':' · Additional form filters applied'):'');}
 function bucket(value,interval,range={}){
  if(typeof value!=='string')return null;let first,last,hour=null;
  if(interval==='month'&&/^\d{4}-\d{2}$/.test(value)){

@@ -12,5 +12,6 @@ assert.throws(()=>p.trend([{bucket:'2026-10-25'},{bucket:'2026-10-23'}],'day'),/
 assert.equal(p.bucket('2026-13','month'),null);assert.equal(p.bucket('2026-02-30','day'),null);
 assert.equal(p.trend([{bucket:'2026-10'}],'month').type,'bar');
 const caption=p.caption(new URLSearchParams({from:'2026-10-23',to:'2026-10-27',queue:'8001',src:'09123456789'}));assert.ok(caption.includes('8001'));assert.ok(caption.includes('فیلترهای تکمیلی'));assert.ok(!caption.includes('09123456789'),'chart captions do not copy raw number filters into exported graphics');
+assert.ok(!caption.includes('تهران'),'period captions do not append the city name');
 document.documentElement.lang='en';assert.ok(p.bucket('2026-10','month').label.includes('Gregorian month'));assert.ok(p.period('2026-10-23','2026-10-27').includes('23/10/2026'));
 console.log('report periods: calendar semantics, clipped month/week bounds, real chronological gaps, invalid and English labels passed');
