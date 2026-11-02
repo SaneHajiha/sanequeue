@@ -11,7 +11,7 @@
  const kpiLabels=[t('کل بخش‌های تماس','All call segments'),t('ورودی','Inbound'),t('خروجی','Outbound'),t('داخلی','Internal'),t('میانگین مکالمهٔ پاسخ‌داده','Average answered talk')];
  const renderKpis=values=>{$('history-cdr-summary').innerHTML=kpiLabels.map((label,i)=>'<article class="history-kpi"><span>'+esc(label)+'</span><strong>'+esc(values[i]??'—')+'</strong><small>'+esc(i===4?t('از مقادیر ثبت‌شده','From known values'):t('بخش ثبت‌شده','Recorded segments'))+'</small></article>').join('');};
  const directions={inbound:t('ورودی','Inbound'),outbound:t('خروجی','Outbound'),internal:t('داخلی','Internal'),unknown:t('نامشخص','Unknown')};
- const outcomes={ANSWERED:t('پاسخ‌داده','Answered'),'NO ANSWER':t('بی‌پاسخ','No answer'),BUSY:t('اشغال','Busy'),FAILED:t('ناموفق','Failed'),UNKNOWN:t('نامعلوم','Unknown')};
+ const outcomes={ANSWERED:t('پاسخ‌داده','Answered'),'NO ANSWER':t('بی‌پاسخ','No answer'),BUSY:t('اشغال','Busy'),FAILED:t('ناموفق','Failed'),CONGESTION:t('ازدحام','Congestion'),CANCEL:t('لغوشده','Cancelled'),CHANUNAVAIL:t('مسیر در دسترس نیست','Channel unavailable'),UNKNOWN:t('نامعلوم','Unknown')};
  let serial=0,uniqueSerial=0,trendSerial=0,next=null,rows=[],currentCursor=null,cursorHistory=[];
  function params(){const main=$('history-filters').elements,p=new URLSearchParams({from:main.from.value,to:main.to.value});for(const [key,value] of new FormData(form))if(value)p.set(key,value);return p;}
  async function api(url){const response=await fetch(url,{credentials:'same-origin'});if(response.redirected||!response.headers.get('content-type')?.includes('application/json'))throw Error('login');const data=await response.json();if(!response.ok)throw Error(data.error);return data;}
