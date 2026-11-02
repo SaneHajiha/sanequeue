@@ -97,3 +97,32 @@ body.dark #live-view .overview-welcome p,body.dark #live-view .overview-kicker{c
 @media(max-width:1100px){#live-view .realtime-graphs{grid-template-columns:repeat(2,minmax(0,1fr))}#live-view .realtime-graphs>.trend-panel:first-child{grid-column:1/-1}}
 @media(max-width:930px){#live-view .overview-intro{grid-template-columns:1fr}#live-view .reference-three-panel{grid-template-columns:1fr}#live-view .realtime-graphs{grid-template-columns:1fr}#live-view .realtime-graphs>.trend-panel:first-child{grid-column:auto}}
 @media(max-width:600px){#live-view .overview-intro .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#live-view .overview-welcome{padding:18px;gap:10px;min-height:116px}#live-view .overview-welcome h2{font-size:19px}#live-view .overview-welcome p{font-size:12px}#live-view .overview-welcome-image{width:78px;height:78px}#live-view .overview-kicker{font-size:9px}}
+
+/* Wallboard follows the selected theme, including its fullscreen surface. */
+body:not(.dark) .wallboard-stage{background:#edf3fb;color:#183553;border-color:#ccdded}
+body:not(.dark) .wallboard-header{border-color:#cbdced}
+body:not(.dark) .wallboard-header h2,body:not(.dark) .wb-card-header h3,body:not(.dark) .wb-journey-heading h3{color:#193955}
+body:not(.dark) .wallboard-header p,body:not(.dark) .wallboard-kicker,body:not(.dark) .wallboard-privacy,body:not(.dark) .wallboard-bottom,body:not(.dark) .wb-card-header small,body:not(.dark) .wb-journey-heading span{color:#496987}
+body:not(.dark) .wallboard-header-tools button,body:not(.dark) .wallboard-toolbar>button{background:#fff;color:#1b4d79;border-color:#c8daed}
+body:not(.dark) .wallboard-toolbar,body:not(.dark) .wallboard-v14-card,body:not(.dark) .wb-journey-area{background:#fff;border-color:#cfdfed}
+body:not(.dark) .wallboard-check,body:not(.dark) .wallboard-stage .wallboard-summary>div,body:not(.dark) .wb-queue-stats>div,body:not(.dark) .wb-two-cols>div,body:not(.dark) .wb-agent,body:not(.dark) .wb-caller{background:#f3f8fe;color:#183553;border-color:#d4e2f1}
+body:not(.dark) .wallboard-stage .wallboard-summary strong,body:not(.dark) .wb-queue-stats b,body:not(.dark) .wb-two-cols h4{color:#193955}
+body:not(.dark) .wallboard-stage .wallboard-summary strong{color:#193955!important}
+body:not(.dark) .wallboard-stage .wallboard-summary span{color:#496987!important}
+body:not(.dark) .wb-hero-numbers>div{background:#eaf2fc;border-color:#cfdfed}
+body:not(.dark) .wb-big-wait strong{color:#995c00}
+body:not(.dark) .wb-big-waittime strong{color:#17628c}
+body:not(.dark) .wb-hero-numbers span,body:not(.dark) .wallboard-private-control{color:#496987}
+body:not(.dark) .wallboard-stage .sq-state--offline{color:#982e49}
+body:not(.dark) .wallboard-stage .sq-state--ready{color:#086145}
+body:not(.dark) .wallboard-stage :is(.sq-state--ringing,.sq-state--busy,.sq-state--held){color:#885200}
+body:not(.dark) .wallboard-stage .sq-state--talking{color:#075b92}
+body:not(.dark) .wallboard-stage .sq-state--paused{color:#633f8a}
+body:not(.dark) .wallboard-stage .sq-journey-empty{color:#496987}
+body:not(.dark) .wallboard-stage .wallboard-summary span,body:not(.dark) .wb-queue-stats small,body:not(.dark) .wb-agent-title small,body:not(.dark) .wb-caller small,body:not(.dark) .wb-empty,body:not(.dark) .wb-empty-state,body:not(.dark) .wb-two-cols h4 em{color:#4b6985}
+body:not(.dark) .wb-wait{color:#925700}
+body:not(.dark) .wb-queue-status{background:#d8f5e9;color:#08634d}
+body:not(.dark) .urgent .wb-queue-status{background:#ffeadf;color:#994123}
+body:not(.dark) .wb-journey-area .sq-journey-card,body:not(.dark) .wallboard-stage .wb-journey-area .journey-card{background:#f3f8fe;color:#183553;border-color:#d4e2f1}
+body:not(.dark) .wb-journey-area :is(.sq-journey-card small,.sq-journey-secondary,.sq-timeline time){color:#4b6985}
+#history-filters[hidden]{display:none!important}
