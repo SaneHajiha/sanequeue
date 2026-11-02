@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="{{ theme_static('css/operations.css') }}?v={{ current_version() }}">
 <link rel="stylesheet" href="{{ theme_static('css/module-catalog.css') }}?v=20261028-1">
 <link rel="stylesheet" href="{{ theme_static('css/accessibility.css') }}?v={{ current_version() }}">
-<link rel="stylesheet" href="{{ theme_static('css/overview.css') }}?v={{ current_version() }}-light3">
+<link rel="stylesheet" href="{{ theme_static('css/overview.css') }}?v={{ current_version() }}-command1">
 <link rel="stylesheet" href="{{ theme_static('css/reports.css') }}?v={{ current_version() }}-light3"><link rel="stylesheet" href="{{ theme_static('css/navigation.css') }}?v={{ current_version() }}-light3"><link rel="stylesheet" href="{{ theme_static('css/context-help.css') }}?v=20261026-1">
 <link rel="stylesheet" href="{{ theme_static('css/report-charts.css') }}?v=20261028-2">
 <link rel="stylesheet" href="{{ theme_static('css/date-picker.css') }}?v=20261028-1">
@@ -35,8 +35,15 @@
  <div class="monitor-options"><button id="sound-toggle" aria-pressed="false">{{ t('هشدار صوتی: خاموش','Sound alerts: off') }}</button><label {% if ops_config.realtime_push %}hidden{% endif %}>{{ t('هشدار تعداد منتظر','Waiting count alert') }} <input id="waiting-threshold" type="number" min="1" max="1000" value="5"></label><label>{{ t('هشدار استراحت (دقیقه)','Pause alert (min)') }} <input id="pause-threshold" type="number" min="1" max="480" value="15"></label><span id="staffing-info" class="muted"></span></div>
 </div></details>
  <section id="live-view" class="view">
+  <div class="overview-intro">
+  <section class="overview-welcome" aria-labelledby="overview-welcome-title">
+   <div class="overview-welcome-copy"><span class="overview-kicker">SANEQUEUE / LIVE OPERATIONS</span><h2 id="overview-welcome-title">{{ t('مرکز فرماندهی','Command center') }} <bdi>{{ organization.name }}</bdi></h2><p>{{ t('صف‌ها، تماس‌ها و تیم پاسخ‌گویی را در یک نگاه دنبال کنید.','Follow queues, calls and your team at a glance.') }}</p></div>
+   <img class="overview-welcome-image" src="{{ theme_static('images/overview-headset.png') }}" alt="" width="144" height="144" decoding="async">
+  </section>
+  <div class="overview-intro-metrics">
   <div class="section-label"><h2>{{ t('در یک نگاه','At a glance') }}</h2><span><span id="kpi-period-short">{{ t('شمارنده‌ها از آخرین بازنشانی صف','Counters since last queue reset') }}</span> · <span id="updated">—</span></span></div>
   <div id="metrics" class="metrics" aria-live="polite"></div>
+  </div></div>
   <div class="insights-strip"><div class="source-caption"><span class="soft-dot"></span><b>{{ t('نمودارهای زنده','Live charts') }}</b><small>{{ t('از نمونه‌های مشاهده‌شده توسط همین مرورگر، بدون داده تاریخی ساختگی','Only browser-observed samples, no fabricated historical data') }}</small></div><button type="button" class="subtle-link" data-open="pbx">{{ t('سلامت مرکز تلفن','PBX health') }} ↗</button></div>
   <section class="realtime-graphs" aria-label="{{ t('نمودارهای زنده','Live charts') }}">
     <article class="panel trend-panel"><div class="panel-heading"><div><h2>{{ t('روند تماس‌های منتظر','Waiting trend') }}</h2><p>{{ t('از لحظه بازشدن صفحه','From page opening') }} · <span id="trend-points">—</span></p></div><span class="live-chip">LIVE</span></div><div id="trend-wait" class="trend-svg"></div><div class="chart-legend"><span><i class="dot busy"></i>{{ t('تعداد منتظر','Waiting') }}</span><span id="trend-time-label">—</span></div></article>

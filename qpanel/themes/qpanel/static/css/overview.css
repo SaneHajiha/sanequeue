@@ -70,3 +70,30 @@ body:not(.dark) #live-view .compact-table th{background:#edf4ff!important;color:
 .queue-focus-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .queue-focus-actions button{min-height:40px;padding:8px 12px;font-size:12px;background:var(--soft);color:var(--ink);border:1px solid var(--line);white-space:nowrap}
 .queue-focus-more{font-size:11px;line-height:1.8;color:var(--muted);margin:0}
+
+/* Command center: a quiet surface and the hierarchy of the selected reference. */
+#live-view .overview-intro{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:14px;align-items:stretch;margin-bottom:16px}
+#live-view .overview-intro-metrics{min-width:0}
+#live-view .overview-intro .metrics{grid-template-columns:repeat(3,minmax(0,1fr));margin:0}
+#live-view .overview-intro .metric{min-height:95px;padding:10px 12px}
+#live-view .overview-intro .metric b{font-size:23px;margin-top:2px}
+#live-view .overview-welcome{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:148px;margin:0 0 18px;padding:20px 30px;border:1px solid #cfdaf4;border-radius:18px;background:#eef2ff;overflow:hidden}
+#live-view .overview-intro .overview-welcome{margin:0}
+#live-view .overview-welcome-copy{min-width:0;position:relative;z-index:1}
+#live-view .overview-welcome h2{font-size:25px;line-height:1.5;margin:8px 0;color:#222d63}
+#live-view .overview-welcome p{font-size:13px;line-height:1.9;color:#52658b;margin:0}
+#live-view .overview-kicker{font-size:10px;font-weight:750;letter-spacing:.12em;color:#526aa4}
+#live-view .overview-welcome-image{width:132px;height:132px;object-fit:contain;flex:0 0 auto}
+body.dark #live-view .overview-welcome{background:#14223e;border-color:#33466b}
+body.dark #live-view .overview-welcome h2{color:#f0f4ff}
+body.dark #live-view .overview-welcome p,body.dark #live-view .overview-kicker{color:#b6c8e7}
+#live-view .realtime-graphs{grid-template-columns:minmax(0,1.6fr) minmax(250px,.78fr) minmax(0,1fr);align-items:stretch}
+#live-view .trend-panel{overflow:visible;min-width:0}
+#live-view .trend-panel:first-child{min-height:300px}
+#live-view .reference-three-panel{grid-template-columns:minmax(0,1.15fr) minmax(0,1.15fr) minmax(0,.95fr);align-items:start}
+#live-view .overview-column{gap:14px}
+#live-view .panel-heading h2{letter-spacing:-.01em}
+#live-view .metric{box-shadow:0 5px 16px #243d6b0b}
+@media(max-width:1100px){#live-view .realtime-graphs{grid-template-columns:repeat(2,minmax(0,1fr))}#live-view .realtime-graphs>.trend-panel:first-child{grid-column:1/-1}}
+@media(max-width:930px){#live-view .overview-intro{grid-template-columns:1fr}#live-view .reference-three-panel{grid-template-columns:1fr}#live-view .realtime-graphs{grid-template-columns:1fr}#live-view .realtime-graphs>.trend-panel:first-child{grid-column:auto}}
+@media(max-width:600px){#live-view .overview-intro .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#live-view .overview-welcome{padding:18px;gap:10px;min-height:116px}#live-view .overview-welcome h2{font-size:19px}#live-view .overview-welcome p{font-size:12px}#live-view .overview-welcome-image{width:78px;height:78px}#live-view .overview-kicker{font-size:9px}}
