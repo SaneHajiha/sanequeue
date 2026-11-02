@@ -754,6 +754,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         # DID is a number even in a grouped result. Enforce the same policy as
         # the detail endpoint before serializing any aggregate rows.
         if not numbers:
+            # Endpoint identifiers are sensitive even in aggregate rows.
+            data['endpoints']=[]
             secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
             for row in data['trunk_traffic']:
                 if row.get('did') is not None:

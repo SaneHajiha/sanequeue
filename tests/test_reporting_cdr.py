@@ -50,6 +50,17 @@ class CDRTests(unittest.TestCase):
             self.assertNotIn(secret, encoded)
         self.assertFalse(page(self.archive, 100, 200)['audio_granted'])
 
+    def test_summary_endpoint_uses_observed_inventory_and_keeps_unknown(self):
+        self.seed(self.event('known'), self.event('unknown', 160,
+                  channel='PJSIP/not-in-inventory-000000ab', dstchannel=''))
+        data = summary(self.archive, 100, 200)
+        endpoints = {row['endpoint']: row for row in data['endpoints']}
+        self.assertEqual(endpoints['PJSIP/100']['segments_started'], 1)
+        self.assertEqual(endpoints['PJSIP/100']['answered_segments'], 1)
+        self.assertEqual(endpoints[None]['segments_started'], 1)
+        self.assertEqual(sum(row['segments_started'] for row in data['endpoints']),
+                         data['totals']['segments_started'])
+
     def test_unique_inbound_counts_numbers_not_segments_or_people(self):
         stamp=datetime(2026,10,24,9,tzinfo=ZoneInfo('Asia/Tehran')).timestamp()
         inbound=dict(channel='PJSIP/provider-main-000000af',dstchannel='SIP/200-000000ae')

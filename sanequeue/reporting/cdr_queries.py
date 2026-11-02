@@ -152,13 +152,13 @@ def page(archive,start,end,filters=None,*,before=None,limit=100):
 def summary(archive,start,end,filters=None):
     clause,args,clean=_where(archive,start,end,filters)
     cte='''WITH matched AS (SELECT c.duration,c.billsec,'''+_DISPOSITION+' disposition,'+_DIRECTION+''' direction,
-      e.internal_caller_ext,e.outbound_cid,e.did,e.trunk '''+_JOIN+' WHERE '+clause+') '
+      e.internal_caller_ext,e.outbound_cid,e.did,e.trunk,NULLIF(p.agent,'') endpoint '''+_JOIN+' WHERE '+clause+') '
     with archive.reader() as db:
         _functions(db)
         totals=dict(db.execute(cte+'SELECT '+_METRICS+' FROM matched',args).fetchone())
         groups={};count=0
         for name,field in (('directions','direction'),('dispositions','disposition'),('trunks','trunk'),
-                           ('trunk_traffic','trunk,did,direction')):
+                           ('trunk_traffic','trunk,did,direction'),('endpoints','endpoint')):
             rows=[dict(row) for row in db.execute(cte+'SELECT '+field+','+_METRICS+
                   ' FROM matched GROUP BY '+field+' ORDER BY '+field+' LIMIT ?',(*args,MAX_GROUPS+1))]
             count+=len(rows)
