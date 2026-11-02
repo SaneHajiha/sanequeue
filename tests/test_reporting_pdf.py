@@ -61,6 +61,20 @@ class PdfDocumentTests(unittest.TestCase):
         self.assertIn('Answered:  | Segment ended:  | Visit ID:',document.pdf.getCurrentPageContent())
         document.close()
 
+    def test_positions_are_explicit_in_both_languages_and_unknown_stays_blank(self):
+        for language in ('fa','en'):
+            with self.subTest(language=language):
+                document=self.document(language); drawn=[];original=document._draw
+                def record(value,*args,**kwargs):
+                    drawn.append(value);return original(value,*args,**kwargs)
+                document._draw=record
+                body=table(rows(2),language)[1]
+                body[0].extend([7,3]);body[1].extend([None,None])
+                document.append(body);document.close()
+                labels=('جایگاه ورود: 7 | جایگاه خروج: 3','جایگاه ورود:  | جایگاه خروج: ') if language=='fa' else ('Entry position: 7 | Exit position: 3','Entry position:  | Exit position: ')
+                for label in labels:self.assertIn(label,drawn)
+                self.assertTrue(self.output.getvalue().startswith(b'%PDF-'))
+
     def test_rows_pages_bytes_and_long_fields_fail_instead_of_silent_truncation(self):
         document=self.document(max_rows=1)
         with self.assertRaisesRegex(pdf_stream.PdfFailure,'^pdf_row_limit$'):document.append(table(rows(2),'en')[1])
@@ -112,6 +126,18 @@ class PdfWorkerTests(unittest.TestCase):
     seed=export_fixtures.ExportJobTests.seed
     create=export_fixtures.ExportJobTests.create
     worker=export_fixtures.ExportJobTests.worker
+
+    def test_snapshot_pdf_preserves_observed_positions(self):
+        self.seed()
+        with self.archive.writer() as db:
+            db.execute("INSERT INTO report_visit_positions SELECT pbx,id,?,?,?,? FROM report_visits",(7,3,'observed','observed'))
+        token=capture(self.archive);ident=self.create(format='pdf',snapshot=token)
+        seen=[];original=pdf_stream.Document._draw
+        def draw(document,value,*args,**kwargs):
+            seen.append(value);return original(document,value,*args,**kwargs)
+        with patch.object(pdf_stream.Document,'_draw',draw):result=self.worker().run_once()
+        self.assertEqual(result['state'],'completed',result)
+        self.assertIn('Entry position: 7 | Exit position: 3',seen)
 
     def test_private_pdf_snapshot_masking_checksum_and_completed_cancel(self):
         self.seed();token=capture(self.archive)

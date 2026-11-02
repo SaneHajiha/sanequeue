@@ -191,9 +191,9 @@ class Document:
         if len(body)>200:raise PdfFailure('pdf_batch_limit')
         if self.rows+len(body)>self.max_rows:raise PdfFailure('pdf_row_limit')
         for row in body:
-            if len(row)!=12:raise ValueError('invalid_pdf_row')
+            if len(row) not in (12,14):raise ValueError('invalid_pdf_row')
             cells={index:self._lines(row[index],width-10,7.8,3) for index,width in zip(_MAIN,_WIDTHS)}
-            height=max(19,max(map(len,cells.values()))*9+6)+15
+            height=max(19,max(map(len,cells.values()))*9+6)+(27 if len(row)==14 else 15)
             if self.y-height<self.bottom:self._new_page()
             if self.y-height<self.bottom:raise PdfFailure('pdf_field_limit')
             pdf=self.pdf
@@ -206,8 +206,8 @@ class Document:
                 for offset,line in enumerate(cells[index]):
                     self._draw(line,x+width-5 if self.fa else x+5,self.y-12-offset*9,7.8,right=self.fa)
                 x+=width
-            # The remaining three fields are explicit and readable, including
-            # the opaque visit ID. Never silently omit them to fit a table.
+            # Keep secondary fields explicit; unknown positions stay blank.
+            secondary_y=self.y-height+(17 if len(row)==14 else 5)
             if self.fa:
                 edge=self.width-self.margin-5
                 for label,value,label_x,value_x,maximum in (
@@ -215,12 +215,18 @@ class Document:
                     ('پایان صف:',row[6],edge-184,edge-236,130),
                     ('شناسه:',row[11],edge-389,edge-424,330)):
                     if self._width(_text(value),6.6)>maximum:raise PdfFailure('pdf_field_limit')
-                    self._draw(label,label_x,self.y-height+5,6.6,'#607386',right=True)
-                    self._draw(_text(value),value_x,self.y-height+5,6.6,'#607386',right=True)
+                    self._draw(label,label_x,secondary_y,6.6,'#607386',right=True)
+                    self._draw(_text(value),value_x,secondary_y,6.6,'#607386',right=True)
             else:
                 secondary='Answered: '+_text(row[5])+' | Segment ended: '+_text(row[6])+' | Visit ID: '+_text(row[11])
                 if self._width(secondary,6.6)>self.width-2*self.margin-10:raise PdfFailure('pdf_field_limit')
-                self._draw(secondary,self.margin+5,self.y-height+5,6.6,'#607386')
+                self._draw(secondary,self.margin+5,secondary_y,6.6,'#607386')
+            if len(row)==14:
+                position=(('جایگاه ورود: '+_text(row[12])+' | جایگاه خروج: '+_text(row[13])) if self.fa else
+                          ('Entry position: '+_text(row[12])+' | Exit position: '+_text(row[13])))
+                if self._width(position,6.6)>self.width-2*self.margin-10:raise PdfFailure('pdf_field_limit')
+                self._draw(position,self.width-self.margin-5 if self.fa else self.margin+5,
+                           self.y-height+5,6.6,'#607386',right=self.fa)
             pdf.setStrokeColor('#d8e2eb');pdf.line(self.margin,self.y-height,self.width-self.margin,self.y-height)
             self.y-=height;self.rows+=1
 

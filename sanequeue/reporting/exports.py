@@ -62,6 +62,8 @@ def table(rows, language='en'):
 
 def csv_bytes(rows, language='en'):
     headers, body = table(rows, language)
+    headers += position_headers(language)
+    body = [values+[row.get('entry_position'),row.get('exit_position')] for values,row in zip(body,rows)]
     output = io.StringIO(newline='')
     writer = csv.writer(output)
     writer.writerow(headers)

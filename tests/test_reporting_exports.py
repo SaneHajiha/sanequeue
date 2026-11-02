@@ -30,6 +30,11 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(rows[1][8],'')
         english=list(csv.reader(io.StringIO(csv_bytes([self.row()],'en').decode('utf-8-sig'))))
         self.assertEqual(english[1][4],'2026-10-25 23:06:22')
+        self.assertEqual(english[0][-2:],['Entry position','Exit position'])
+        self.assertEqual(english[1][-2:],['',''])
+        known=self.row();known.update(entry_position=7,exit_position=3)
+        english=list(csv.reader(io.StringIO(csv_bytes([known],'en').decode('utf-8-sig'))))
+        self.assertEqual(english[1][-2:],['7','3'])
 
     def test_xlsx_text_identity_safe_cells_rtl_freeze_and_filter(self):
         output=xlsx_bytes([self.row()],'fa',period='2026-10-25')
