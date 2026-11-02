@@ -29,9 +29,12 @@
   // These sections have their own explicit run or preview controls.
   if(filterActions)filterActions.hidden=['history-cdr-section','history-outbound-dashboard-section','history-builder-section'].includes(target);
   if(queueControl)queueControl.hidden=globalPbx.has(target);
+  for(const id of ['history-filter-time-from','history-filter-time-to']){const field=document.getElementById(id);if(field)field.hidden=target!=='history-cdr-section';}
   if(pauseControl)pauseControl.hidden=!['history-outbound-section','history-work-section'].includes(target);
   if(outcomeControl)outcomeControl.hidden=!['history-calls-section','history-export-jobs-section'].includes(target);
-  if(extensionCard)extensionCard.hidden=!['history-summary-section','history-cdr-section'].includes(target);
+  if(extensionCard)extensionCard.hidden=target!=='history-summary-section';
+  const heading=document.getElementById('history-cdr-heading');if(heading)heading.hidden=target!=='history-cdr-section';
+  document.body.dataset.reportTarget=target;
  }
  // One report at a time, using only the server-authorized navigation items.
  // Native links and the full report remain available when JavaScript is off.

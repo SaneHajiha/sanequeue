@@ -58,3 +58,9 @@ body[data-view="reports"] .monitor-preferences { display: none !important; }
 
 /* PBX reports: keep common filters visible and secondary filters optional. */
 .history-cdr-primary{padding:16px 0;align-items:end}.history-cdr-primary>label{flex:1 1 155px}.history-cdr-primary>label:first-child{flex:2 1 240px}.history-cdr-primary>.history-cdr-advanced{order:2}.history-cdr-primary>button{order:1;min-width:140px}.history-cdr-advanced summary:focus-visible{outline:2px solid #3b82f6;outline-offset:4px}.history-cdr-result{margin-block:24px;border-top:1px solid var(--line);padding-top:16px}.history-cdr-result h3{margin:0 0 8px}.history-cdr-result .report-note{margin:0 0 12px}
+
+.history-filters label[hidden]{display:none!important}#history-cdr-table audio{min-width:190px;max-width:230px;height:36px}#history-cdr-table td:last-child{min-width:210px}#history-cdr-trend-bucket{min-height:40px}
+
+.history-cdr-charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.history-cdr-charts .history-cdr-result{min-width:0}@media(max-width:1050px){.history-cdr-charts{grid-template-columns:1fr}}
+
+.pbx-report-heading[hidden]{display:none}.pbx-report-heading{padding:8px 2px 0}.pbx-report-heading h2{font-size:1.5rem;margin:6px 0}.pbx-report-heading p{color:var(--muted);margin:0}body[data-report-target="history-cdr-section"] .reports-workspace>.report-intro{display:none}body[data-report-target="history-cdr-section"] #history-cdr-section>.panel-heading:first-child{display:none}
