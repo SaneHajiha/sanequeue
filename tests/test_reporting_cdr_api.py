@@ -57,6 +57,21 @@ class CDRAPITests(unittest.TestCase):
         self.assertEqual(response.status_code,200,response.json)
         self.assertEqual(sum(row['outbound'] for row in response.json['rows']),1)
 
+    def test_cdr_api_bounded_page_limit_and_cursor(self):
+        with self.case.archive.writer() as db:db.execute("DELETE FROM report_visits WHERE queue='8002'")
+        case=self.case
+        case.archive.append([Event('cdr','segment2',case.stamp+11,'CDR',dict(
+            src='100',dst='200',duration=4,billsec=2,disposition='ANSWERED'))])
+        project_batch(case.archive)
+        client=case.client(role='admin',menus=('reports','users'),details=True)
+        first=client.get('/api/history/cdr'+self.query+'&limit=1')
+        self.assertEqual(first.status_code,200);self.assertEqual(len(first.json['rows']),1)
+        cursor=first.json['next'];self.assertIsNotNone(cursor)
+        second=client.get('/api/history/cdr'+self.query+'&limit=1&before_time='+str(cursor[0])+'&before_id='+cursor[1])
+        self.assertEqual(second.status_code,200);self.assertEqual(len(second.json['rows']),1)
+        self.assertNotEqual(first.json['rows'][0]['id'],second.json['rows'][0]['id'])
+        self.assertEqual(client.get('/api/history/cdr'+self.query+'&limit=0').status_code,400)
+
     def test_masked_output_search_gate_and_global_aggregate_alignment(self):
         # Restrict the synthetic archive to a single authorized queue.
         with self.case.archive.writer() as db:

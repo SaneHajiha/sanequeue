@@ -734,7 +734,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         before=None
         if request.args.get('before_time') is not None:
             before=(request.args['before_time'],request.args.get('before_id'))
-        data=cdr_queries.page(archive,start,end,filters,before=before)
+        data=cdr_queries.page(archive,start,end,filters,before=before,limit=request.args.get('limit',100))
         if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
         secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
         for row in data['rows']:
