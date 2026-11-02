@@ -43,3 +43,14 @@ body[data-view="reports"] .monitor-preferences { display: none !important; }
 .extension-report-controls button{min-height:42px}
 .extension-report-shortcut .extension-report-note{grid-column:1/-1;border-top:1px solid var(--line);padding-top:9px}
 @media(max-width:760px){.extension-report-shortcut{grid-template-columns:1fr}.extension-report-controls input{flex:1;min-width:110px}}
+
+/* Reporting flow: choose the report, then its applicable filters. */
+.reports-workspace .history-navigation{padding:14px 18px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.reports-workspace .history-navigation>label{font-size:13px;color:var(--ink);gap:14px}
+.reports-workspace .history-navigation select{max-width:620px}
+.reports-workspace .history-filters{border-radius:14px}
+.reports-workspace .report-scope-info{padding:11px 16px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--muted);font-size:12px;line-height:1.9}
+.report-scope-info summary{cursor:pointer;color:var(--ink);font-weight:650}
+.report-scope-info p{margin:8px 0 0}
+.report-scope-info summary:focus-visible{outline:2px solid #3b82f6;outline-offset:4px}
+@media(max-width:600px){.reports-workspace .history-navigation>label{align-items:stretch;flex-direction:column}.reports-workspace .history-navigation select{width:100%;flex:auto}}
