@@ -34,6 +34,11 @@ callers, survey invitations or all conversations. Queue-filtered status counts
 cover all statuses; the status selector filters the displayed rows. No CSAT
 score or sentiment is inferred from this free-form audio.
 
+Choose both creation dates to filter rows and counts by Tehran local days; the
+end date is inclusive and a selected range is limited to 366 days. Clearing
+both dates restores all retained dates without deleting any data. The status
+counts remain independent of the status selected for the row list.
+
 ## Storage and bounds
 
 The private `STATE/voice-feedback/feedback.sqlite3` stores audio as SQLite BLOBs

@@ -5,6 +5,8 @@ import io
 import os
 from pathlib import Path
 import sqlite3
+from datetime import date,datetime,timedelta,time
+from zoneinfo import ZoneInfo
 
 from flask import abort,jsonify,request,session,send_file
 from flask_login import current_user,login_required
@@ -77,7 +79,15 @@ def install(app,state):
             if queue:
                 if queue not in queues:abort(403)
                 queues=(queue,)
-            return jsonify(**store.report(queues,status=request.args.get('status') or None,before=request.args.get('before')),queues=ctx['queues'],statuses=STATES)
+            first=request.args.get('from');last=request.args.get('to');start=end=None
+            if first or last:
+                if not first or not last:raise ValueError('invalid_voice_feedback_range')
+                first=date.fromisoformat(first);last=date.fromisoformat(last)
+                if first<date(1900,1,1) or last>date(2099,12,31) or not 0<=(last-first).days<366:raise ValueError('invalid_voice_feedback_range')
+                zone=ZoneInfo('Asia/Tehran')
+                start=datetime.combine(first,time.min,zone).timestamp()
+                end=datetime.combine(last+timedelta(days=1),time.min,zone).timestamp()
+            return jsonify(**store.report(queues,status=request.args.get('status') or None,before=request.args.get('before'),start=start,end=end),queues=ctx['queues'],statuses=STATES)
         queue=request.args.get('queue')
         if queue not in ctx['queues']:abort(403)
         if request.mimetype not in ('audio/wav','audio/x-wav','application/octet-stream'):abort(415)

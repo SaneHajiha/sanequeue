@@ -108,17 +108,20 @@ class VoiceFeedback:
         with self.db() as db:row=self.public(db.execute('SELECT '+self.columns()+' FROM feedback WHERE id=?',(ident,)).fetchone())
         if row['queue'] not in queues:raise FileNotFoundError()
         return row
-    def report(self,queues,*,status=None,before=None):
+    def report(self,queues,*,status=None,before=None,start=None,end=None):
         if len(queues)>100 or status is not None and status not in STATES:raise ValueError('invalid_voice_feedback_filter')
         if before is not None and (not isinstance(before,str) or not ID.fullmatch(before)):raise ValueError('invalid_voice_feedback_cursor')
+        if (start is None)!=(end is None):raise ValueError('invalid_voice_feedback_range')
+        if start is not None and (type(start) not in (float,int) or type(end) not in (float,int) or not math.isfinite(start) or not math.isfinite(end) or not 0<end-start<=367*86400):raise ValueError('invalid_voice_feedback_range')
         if not queues:return {'rows':[],'next':None,'counts':{}}
         where='queue IN ('+','.join('?' for _ in queues)+')';args=list(queues)
+        if start is not None:where+=' AND created>=? AND created<?';args.extend((start,end))
         with self.db() as db:
             counts={row[0]:row[1] for row in db.execute('SELECT status,COUNT(*) FROM feedback WHERE '+where+' GROUP BY status',args)}
             if status:where+=' AND status=?';args.append(status)
             if before:
-                prior=db.execute('SELECT created,id,queue FROM feedback WHERE id=?',(before,)).fetchone()
-                if prior is None or prior['queue'] not in queues:raise ValueError('invalid_voice_feedback_cursor')
+                prior=db.execute('SELECT created,id,queue,status FROM feedback WHERE id=?',(before,)).fetchone()
+                if prior is None or prior['queue'] not in queues or status and prior['status']!=status or start is not None and not start<=prior['created']<end:raise ValueError('invalid_voice_feedback_cursor')
                 where+=' AND (created<? OR (created=? AND id<?))';args.extend((prior['created'],prior['created'],prior['id']))
             rows=[self.public(row) for row in db.execute('SELECT '+self.columns()+' FROM feedback WHERE '+where+' ORDER BY created DESC,id DESC LIMIT 51',args)]
         return dict(rows=rows[:50],next=rows[49]['id'] if len(rows)>50 else None,counts=counts,unit='manually_uploaded_voice_feedback',source_coverage='manual_intake_only')

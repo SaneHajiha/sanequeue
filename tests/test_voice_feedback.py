@@ -7,6 +7,8 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from unittest.mock import patch
 import wave
 
@@ -88,6 +90,22 @@ class VoiceAPITests(unittest.TestCase):
             def __init__(self,ident):self.id=ident
         manager.user_loader(User);install(app,self.root);self.client=app.test_client();self.login('boss');self.headers={'X-CSRF-Token':'token','Idempotency-Key':'upload'}
     def write_policy(self):self.accounts.write_text(json.dumps(self.account_data));self.policies.write_text(json.dumps(self.policy_data))
+    def test_report_dates_use_inclusive_tehran_days_and_respect_scope(self):
+        zone=ZoneInfo('Asia/Tehran')
+        for day,queue,key in [(1,'8001','first'),(2,'8001','second'),(1,'8002','foreign')]:
+            ts=datetime(2026,10,day,12,tzinfo=zone).timestamp()
+            with patch('sanequeue.surveys.voice_feedback.time.time',return_value=ts):self.store.intake(self.audio,queue,'admin',key)
+        result=self.client.get('/api/voice-feedback?from=2026-10-01&to=2026-10-01')
+        self.assertEqual(result.status_code,200);self.assertEqual(len(result.json['rows']),1)
+        self.assertEqual(result.json['rows'][0]['queue'],'8001');self.assertEqual(result.json['counts'],{'new':1})
+        self.assertEqual(self.client.get('/api/voice-feedback?from=2026-10-01').status_code,400)
+        self.assertEqual(self.client.get('/api/voice-feedback?from=2026-10-02&to=2026-10-01').status_code,400)
+        self.assertEqual(self.client.get('/api/voice-feedback?from=2024-01-01&to=2026-10-01').status_code,400)
+        self.assertEqual(self.client.get('/api/voice-feedback?from=9999-12-31&to=9999-12-31').status_code,400)
+        for stamp,key in [(datetime(2026,10,1,0,0,0,tzinfo=zone).timestamp(),'start'),(datetime(2026,10,1,23,59,59,tzinfo=zone).timestamp(),'end')]:
+            with patch('sanequeue.surveys.voice_feedback.time.time',return_value=stamp):self.store.intake(self.audio,'8001','admin',key)
+        result=self.client.get('/api/voice-feedback?from=2026-10-01&to=2026-10-01')
+        self.assertEqual(len(result.json['rows']),3);self.assertEqual(result.json['counts'],{'new':3})
     def login(self,user):
         with self.client.session_transaction() as session:session['_user_id']=user;session['_fresh']=True;session['csrf_token']='token'
     def upload(self,queue='8001',headers=None,data=None):return self.client.post('/api/voice-feedback?queue='+queue,data=self.audio if data is None else data,content_type='audio/wav',headers=headers or self.headers)
