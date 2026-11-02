@@ -55,3 +55,6 @@ body[data-view="reports"] .monitor-preferences { display: none !important; }
 .report-scope-info summary:focus-visible{outline:2px solid #3b82f6;outline-offset:4px}
 .history-filter-actions[hidden]{display:none!important}
 @media(max-width:600px){.reports-workspace .history-navigation>label{align-items:stretch;flex-direction:column}.reports-workspace .history-navigation select{width:100%;flex:auto}}
+
+/* PBX reports: keep common filters visible and secondary filters optional. */
+.history-cdr-primary{padding:16px 0;align-items:end}.history-cdr-primary>label{flex:1 1 155px}.history-cdr-primary>label:first-child{flex:2 1 240px}.history-cdr-primary>.history-cdr-advanced{order:2}.history-cdr-primary>button{order:1;min-width:140px}.history-cdr-advanced summary:focus-visible{outline:2px solid #3b82f6;outline-offset:4px}.history-cdr-result{margin-block:24px;border-top:1px solid var(--line);padding-top:16px}.history-cdr-result h3{margin:0 0 8px}.history-cdr-result .report-note{margin:0 0 12px}
