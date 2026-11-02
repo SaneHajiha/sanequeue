@@ -110,7 +110,7 @@ async function journey(){
  const host=element('journey-result');
  const button={dataset:{historyJourney:'opaque',journeyQuery:'from=2026-10-26'},isConnected:true,disabled:false,nextElementSibling:host};
  const click=()=>events.get('click')({target:{closest:()=>button}});
- const payload={events:[{ts:100,kind:'IVR_SELECTION',source:'cel',node:'leg1',ivr_id:'3',digit:'2',caller:'n1'}],edges:[],numbers:{n1:'<img src=x onerror=alert(1)>'},final_hangup:null,
+ const payload={events:[{ts:100,kind:'IVR_SELECTION',source:'cel',node:'leg1',ivr_id:'3',digit:'2',caller:'n1'},{ts:101,kind:'APP_END',source:'cel',node:'leg1',origin:'ring_group',observed_app_seconds:3}],edges:[],numbers:{n1:'<img src=x onerror=alert(1)>'},final_hangup:null,
   termination:{queue_segment:{party:'caller'},final:{party:null,reason:'conflicting_causality'}}};
  const obsolete=click();element('history-filters').listeners.submit();
  assert.equal(pending[0].signal.aborted,true);pending[0].resolve(payload);await obsolete;
@@ -118,6 +118,7 @@ async function journey(){
  const loaded=click();pending[1].resolve(payload);await loaded;
  assert.match(host.innerHTML,/Queue segment ended by: Caller/);
  assert.match(host.innerHTML,/Conflicting hangup evidence/);assert.match(host.innerHTML,/IVR 3/);assert.match(host.innerHTML,/Key: 2/);
+ assert.match(host.innerHTML,/Ring group/);assert.match(host.innerHTML,/Observed application duration: 3 seconds; not necessarily wait time/);
  assert.match(host.innerHTML,/&lt;img/);assert.doesNotMatch(host.innerHTML,/<img/);
  assert.equal(host.attrs['aria-busy'],undefined);assert.equal(button.disabled,false);
  const old=click(),fresh=click();pending[3].resolve({...payload,final_hangup:{node:'leg2',party:'agent'}});await fresh;

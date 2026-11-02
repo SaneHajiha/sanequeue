@@ -85,7 +85,7 @@ def explain(archive,scope,start,end,visit_id):
     budget-=len(events)
     if budget<=0:limited=True
     first=max(float(start),float(scope.not_before),float(visit['entered']))
-    # Only the owned root's explicit IVR events gain a pre-queue window.
+    # Only explicit allowlisted route events on the owned root may precede the queue.
     # Graph expansion, downstream legs and CDR keep their original boundary.
     prequeue_first=max(float(start),float(scope.not_before))
     last=float(end)
@@ -175,6 +175,7 @@ def explain(archive,scope,start,end,visit_id):
                 ORDER BY c.ts,c.event_id LIMIT ?''',
                 (archive.pbx,uid,cel_first,last,budget+1)).fetchall()
             if len(rows)>budget:rows=rows[:budget];limited=True
+            app_starts={}
             for item in rows:
                 check();budget-=1
                 kind=item['kind'].upper()
@@ -194,9 +195,18 @@ def explain(archive,scope,start,end,visit_id):
                     if app=='dial' and context=='ext-group':origin='ring_group'
                     if app in ('followme','dial') and context in ('ext-findme','followme-check'):origin='follow_me'
                     if origin is None:continue
-                    if prequeue and origin!='ivr':continue
                     event['origin']=origin
                     if origin=='ivr':event['ivr_id']=context[4:]
+                    if origin in ('ring_group','follow_me'):
+                        # Same exact UID, app and context, with one unambiguous
+                        # start/end pair. The observed application interval is
+                        # not proof of ringing or caller wait throughout it.
+                        key=(origin,app,context)
+                        if kind=='APP_START':
+                            app_starts[key]=item['ts'] if key not in app_starts else None
+                        else:
+                            started=app_starts.pop(key,None)
+                            event['observed_app_seconds']=(item['ts']-started if started is not None and item['ts']>=started else None)
                 if kind=='USER_DEFINED':
                     if payload.get('userdeftype') not in ('IVRSelection','SaneQueueIVR'):continue
                     digit=str(extra.get('digit',''))

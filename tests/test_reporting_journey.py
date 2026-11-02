@@ -233,8 +233,36 @@ class JourneyTests(unittest.TestCase):
         result=self.report()
         self.assertNotIn('09999999999',result['numbers'].values())
         self.assertFalse(any(item.get('ivr_id')=='9' for item in result['events']))
-        self.assertFalse(any(item.get('origin')=='ring_group' for item in result['events']))
+        self.assertEqual([item['ts'] for item in result['events'] if item.get('origin')=='ring_group'],[95])
         self.assertFalse(any(item['type']=='bridge' for item in result['nodes']))
+
+    def test_prequeue_route_intervals_require_unambiguous_exact_app_pair(self):
+        self.seed(*self.visit('private-root-uid'),
+            self.cel('private-root-uid','APP_START',91,appname='Dial',context='ext-group'),
+            self.cel('private-root-uid','APP_END',94,appname='Dial',context='ext-group'),
+            self.cel('private-root-uid','APP_START',95,appname='FollowMe',context='ext-findme'),
+            self.cel('private-root-uid','APP_END',98,appname='FollowMe',context='ext-findme'),
+            self.cel('private-root-uid','APP_START',102,appname='Dial',context='ext-group'),
+            self.cel('private-root-uid','APP_START',103,appname='Dial',context='ext-group'),
+            self.cel('private-root-uid','APP_END',104,appname='Dial',context='ext-group'),
+            self.cel('private-root-uid','APP_END',105,appname='Dial',context='ext-group'))
+        events=[e for e in self.report()['events'] if e.get('origin') in ('ring_group','follow_me') and e['kind']=='APP_END']
+        self.assertEqual([(e['origin'],e['observed_app_seconds']) for e in events],
+                         [('ring_group',3),('follow_me',3),('ring_group',None),('ring_group',None)])
+
+    def test_prequeue_routes_respect_time_and_foreign_queue_scope(self):
+        self.seed(*self.visit('private-root-uid'),*self.visit('private-root-uid','8002',130),
+            self.cel('private-root-uid','APP_START',95,appname='Dial',context='ext-group'),
+            self.cel('private-root-uid','APP_END',98,appname='Dial',context='ext-group'))
+        self.assertFalse(any(e.get('origin')=='ring_group' for e in self.report()['events']))
+
+    def test_prequeue_route_start_outside_access_window_is_not_reconstructed(self):
+        self.seed(*self.visit('private-root-uid'),
+            self.cel('private-root-uid','APP_START',91,appname='Dial',context='ext-group'),
+            self.cel('private-root-uid','APP_END',98,appname='Dial',context='ext-group'))
+        result=self.report(scope=Scope(('8001',),not_before=96))
+        events=[e for e in result['events'] if e.get('origin')=='ring_group']
+        self.assertEqual([(e['ts'],e.get('observed_app_seconds')) for e in events],[(98,None)])
 
     def test_cel_uid_projection_replays_in_worker_and_http_waits_without_ddl(self):
         self.seed(*self.visit('private-root-uid'),self.cel('private-root-uid','ANSWER',105))
