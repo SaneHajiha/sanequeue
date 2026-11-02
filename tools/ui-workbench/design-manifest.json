@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "figmaUrl": "https://www.figma.com/design/eKxCAaXf89ch2xu2KppEM5",
+  "pageId": "0:1",
+  "foundations": {
+    "light": "2:28",
+    "dark": "2:69"
+  },
+  "componentSets": {
+    "Button": "3:10",
+    "KPI": "3:31",
+    "AgentStatus": "3:56",
+    "DataTable": "3:89"
+  },
+  "tokenSource": "src/tokens.json",
+  "componentSource": "src/components.js",
+  "sync": "manual-reviewed; no automatic bidirectional synchronization",
+  "fontDifference": "Runtime uses local Vazirmatn. Figma reference uses Noto Sans Arabic because Vazirmatn was not available in the inspected Figma font inventory.",
+  "productionRollout": "pending visual approval",
+  "geometryCollection": "VariableCollectionId:5:2",
+  "geometryTokenCount": 8
+}

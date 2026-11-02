@@ -1,3 +1,5 @@
+Current source-of-truth (2026-10-28): [Module catalog](MODULE_CATALOG.fa.md), [reference sources](MODULE_REFERENCE_SOURCES.md), [reporting completion](REPORTING_COMPLETION_CHECKLIST.fa.md). Older roadmap notes below are historical.
+
 # Roadmap
 
 ## Phase 1 — Monitoring and supervisor operations (2.0 beta)

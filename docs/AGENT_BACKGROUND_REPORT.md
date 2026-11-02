@@ -1,0 +1,9 @@
+# Background agent summary
+
+In Reports → Agent comparison, select a date range and queue scope, then queue a background summary. Refresh jobs manually and view the finished result or download its private JSON. Supervisors and administrators need Reports plus view and report-export permission on every selected queue. Authorization is checked again during processing and when retrieving results.
+
+The source watermark, both historical projection generations, queue scope and period are frozen when the job is queued. Periods are limited to 31 days. The Outcome filter does not apply. Answer counts represent queue visits, not unique conversations; a faster average is not a quality score. Presence time is unioned across overlapping queue memberships. Unknown after-call work is shown as unknown, not zero. If endpoint identity cannot be proven or coverage is incomplete, the result must not be interpreted as proof of employee performance or absence.
+
+The existing resource-limited export worker processes jobs without querying AMI or the PBX database. It uses short 200-row source pages, a maximum of 250,000 scanned rows, 2,000 agents, 64 MiB of temporary SQLite storage and a 240-second budget. Jobs fail closed on revoked permission, cancellation or an invalidated snapshot. Visits with unproven agent identity are counted separately, excluded from the comparison and clearly marked as incomplete; no identity is guessed. The projection worker initializes legacy activity snapshots in batches of at most 500; requests remain unavailable until that migration completes. Existing raw records are retained.
+
+On the test server, a separate synthetic month of 30,000 calls and 33,330 queue visits completed the pinned calculation in 117 seconds at a 10% one-core CPU quota and 128 MiB service memory limit. Its 146,790 scanned facts and unioned presence matched the previously verified reference. This is not a concurrent live-call or production compatibility certification.

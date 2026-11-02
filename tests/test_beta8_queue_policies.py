@@ -91,6 +91,14 @@ class Beta8PolicyTests(unittest.TestCase):
         rules.update(count_enabled=False,time_enabled=False);self.store.replace(config)
         self.assertFalse(self.store.evaluate({'8001':queue})['alerts'])
 
+    def test_empty_observed_members_triggers_ready_threshold_missing_members_does_not(self):
+        self.store.replace(sample_policy())
+        self.assertFalse(self.store.evaluate({'8001':{'Calls':'0','entries':{}}},now=1)['alerts'])
+        alerts=self.store.evaluate({'8001':{'members':{},'Calls':'0','entries':{}}},now=2)
+        self.assertEqual([(a['type'],a['value'],a['threshold']) for a in alerts['alerts']],[('ready_below',0,3)])
+        self.assertEqual(len(alerts['notify']),1)
+        self.assertFalse(self.store.evaluate({'8001':{'members':{},'Calls':'0','entries':{}}},now=3)['notify'])
+
     def test_numeric_limit_is_stricter_than_percentage(self):
         cfg=sample_policy(pct=90,count=2)
         self.store.replace(cfg)

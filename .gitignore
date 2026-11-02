@@ -73,3 +73,12 @@ logs/
 
 local_accounts.json
 local_accounts.tmp
+
+# Isolated UI development artifacts
+tmp/
+output/
+tools/ui-workbench/node_modules/
+tools/ui-workbench/dist/
+tools/ui-workbench/storybook-static/
+tools/ui-workbench/test-results/
+tools/ui-workbench/playwright-report/

@@ -17,6 +17,7 @@ QUEUE_ID = re.compile(r'^[A-Za-z0-9_-]{1,32}$')
 USER_ID = re.compile(r'^[A-Za-z0-9_.@-]{1,70}$')
 REASON_ID = re.compile(r'^[a-z][a-z0-9_-]{0,31}$')
 ALLOWED_GRANTS = frozenset({'view', 'pause', 'membership', 'monitor', 'hangup', 'priority', 'caller_details','transfer','park','pickup','dial'})
+ALLOWED_GRANTS = ALLOWED_GRANTS | {'report_export','recording_play','recording_download','survey_reports'}
 DEFAULT_REASONS = [
     {'id':'break', 'label':'استراحت'},
     {'id':'lunch', 'label':'ناهار'},
@@ -87,7 +88,7 @@ def validate_config(raw):
     for username, grant in users.items():
         if not USER_ID.fullmatch(username) or not isinstance(grant,dict):raise ValueError('invalid_supervisor')
         qids=grant.get('queues',[]); actions=grant.get('actions',['view'])
-        if not isinstance(qids,list) or not isinstance(actions,list) or len(qids)>100 or len(actions)>11:
+        if not isinstance(qids,list) or not isinstance(actions,list) or len(qids)>100 or len(actions)>len(ALLOWED_GRANTS):
             raise ValueError('invalid_supervisor_scope')
         if any(q not in cleaned['queues'] for q in qids) or any(a not in ALLOWED_GRANTS for a in actions):
             raise ValueError('invalid_supervisor_scope')
@@ -260,7 +261,7 @@ class QueuePolicyStore:
                 matched=bool(selected) and (all(selected) if rules['match_mode']=='all' else any(selected))
                 tests=(('waiting_count',matched and rules['count_enabled'] and count_fired, summary['waiting'], rules['waiting_above']),
                        ('waiting_time',matched and rules['time_enabled'] and time_fired,summary['longest_wait'],rules['wait_seconds_above']),
-                       ('ready_below',summary['members']>0 and summary['status_counts']['ready']<rules['min_ready'],summary['status_counts']['ready'],rules['min_ready']))
+                       ('ready_below',isinstance(data.get('members'),dict) and summary['status_counts']['ready']<rules['min_ready'],summary['status_counts']['ready'],rules['min_ready']))
                 for typ,fired,value,limit in tests:
                     if not fired:continue
                     ident=(name,typ);current.add(ident)

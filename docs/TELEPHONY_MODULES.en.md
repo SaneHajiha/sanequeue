@@ -18,7 +18,7 @@ Menu, confirmation and wait-timeout slots accept recordings up to 60 seconds / 8
 
 The bottom of Telephone modules shows the latest 100 requests: request, requester answer, verified target bridge, end and observed talk duration. Persian uses the Persian calendar; English uses Gregorian. This report uses Asia/Tehran.
 
-AMI acceptance is not destination answer. A verified connection requires the requester and the expected target channel in the same observed bridge. Duration requires both connection and requester hangup. Unknown outcomes remain unknown; older rows are not assigned invented timestamps. Reconnection gaps or forwarding can leave the destination unverified. This is an event report, not billing CDR or call recording. Finished requests are retained for up to 30 days.
+AMI acceptance is not destination answer. A verified connection requires the requester and the expected target channel in the same observed bridge. Duration requires both connection and requester hangup. Unknown outcomes remain unknown; older rows are not assigned invented timestamps. Reconnection gaps or forwarding can leave the destination unverified. This is an event report, not billing CDR or call recording. Finished request history has no automatic deletion. Pending expiry stops dialing without deleting the request history.
 
 ## Caller-number formatting
 

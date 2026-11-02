@@ -14,6 +14,7 @@ def main():
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('initialize')
     commands.add_parser('status')
+    commands.add_parser('project')
     queue = commands.add_parser('import-queue')
     queue.add_argument('path')
     queue.add_argument('--batch', type=int, default=500)
@@ -28,6 +29,9 @@ def main():
     if args.command == 'initialize':
         archive.initialize()
         result = archive.status()
+    elif args.command == 'project':
+        from .facts import project_batch
+        result = project_batch(archive)
     elif args.command == 'status':
         result = archive.status()
     elif args.command == 'import-queue':

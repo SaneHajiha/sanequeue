@@ -1,0 +1,23 @@
+{% if user_role in ('admin','supervisor') %}
+<section id="agent-summary-jobs" aria-labelledby="agent-summary-jobs-title">
+ <header class="panel-heading"><div><h3 id="agent-summary-jobs-title">{{ t('جمع‌بندی کامل کارشناس در پس‌زمینه','Complete background agent summary') }}</h3><p class="report-note">{{ t('برای بازه‌های ماهانه یا بیش از سقف گزارش تعاملی، محاسبهٔ پس‌زمینه را ثبت کنید. بازه، صف‌ها و نسخهٔ داده هنگام ثبت کار ثابت می‌شوند. فیلتر «نتیجه» در این محاسبه کاربرد ندارد.','For monthly periods or data beyond the interactive limit, queue a background calculation. The period, queue scope and data version are frozen when queued. The Outcome filter does not apply.') }}</p></div><button id="agent-summary-job-refresh" type="button">{{ t('بازخوانی کارها','Refresh jobs') }}</button></header>
+ <form id="agent-summary-job-form" class="history-analysis-controls">
+  <label>{{ t('حداقل نمونهٔ معتبر','Minimum valid samples') }}<input name="min_samples" type="number" min="1" max="100" value="5" required></label>
+  <label>{{ t('حداکثر رتبه‌های هر شاخص','Maximum rows per metric') }}<input name="top" type="number" min="1" max="20" value="10" required></label>
+  <button id="agent-summary-job-create" type="submit" class="primary">{{ t('ثبت محاسبهٔ کامل','Queue complete calculation') }}</button>
+ </form>
+ <p class="report-note">{{ t('محاسبه فقط با درخواست شما شروع می‌شود؛ برای دیدن پیشرفت «بازخوانی کارها» را بزنید. بازخوانی خودکار وجود ندارد. پاسخ‌ها بر حسب مراجعهٔ صف هستند؛ حضور هم‌زمان یک داخلی در چند صف دوبار شمرده نمی‌شود. مدت نامعلوم صفر نیست و ACW فقط از وضعیت صریح محاسبه می‌شود.','Calculation starts only on request. Use Refresh jobs to inspect progress; there is no automatic polling. Answer counts are queue visits; overlapping multi-queue presence is counted once. Unknown duration is not zero, and ACW requires an explicit state.') }}</p>
+ <p id="agent-summary-job-feedback" role="status" aria-live="polite">{{ t('برای مشاهدهٔ کارهای این بازه، بازخوانی را بزنید.','Refresh to view jobs in this period.') }}</p>
+ <div id="agent-summary-job-list" class="table-wrap"></div>
+ <section id="agent-summary-job-result" hidden aria-labelledby="agent-summary-job-result-title">
+  <h4 id="agent-summary-job-result-title">{{ t('نتیجهٔ ثبت‌شدهٔ محاسبه','Saved calculation result') }}</h4>
+  <p id="agent-summary-job-period" class="report-note"></p>
+  <p class="report-note">{{ t('این مقایسه امتیاز کیفیت یا ارزیابی قطعی کارمند نیست. مکالمهٔ کوتاه‌تر الزاماً بهتر نیست. زمان‌ها فقط از شواهد صف‌های مجازِ ثبت‌شده محاسبه می‌شوند.','These comparisons are not quality scores or definitive employee evaluations. Shorter calls are not necessarily better. Times use only recorded evidence within the authorized queue scope.') }}</p>
+  <div id="agent-summary-job-answers-chart"></div><div id="agent-summary-job-answers-table" class="table-wrap"></div>
+  <div id="agent-summary-job-talk-chart"></div><div id="agent-summary-job-talk-table" class="table-wrap"></div>
+  <h4>{{ t('زمان‌های یکتای حضور و وضعیت','Unioned presence and state times') }}</h4>
+  <div id="agent-summary-job-presence" class="table-wrap"></div>
+  <details><summary>{{ t('منبع و قرارداد محاسبه','Calculation source and contract') }}</summary><p id="agent-summary-job-source" class="report-note"></p></details>
+ </section>
+</section>
+{% endif %}

@@ -31,6 +31,11 @@ def dispatch(env,config,spool=SPOOL,*,now=None):
     if len(route)!=2 or not hmac.compare_digest(route[0],config.get('token','')):return {}
     mode=route[1];settings=config['settings'];phones=config.get('phones',{})
     if (Path(spool)/'disabled').exists():return {}
+    if mode=='incident':
+        from .incidents import select_notice
+        row=select_notice(config,env.get('agi_arg_1',''),env.get('agi_arg_2',''),env.get('agi_arg_3',''),now)
+        if row is None:return {'SQ_NOTICE_ENABLED':'0'}
+        return {'SQ_NOTICE_ENABLED':'1','SQ_NOTICE_AUDIO':row['audio'],'SQ_NOTICE_REVISION':str(row['revision'])}
     if mode=='normalize':
         number=env.get('agi_callerid','')
         value=normalize_number(number,settings['caller_id']) if settings['caller_id']['enabled'] else number

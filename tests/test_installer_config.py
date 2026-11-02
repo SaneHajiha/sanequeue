@@ -26,6 +26,13 @@ class InstallerConfigurationTests(unittest.TestCase):
             with self.subTest(value=value),self.assertRaises(ValueError):self.module.validate_origin(value)
         self.assertEqual(self.module.validate_origin('http://192.168.2.2:5000/'),'http://192.168.2.2:5000')
 
+    def test_ambiguous_or_partial_managed_ami_markers_fail_before_replacement(self):
+        begin,end=self.module.BEGIN,self.module.END
+        for text in (begin, end, end+'\n'+begin, begin+'\n'+end+'\n'+begin+'\n'+end,
+                     'prefix '+begin+'\n'+end,begin+'\n'+end+' trailing'):
+            with self.subTest(text=text),self.assertRaisesRegex(ValueError,'ambiguous_managed_ami_block'):
+                self.module.manager_block(text,'a'*64,'b'*64)
+
     def test_private_permissions_use_descriptor_and_refuse_links(self):
         import tempfile,stat
         from unittest.mock import patch
@@ -38,3 +45,17 @@ class InstallerConfigurationTests(unittest.TestCase):
                 self.module.private_permissions(Path(folder),os.getuid(),os.getgid(),0o750)
                 with self.assertRaises(OSError):self.module.private_permissions(alias,os.getuid(),os.getgid(),0o777)
             self.assertEqual(stat.S_IMODE(target.stat().st_mode),0o600)
+
+    def test_upgrade_preserves_owner_only_export_directory_contract(self):
+        import tempfile,stat
+        from sanequeue.reporting.export_jobs import JobStore
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);store=JobStore(root/'jobs.sqlite3',root/'private-exports')
+            store.initialize()
+            self.module.prepare_state_permissions(root,os.getuid(),os.getgid())
+            store.initialize()
+            self.assertEqual(stat.S_IMODE((root/'private-exports').stat().st_mode),0o700)
+            self.assertEqual(stat.S_IMODE((root/'jobs.sqlite3').stat().st_mode),0o600)
+
+    def test_optional_survey_writer_is_in_install_backup_and_rollback_unit_set(self):
+        self.assertIn('sanequeue-surveys.service',self.module.REPORTING_UNITS)

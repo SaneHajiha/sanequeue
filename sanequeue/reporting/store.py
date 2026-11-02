@@ -57,12 +57,24 @@ class Archive:
                   imported REAL NOT NULL);
                 CREATE INDEX IF NOT EXISTS event_source ON events(pbx,source,source_key);
                 CREATE INDEX IF NOT EXISTS event_time ON events(pbx,ts,id);
+                CREATE INDEX IF NOT EXISTS event_cursor ON events(pbx,id);
+                CREATE INDEX IF NOT EXISTS event_ring_time ON events(pbx,ts,id)
+                  WHERE UPPER(kind)='RINGNOANSWER';
                 CREATE TABLE IF NOT EXISTS source_items(
                   pbx TEXT,source TEXT,source_key TEXT,event_id INTEGER,
                   PRIMARY KEY(pbx,source,source_key));
                 CREATE TABLE IF NOT EXISTS checkpoints(
                   pbx TEXT,source TEXT,value TEXT,updated REAL,
                   PRIMARY KEY(pbx,source));
+                CREATE TABLE IF NOT EXISTS activity_import_open(
+                  pbx TEXT,source TEXT,row_id INTEGER,source_key TEXT,payload TEXT,
+                  PRIMARY KEY(pbx,source,row_id));
+                CREATE TABLE IF NOT EXISTS sql_cdr_pending(
+                  pbx TEXT,uid TEXT,due REAL,attempts INTEGER,created REAL,
+                  PRIMARY KEY(pbx,uid));
+                CREATE TABLE IF NOT EXISTS sql_cdr_unresolved(
+                  pbx TEXT,uid TEXT,attempts INTEGER,last_checked REAL,reason TEXT,
+                  PRIMARY KEY(pbx,uid));
                 CREATE TABLE IF NOT EXISTS archive_stats(
                   pbx TEXT PRIMARY KEY,events INTEGER NOT NULL DEFAULT 0,
                   rejected INTEGER NOT NULL DEFAULT 0,updated REAL);
@@ -110,6 +122,7 @@ class Archive:
             db.execute('PRAGMA query_only=ON')
             db.execute('PRAGMA trusted_schema=OFF')
             db.execute('PRAGMA cache_size=-2048')
+            db.execute('BEGIN')
             yield db
         except sqlite3.OperationalError as error:
             if 'interrupt' in str(error).lower():
@@ -124,7 +137,7 @@ class Archive:
             row = db.execute('SELECT value FROM checkpoints WHERE pbx=? AND source=?', (self.pbx, source)).fetchone()
             return json.loads(row[0]) if row else {}
 
-    def append(self, events, *, checkpoint_source=None, checkpoint=None, rejected=0):
+    def append(self, events, *, checkpoint_source=None, checkpoint=None, rejected=0, update_state=None):
         from .correlate import project
         rows = []
         total_bytes = 0
@@ -164,6 +177,10 @@ class Archive:
                 db.execute('INSERT OR REPLACE INTO checkpoints VALUES(?,?,?,?)', (self.pbx, checkpoint_source, value, time.time()))
             db.execute('INSERT INTO archive_stats VALUES(?,?,?,?) ON CONFLICT(pbx) DO UPDATE SET events=events+excluded.events,rejected=rejected+excluded.rejected,updated=excluded.updated',
                        (self.pbx, inserted, max(0, rejected), time.time()))
+            if update_state is not None:
+                # Trusted importer bookkeeping shares this transaction. A
+                # failure must roll back evidence, cursor and open-row state.
+                update_state(db)
         return inserted
 
     def page(self, *, after=0, limit=100, source=None):

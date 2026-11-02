@@ -1,0 +1,30 @@
+[Unit]
+Description=SaneQueue optional loopback generative transcript assistance
+After=local-fs.target
+ConditionPathExists=/etc/sanequeue/generative.enabled
+
+[Service]
+Type=simple
+User=sanequeue
+Group=sanequeue
+WorkingDirectory=/opt/sanequeue
+ExecStart=/opt/sanequeue/.venv/bin/python -m sanequeue.reporting.generative_worker --jobs /var/lib/sanequeue/generative-jobs.sqlite3 --sources /var/lib/sanequeue/ai-jobs.sqlite3 --archive /var/lib/sanequeue/history.sqlite3 --config /etc/sanequeue/generative.json --scratch /var/lib/sanequeue/generative-scratch --accounts /var/lib/sanequeue/local_accounts.json --policies /var/lib/sanequeue/local_queue_policies.json
+Restart=on-failure
+RestartSec=30
+CPUQuota=10%
+MemoryMax=192M
+TasksMax=8
+Nice=19
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/sanequeue
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

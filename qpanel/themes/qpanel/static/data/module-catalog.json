@@ -1,0 +1,1517 @@
+{
+  "version": 1,
+  "updated": "2026-10-28",
+  "scope": "Code inventory, not host capability or production certification",
+  "groups": [
+    {
+      "id": "live",
+      "fa": "پایش و کنترل",
+      "en": "Monitoring and control"
+    },
+    {
+      "id": "reports",
+      "fa": "گزارش و کیفیت",
+      "en": "Reporting and quality"
+    },
+    {
+      "id": "telephony",
+      "fa": "خدمات تلفنی",
+      "en": "Telephony services"
+    },
+    {
+      "id": "customers",
+      "fa": "مشتری و ارتباطات",
+      "en": "Customer operations"
+    },
+    {
+      "id": "automation",
+      "fa": "اتوماسیون و یکپارچه‌سازی",
+      "en": "Automation and integrations"
+    },
+    {
+      "id": "ai",
+      "fa": "هوش مصنوعی",
+      "en": "Artificial intelligence"
+    },
+    {
+      "id": "platform",
+      "fa": "مدیریت و بهره‌برداری",
+      "en": "Platform and operations"
+    }
+  ],
+  "modules": [
+    {
+      "id": "monitoring",
+      "group": "live",
+      "fa": "مانیتورینگ و دیوار نمایش",
+      "en": "Monitoring and wallboard",
+      "state": "beta",
+      "pilot": true,
+      "features": [
+        {
+          "fa": "شاخص‌های صف و زمان/منبع داده",
+          "en": "Queue KPIs and source/period",
+          "state": "beta"
+        },
+        {
+          "fa": "شماره و زمان انتظار افراد صف",
+          "en": "Waiting caller numbers and timers",
+          "state": "beta"
+        },
+        {
+          "fa": "تماس جاری و وضعیت متنی کارشناس",
+          "en": "Active calls and labeled agent states",
+          "state": "beta"
+        },
+        {
+          "fa": "عضویت هم‌زمان چندصفی",
+          "en": "Multi-queue membership",
+          "state": "beta"
+        },
+        {
+          "fa": "نمای تمام‌صفحه و هشدار رنگی",
+          "en": "Fullscreen view and threshold colors",
+          "state": "beta"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "built"
+    },
+    {
+      "id": "supervisor",
+      "group": "live",
+      "fa": "کنترل سرپرست",
+      "en": "Supervisor controls",
+      "state": "beta",
+      "pilot": true,
+      "features": [
+        {
+          "fa": "توقف/ادامه، علت و حداقل آمادگی",
+          "en": "Pause/resume, reasons and minimum readiness",
+          "state": "beta"
+        },
+        {
+          "fa": "عضویت پویا و وزن کارشناس",
+          "en": "Dynamic membership and penalty",
+          "state": "beta"
+        },
+        {
+          "fa": "شنود، نجوا و ورود به مکالمه",
+          "en": "Listen, whisper and barge",
+          "state": "beta"
+        },
+        {
+          "fa": "انتقال مستقیم و با مشورت",
+          "en": "Blind and attended transfer",
+          "state": "beta"
+        },
+        {
+          "fa": "پارک/بازیابی، برداشتن، قطع و اولویت",
+          "en": "Park/retrieve, pickup, hangup and priority",
+          "state": "beta"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "صدای دوطرفه، مقصد مجاز، کانال Local و بازگشت امن باید آزموده شوند.",
+        "en": "Verify bidirectional audio, allowed destinations, Local channels and safe fallback."
+      },
+      "implementation": "built"
+    },
+    {
+      "id": "queue_reports",
+      "group": "reports",
+      "fa": "گزارش صف و شاخص‌ها",
+      "en": "Queue reporting",
+      "state": "beta",
+      "pilot": true,
+      "features": [
+        {
+          "fa": "مراجعه، پاسخ و رهاشدن با مخرج مشخص",
+          "en": "Visits, answers and abandonment with denominator",
+          "state": "beta"
+        },
+        {
+          "fa": "SLA، ASA، صدک انتظار و AHT مشروط",
+          "en": "SLA, ASA, waiting percentiles and conditional AHT",
+          "state": "beta"
+        },
+        {
+          "fa": "روند، مقایسه، ساعت/روز و تقویم",
+          "en": "Trends, comparisons, hour/day and calendars",
+          "state": "beta"
+        },
+        {
+          "fa": "ریز زنگ بدون پاسخ RINGNOANSWER",
+          "en": "RINGNOANSWER offer details",
+          "state": "beta"
+        },
+        {
+          "fa": "نمودار و ذخیره تصویر محلی",
+          "en": "Charts and client-side image export",
+          "state": "beta"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "agent_reports",
+      "group": "reports",
+      "fa": "گزارش کارشناس و حضور",
+      "en": "Agent reporting and presence",
+      "state": "beta",
+      "pilot": true,
+      "features": [
+        {
+          "fa": "تعداد پاسخ و قطع‌کننده با شاهد",
+          "en": "Answers and evidence-based hangup attribution",
+          "state": "beta"
+        },
+        {
+          "fa": "اجتماع زمان حضور چندصفی",
+          "en": "Union of multi-queue duty intervals",
+          "state": "beta"
+        },
+        {
+          "fa": "دلایل توقف و پایبندی/تأخیر شیفت",
+          "en": "Pause reasons, adherence and tardiness",
+          "state": "beta"
+        },
+        {
+          "fa": "ACW و اشغال فقط با پوشش معتبر",
+          "en": "ACW and occupancy only with valid coverage",
+          "state": "beta"
+        },
+        {
+          "fa": "ثبت صریح ACW برای منبع فاقد وضعیت",
+          "en": "Explicit ACW capture for unsupported sources",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "مقایسه و رتبه‌بندی دوشاخصی با حداقل نمونه و نمودار؛ امتیاز کیفیت نیست. پذیرش محیط هدف باقی است.",
+        "en": "Two-metric comparison and ranking with minimum samples and chart; not a quality score. Target acceptance remains."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "built"
+    },
+    {
+      "id": "cdr_trunks",
+      "group": "reports",
+      "fa": "ریز تماس و خطوط",
+      "en": "CDR and trunk traffic",
+      "state": "beta",
+      "pilot": true,
+      "features": [
+        {
+          "fa": "داخلی واقعی جدا از Caller ID خروجی",
+          "en": "Real originating extension versus outbound CID",
+          "state": "beta"
+        },
+        {
+          "fa": "مبدأ/مقصد/طرف تماس و طول شماره",
+          "en": "Source, destination, party and number length",
+          "state": "beta"
+        },
+        {
+          "fa": "ساعت هر روز، روز هفته و بازه",
+          "en": "Daily time window, weekday and date range",
+          "state": "beta"
+        },
+        {
+          "fa": "ورودی/خروجی هر ترانک و DID",
+          "en": "Per-trunk and DID inbound/outbound traffic",
+          "state": "beta"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "تماس داخلی جای آزمون مسیر ترانک بیرونی نیست.",
+        "en": "Internal calls do not validate an external trunk path."
+      },
+      "implementation": "built"
+    },
+    {
+      "id": "call_journey",
+      "group": "reports",
+      "fa": "ردیابی مسیر تماس",
+      "en": "Call journey",
+      "state": "beta",
+      "pilot": true,
+      "features": [
+        {
+          "fa": "IVR و کلید ثبت‌شده، صف و پاسخ",
+          "en": "Observed IVR/digits, queue and answer",
+          "state": "beta"
+        },
+        {
+          "fa": "Local optimization و انتقال با مشورت",
+          "en": "Local optimization and attended transfer",
+          "state": "beta"
+        },
+        {
+          "fa": "انتساب قطع فقط با شواهد",
+          "en": "Hangup attribution only with evidence",
+          "state": "beta"
+        },
+        {
+          "fa": "بازه مستقل Ring Group و Follow-Me پیش از صف",
+          "en": "Independent pre-queue Ring Group and Follow-Me intervals",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "recordings_qa",
+      "group": "reports",
+      "fa": "ضبط و کنترل کیفیت انسانی",
+      "en": "Recordings and human QA",
+      "state": "beta",
+      "pilot": true,
+      "features": [
+        {
+          "fa": "پخش/دانلود با مجوز مستقل",
+          "en": "Independent playback/download authorization",
+          "state": "beta"
+        },
+        {
+          "fa": "تاریخچه درخواست صوت کنار ردیف",
+          "en": "Inline audio-access audit",
+          "state": "beta"
+        },
+        {
+          "fa": "فرم نسخه‌دار و امتیاز وزنی",
+          "en": "Versioned weighted quality forms",
+          "state": "beta"
+        },
+        {
+          "fa": "یادداشت زمان‌دار و محدودیت دسترسی",
+          "en": "Timestamp notes and scoped access",
+          "state": "beta"
+        },
+        {
+          "fa": "مالکیت پیچیده صوت پس از کنفرانس/انتقال",
+          "en": "Complex post-transfer/conference audio ownership",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "exports_builder",
+      "group": "reports",
+      "fa": "خروجی و گزارش‌ساز",
+      "en": "Exports and report builder",
+      "state": "beta",
+      "pilot": true,
+      "features": [
+        {
+          "fa": "CSV، Excel و PDF فارسی",
+          "en": "CSV, Excel and Persian PDF",
+          "state": "beta"
+        },
+        {
+          "fa": "Snapshot ثابت، کار پس‌زمینه و لغو",
+          "en": "Stable snapshots, background jobs and cancellation",
+          "state": "beta"
+        },
+        {
+          "fa": "قالب خصوصی و خروجی دوره‌ای استاندارد",
+          "en": "Private templates and standard scheduled exports",
+          "state": "beta"
+        },
+        {
+          "fa": "پیش‌نمایش ستون/فیلتر/گروه سفارشی صف",
+          "en": "Custom queue column/filter/group preview",
+          "state": "beta"
+        },
+        {
+          "fa": "CSV سفارشی دقیق تا ۵۰۰ ردیف؛ snapshot و مجوز جاری",
+          "en": "Exact custom CSV up to 500 rows; snapshot and current grants",
+          "state": "beta"
+        },
+        {
+          "fa": "خروجی حجیم/پس‌زمینه و زمان‌بندی مطابق تعریف سفارشی",
+          "en": "Large/background and scheduled exact custom exports",
+          "state": "beta"
+        },
+        {
+          "fa": "Dataset مستقل گزارش‌ساز CDR",
+          "en": "Independent CDR builder dataset",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "happy_call",
+      "group": "reports",
+      "fa": "هپی‌کال و نظرسنجی کاری کارشناس",
+      "en": "Agent happy-call work",
+      "state": "beta",
+      "pilot": true,
+      "features": [
+        {
+          "fa": "دوره صریح نظرسنجی مستقل از صف",
+          "en": "Explicit survey work sessions independent of queues",
+          "state": "beta"
+        },
+        {
+          "fa": "شماره‌ها، تعداد، مدت و نتیجه تماس",
+          "en": "Destinations, count, duration and outcomes",
+          "state": "beta"
+        },
+        {
+          "fa": "صدای مجاز و تفکیک داخلی/خارجی",
+          "en": "Authorized recordings and internal/external classification",
+          "state": "beta"
+        },
+        {
+          "fa": "حضور چندصفی بدون دوباره‌شماری",
+          "en": "Multi-queue duty without double counting",
+          "state": "beta"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "built"
+    },
+    {
+      "id": "customer_surveys",
+      "group": "customers",
+      "fa": "نظرسنجی مشتری",
+      "en": "Customer surveys",
+      "state": "beta",
+      "pilot": true,
+      "features": [
+        {
+          "fa": "فرم نسخه‌دار، سؤال و شاخه",
+          "en": "Versioned forms, questions and branches",
+          "state": "beta"
+        },
+        {
+          "fa": "DTMF، retry یکتا، بی‌پاسخی و CSAT",
+          "en": "DTMF, idempotent retry, no-response and CSAT",
+          "state": "beta"
+        },
+        {
+          "fa": "آداپتور اختیاری پایان اثبات‌شده تماس",
+          "en": "Opt-in adapter for proven call completion",
+          "state": "beta"
+        },
+        {
+          "fa": "نصب خودکار hook برای همه مسیرها",
+          "en": "Automatic hooks for every call path",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "فعال‌سازی اختیاری و Queue با مسیر COMPLETEAGENT معتبر لازم است؛ آزمایش تلفنی و انصراف مشتری هنوز باید تأیید شوند.",
+        "en": "Opt-in activation and a valid COMPLETEAGENT Queue path are required; telephone acceptance and customer opt-out remain to be verified."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "voice_feedback",
+      "group": "customers",
+      "fa": "صدای مشتری",
+      "en": "Customer voice feedback",
+      "state": "beta",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "ورود دستی صوت و کارتابل بررسی",
+          "en": "Manual audio intake and review inbox",
+          "state": "beta"
+        },
+        {
+          "fa": "تخصیص، یادداشت و موعد پیگیری",
+          "en": "Assignment, notes and follow-up due date",
+          "state": "beta"
+        },
+        {
+          "fa": "پخش/دانلود با مجوز مستقل",
+          "en": "Independent playback/download permission",
+          "state": "beta"
+        },
+        {
+          "fa": "ضبط خودکار تلفنی با رضایت و جلسه معتبر",
+          "en": "Automatic telephone recording with consent and valid session",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "extension_callback",
+      "group": "telephony",
+      "fa": "کال‌بک داخلی مشغول",
+      "en": "Busy-extension callback",
+      "state": "beta",
+      "pilot": true,
+      "features": [
+        {
+          "fa": "منوی داخلی مشغول و درخواست کلید ۲",
+          "en": "Busy-extension menu and key 2 request",
+          "state": "beta"
+        },
+        {
+          "fa": "انقضا، retry محدود و جلوگیری از تکرار",
+          "en": "Expiry, bounded retry and deduplication",
+          "state": "beta"
+        },
+        {
+          "fa": "ابتدا درخواست‌کننده، سپس مقصد",
+          "en": "Requester first, then destination",
+          "state": "beta"
+        },
+        {
+          "fa": "نمایش نام کال‌بک و گزارش نتیجه/مدت",
+          "en": "Callback caller-name and outcome/duration report",
+          "state": "beta"
+        },
+        {
+          "fa": "نصب تازه بدون وابستگی به مسیر legacy",
+          "en": "Fresh installation independent of legacy dialplan",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "پذیرش آزمایشگاه قبلی، نصب خودکار روی PBX تازه را اثبات نمی‌کند؛ مسیر نصب فعلی به adapter سازگار نیاز دارد.",
+        "en": "Previous lab acceptance does not prove fresh-PBX installation; the current installer needs a compatible adapter."
+      },
+      "implementation": "built"
+    },
+    {
+      "id": "extension_waiting",
+      "group": "telephony",
+      "fa": "انتظار داخلی مشغول",
+      "en": "Busy-extension waiting",
+      "state": "beta",
+      "pilot": true,
+      "features": [
+        {
+          "fa": "کلید ۱ برای انتظار",
+          "en": "Key 1 waiting",
+          "state": "beta"
+        },
+        {
+          "fa": "اتصال پس از آزادشدن داخلی",
+          "en": "Connect after extension becomes available",
+          "state": "beta"
+        },
+        {
+          "fa": "سقف انتظار، انصراف و صدای قابل تغییر",
+          "en": "Bounded wait, cancellation and configurable prompts",
+          "state": "beta"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "نصب تازه و آزمون فعال‌سازی/غیرفعال‌سازی روی مسیر داخلی هدف لازم است.",
+        "en": "Fresh installation and enable/disable acceptance on the target extension path are required."
+      },
+      "implementation": "built"
+    },
+    {
+      "id": "caller_id",
+      "group": "telephony",
+      "fa": "اصلاح شماره و Caller ID",
+      "en": "Caller ID normalization",
+      "state": "beta",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "قواعد کشور/پیش‌شماره و حالت‌های اختیاری",
+          "en": "Country/prefix rules and optional anomalies",
+          "state": "beta"
+        },
+        {
+          "fa": "پیش‌نمایش بدون تغییر شماره خام",
+          "en": "Preview preserving raw number",
+          "state": "beta"
+        },
+        {
+          "fa": "نام دفترچه در دامنه صف مجاز",
+          "en": "Directory names within authorized queue scope",
+          "state": "beta"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "built"
+    },
+    {
+      "id": "contacts",
+      "group": "customers",
+      "fa": "دفترچه تلفن و ارتباط با مشتری",
+      "en": "Contacts and customer context",
+      "state": "beta",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "دفترچه صف، تطبیق نام و کلیک تماس مجاز",
+          "en": "Queue directory, name matching and authorized click-to-call",
+          "state": "beta"
+        },
+        {
+          "fa": "شرکت/شخص، چند شماره و برچسب",
+          "en": "Company/person, multiple numbers and tags",
+          "state": "planned"
+        },
+        {
+          "fa": "دفترچه عمومی/خصوصی و screen-pop",
+          "en": "Public/private contacts and screen-pop",
+          "state": "planned"
+        },
+        {
+          "fa": "ورود گروهی، نگاشت و ادغام تکراری",
+          "en": "Bulk import, mapping and deduplication",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "agent_intro",
+      "group": "telephony",
+      "fa": "معرفی کارشناس پاسخ‌دهنده",
+      "en": "Answering-agent introduction",
+      "state": "planned",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "نام، کد اپراتوری و صوت اختصاصی",
+          "en": "Name, operator code and custom audio",
+          "state": "planned"
+        },
+        {
+          "fa": "تنظیم مجزا برای هر صف",
+          "en": "Per-queue configuration",
+          "state": "planned"
+        },
+        {
+          "fa": "شکست صوت بدون توقف تماس",
+          "en": "Fail-open prompt playback",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "برنامهٔ توسعه؛ هنوز مسیر کامل قابل استفاده نیست.",
+        "en": "Planned; a complete usable workflow is not implemented yet."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "planned"
+    },
+    {
+      "id": "reconnect",
+      "group": "telephony",
+      "fa": "بازگشت هوشمند به کارشناس",
+      "en": "Smart agent reconnect",
+      "state": "planned",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "کارشناس موفق قبلی و بازگشت خروجی بی‌پاسخ",
+          "en": "Previous successful agent and missed outbound return",
+          "state": "planned"
+        },
+        {
+          "fa": "انقضا، انتخاب مشتری و fallback",
+          "en": "Expiry, customer choice and fallback",
+          "state": "planned"
+        },
+        {
+          "fa": "رعایت مشغولی، توقف و مجوز صف",
+          "en": "Busy, pause and queue-scope enforcement",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "برنامهٔ توسعه؛ هنوز مسیر کامل قابل استفاده نیست.",
+        "en": "Planned; a complete usable workflow is not implemented yet."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "planned"
+    },
+    {
+      "id": "queue_callback",
+      "group": "telephony",
+      "fa": "کال‌بک صف",
+      "en": "Queue callback",
+      "state": "planned",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "درخواست DTMF، آستانه یا خارج ساعت",
+          "en": "DTMF, threshold or out-of-hours request",
+          "state": "planned"
+        },
+        {
+          "fa": "کارتابل، تخصیص و ظرفیت پاسخ‌گویی",
+          "en": "Inbox, assignment and answering capacity",
+          "state": "planned"
+        },
+        {
+          "fa": "شناسه یکتا، انقضا و retry محدود",
+          "en": "Stable ID, expiry and bounded retry",
+          "state": "planned"
+        },
+        {
+          "fa": "نتیجه اثبات‌شده تماس برگشتی",
+          "en": "Evidence-based return-call outcome",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "برنامهٔ توسعه؛ هنوز مسیر کامل قابل استفاده نیست.",
+        "en": "Planned; a complete usable workflow is not implemented yet."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "planned"
+    },
+    {
+      "id": "inbound_notices",
+      "group": "telephony",
+      "fa": "پیام موقت ورودی",
+      "en": "Inbound temporary notices",
+      "state": "beta",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "تعریف پیام و بازه اعتبار",
+          "en": "Message and validity window",
+          "state": "beta"
+        },
+        {
+          "fa": "مدیریت صوت و استثنای مسیر",
+          "en": "Audio and route exceptions",
+          "state": "beta"
+        },
+        {
+          "fa": "hook اختیاری پیش از IVR/صف",
+          "en": "Optional pre-IVR/queue hook",
+          "state": "beta"
+        },
+        {
+          "fa": "تأیید نصب خودکار همه مسیرها",
+          "en": "Verified automatic installation on every route",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "notifications",
+      "group": "automation",
+      "fa": "هشدار و اعلان",
+      "en": "Alerts and notifications",
+      "state": "beta",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "آستانه مستقل تعداد/زمان هر صف",
+          "en": "Independent per-queue count/time thresholds",
+          "state": "beta"
+        },
+        {
+          "fa": "هشدار رنگی/صوتی و سلامت منبع/ترانک",
+          "en": "Visual/audio and source/trunk health alerts",
+          "state": "beta"
+        },
+        {
+          "fa": "تلگرام و بله با زبان و قالب",
+          "en": "Telegram/Bale language and templates",
+          "state": "beta"
+        },
+        {
+          "fa": "Outbox، retry محدود و سابقه نتیجه",
+          "en": "Outbox, bounded retry and outcome audit",
+          "state": "beta"
+        },
+        {
+          "fa": "ایمیل، SMS، CRM و webhook عمومی امن",
+          "en": "Email, SMS, CRM and protected generic webhooks",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "pbx_health",
+      "group": "live",
+      "fa": "سلامت مرکز تلفن و شبکه",
+      "en": "PBX and network health",
+      "state": "beta",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "وضعیت داخلی/ترانک و قطع منبع",
+          "en": "Endpoint/trunk state and source loss",
+          "state": "beta"
+        },
+        {
+          "fa": "RTCP/QoS، jitter/loss/RTT در صورت مشاهده",
+          "en": "Observed RTCP/QoS, jitter/loss/RTT",
+          "state": "beta"
+        },
+        {
+          "fa": "برچسب نامشخص برای داده غایب",
+          "en": "Unknown labels for missing observations",
+          "state": "beta"
+        },
+        {
+          "fa": "تشخیص قطعی علت اختلال همه تجهیزات",
+          "en": "Proven root-cause diagnosis across all devices",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "telephone_policies",
+      "group": "platform",
+      "fa": "سیاست و محدودیت تلفنی",
+      "en": "Telephone policies",
+      "state": "beta",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "مجوز فعلی صف، منو، صوت و شماره‌گیری پنل",
+          "en": "Current queue/menu/audio/panel-dial permissions",
+          "state": "beta"
+        },
+        {
+          "fa": "گروه داخلی و محدودیت عمومی مقصد",
+          "en": "Extension groups and general destination restrictions",
+          "state": "planned"
+        },
+        {
+          "fa": "سهمیه هزینه/زمان و استثناهای مسیر",
+          "en": "Cost/time quotas and route exceptions",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "manager_secretary",
+      "group": "telephony",
+      "fa": "مدیر و منشی",
+      "en": "Manager and secretary",
+      "state": "planned",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "گروه مجاز تماس مستقیم و جانشین",
+          "en": "Authorized direct callers and delegates",
+          "state": "planned"
+        },
+        {
+          "fa": "ساعات کاری و fallback امن",
+          "en": "Working hours and safe fallback",
+          "state": "planned"
+        },
+        {
+          "fa": "پیشگیری از حلقه انتقال",
+          "en": "Transfer-loop prevention",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "برنامهٔ توسعه؛ هنوز مسیر کامل قابل استفاده نیست.",
+        "en": "Planned; a complete usable workflow is not implemented yet."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "planned"
+    },
+    {
+      "id": "fax",
+      "group": "automation",
+      "fa": "فکس",
+      "en": "Fax",
+      "state": "planned",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "صندوق، ارسال/دریافت و انتخاب خط",
+          "en": "Mailboxes, send/receive and chosen line",
+          "state": "planned"
+        },
+        {
+          "fa": "تبدیل امن، پیش‌نمایش و آرشیو",
+          "en": "Safe conversion, preview and archive",
+          "state": "planned"
+        },
+        {
+          "fa": "مجوز فایل، retry، لغو و نتیجه واقعی",
+          "en": "File ACL, retry, cancellation and real outcomes",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "برنامهٔ توسعه؛ هنوز مسیر کامل قابل استفاده نیست.",
+        "en": "Planned; a complete usable workflow is not implemented yet."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "planned"
+    },
+    {
+      "id": "paging",
+      "group": "automation",
+      "fa": "پیجینگ و اینترکام",
+      "en": "Paging and intercom",
+      "state": "planned",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "زون، تجهیزات و پخش زنده/فایل",
+          "en": "Zones, devices and live/file broadcast",
+          "state": "planned"
+        },
+        {
+          "fa": "زمان‌بندی، تقدم و مجوز",
+          "en": "Scheduling, priority and permissions",
+          "state": "planned"
+        },
+        {
+          "fa": "کشف قابلیت دستگاه و سقف هم‌زمانی",
+          "en": "Device capability detection and concurrency cap",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "برنامهٔ توسعه؛ هنوز مسیر کامل قابل استفاده نیست.",
+        "en": "Planned; a complete usable workflow is not implemented yet."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "planned"
+    },
+    {
+      "id": "campaigns",
+      "group": "automation",
+      "fa": "کمپین تماس صوتی",
+      "en": "Voice campaigns",
+      "state": "planned",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "ورود فهرست و چند شماره برای هر مخاطب",
+          "en": "List import and multiple contact numbers",
+          "state": "planned"
+        },
+        {
+          "fa": "صوت/DTMF و ساعات کاری",
+          "en": "Audio/DTMF and working hours",
+          "state": "planned"
+        },
+        {
+          "fa": "Pacing، سقف ترانک، توقف و retry محدود",
+          "en": "Pacing, trunk cap, pause and bounded retry",
+          "state": "planned"
+        },
+        {
+          "fa": "گزارش تلاش/پاسخ بدون موفقیت فرضی",
+          "en": "Attempt/answer reports without invented success",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "برنامهٔ توسعه؛ هنوز مسیر کامل قابل استفاده نیست.",
+        "en": "Planned; a complete usable workflow is not implemented yet."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "planned"
+    },
+    {
+      "id": "safe_call",
+      "group": "telephony",
+      "fa": "تماس واسط امن",
+      "en": "Private mediated calls",
+      "state": "planned",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "پنهان‌سازی شماره طرفین",
+          "en": "Hide each party number from the other",
+          "state": "planned"
+        },
+        {
+          "fa": "حفاظت Caller ID، API، گزارش و اعلان",
+          "en": "Protect CID, API, reports and notifications",
+          "state": "planned"
+        },
+        {
+          "fa": "مسیر مجاز و رضایت طرفین",
+          "en": "Authorized route and consent",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "برنامهٔ توسعه؛ هنوز مسیر کامل قابل استفاده نیست.",
+        "en": "Planned; a complete usable workflow is not implemented yet."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "planned"
+    },
+    {
+      "id": "reservations",
+      "group": "automation",
+      "fa": "نوبت‌دهی تلفنی",
+      "en": "Telephone reservations",
+      "state": "planned",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "خدمت، منبع و ظرفیت هر بازه",
+          "en": "Service, resource and time-slot capacity",
+          "state": "planned"
+        },
+        {
+          "fa": "رزرو/لغو و یادآوری",
+          "en": "Reservation, cancellation and reminders",
+          "state": "planned"
+        },
+        {
+          "fa": "کنترل هم‌زمانی، تقویم و منطقه زمانی",
+          "en": "Concurrency, calendar and timezone controls",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "برنامهٔ توسعه؛ هنوز مسیر کامل قابل استفاده نیست.",
+        "en": "Planned; a complete usable workflow is not implemented yet."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "planned"
+    },
+    {
+      "id": "dial_api",
+      "group": "automation",
+      "fa": "API شماره‌گیری محدود",
+      "en": "Scoped dial API",
+      "state": "planned",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "اعتبارنامه محدود و سلب کلید",
+          "en": "Scoped credentials and revocation",
+          "state": "planned"
+        },
+        {
+          "fa": "مبدأ/مقصد مجاز و محدودیت نرخ",
+          "en": "Origin/destination allowlists and rate limits",
+          "state": "planned"
+        },
+        {
+          "fa": "Idempotency، replay و ثبت عملیات",
+          "en": "Idempotency, replay protection and audit",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "برنامهٔ توسعه؛ هنوز مسیر کامل قابل استفاده نیست.",
+        "en": "Planned; a complete usable workflow is not implemented yet."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "planned"
+    },
+    {
+      "id": "ai_transcription",
+      "group": "ai",
+      "fa": "تبدیل صوت به متن",
+      "en": "Speech transcription",
+      "state": "beta",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "صف محدود، VAD و ASR فارسی CPU",
+          "en": "Bounded jobs, VAD and Persian CPU ASR",
+          "state": "beta"
+        },
+        {
+          "fa": "متن قابل جستجو و نرمال‌سازی محافظه‌کارانه",
+          "en": "Searchable text and conservative normalization",
+          "state": "beta"
+        },
+        {
+          "fa": "مجوز مستقل و پردازش خارج مسیر تماس",
+          "en": "Independent permission and off-call-path processing",
+          "state": "beta"
+        },
+        {
+          "fa": "هم‌ترازی دقیق با Bridge در همه ضبط‌ها",
+          "en": "Exact Bridge alignment for every recording",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "وجود کد، دقت فارسی یا بار قابل قبول روی میزبان تماس را ثابت نمی‌کند؛ مدل اختیاری است.",
+        "en": "Code does not prove Persian accuracy or acceptable call-host load; model processing is optional."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "ai_postcall",
+      "group": "ai",
+      "fa": "تحلیل هوشمند پس از تماس",
+      "en": "Post-call AI analysis",
+      "state": "beta",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "سرویس مولد اختیاری و خاموش پیش‌فرض",
+          "en": "Optional generative service, off by default",
+          "state": "beta"
+        },
+        {
+          "fa": "خلاصه/موضوع با ارجاع به متن منبع",
+          "en": "Source-grounded summaries and topics",
+          "state": "beta"
+        },
+        {
+          "fa": "ارزیابی واقعی کیفیت و احساسات فارسی",
+          "en": "Validated Persian quality/sentiment assessment",
+          "state": "planned"
+        },
+        {
+          "fa": "پوشاندن داده حساس و اندازه‌گیری دقت",
+          "en": "Sensitive-data redaction and accuracy evaluation",
+          "state": "planned"
+        },
+        {
+          "fa": "واژه حساس سازمانی و علامت‌گذاری مکالمه بحرانی",
+          "en": "Organization keywords and critical-call flagging",
+          "state": "planned"
+        },
+        {
+          "fa": "رعایت اسکریپت، ادب و هم‌پوشانی صحبت با شواهد",
+          "en": "Evidence-based script compliance, courtesy and overlapping speech",
+          "state": "planned"
+        },
+        {
+          "fa": "تفکیک گوینده فقط با کانال معتبر یا مدل ارزیابی‌شده",
+          "en": "Speaker separation only with valid channels or evaluated models",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "ai_supervisor",
+      "group": "ai",
+      "fa": "دستیار هوشمند سرپرست",
+      "en": "AI supervisor assistant",
+      "state": "planned",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "خلاصه ازدحام، SLA و پیشنهاد ظرفیت",
+          "en": "Congestion/SLA summary and staffing suggestions",
+          "state": "planned"
+        },
+        {
+          "fa": "ناهنجاری عملکرد و دستیار PBX/شبکه",
+          "en": "Performance anomalies and PBX/network assistant",
+          "state": "planned"
+        },
+        {
+          "fa": "دستیار کیفیت سرویس با شواهد RTCP و سطح اطمینان",
+          "en": "QoS assistant using RTCP evidence and confidence",
+          "state": "planned"
+        },
+        {
+          "fa": "پیشنهاد تصمیم جدا از اجرای فرمان",
+          "en": "Decision suggestions separate from action execution",
+          "state": "planned"
+        },
+        {
+          "fa": "بازبینی انسانی و شواهد قابل پیگیری",
+          "en": "Human review and traceable evidence",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "برنامهٔ توسعه؛ هنوز مسیر کامل قابل استفاده نیست.",
+        "en": "Planned; a complete usable workflow is not implemented yet."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "planned"
+    },
+    {
+      "id": "ai_voice_assistant",
+      "group": "ai",
+      "fa": "دستیار صوتی و کمک زنده",
+      "en": "Voice assistant and live assistance",
+      "state": "planned",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "رونویسی و راهنمایی زنده اختیاری",
+          "en": "Opt-in live transcription and assistance",
+          "state": "planned"
+        },
+        {
+          "fa": "Voicebot و اتصال به مسیر مجاز",
+          "en": "Voicebot and authorized routing",
+          "state": "planned"
+        },
+        {
+          "fa": "رضایت، حریم خصوصی و محدودیت منابع",
+          "en": "Consent, privacy and resource isolation",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "برنامهٔ توسعه؛ هنوز مسیر کامل قابل استفاده نیست.",
+        "en": "Planned; a complete usable workflow is not implemented yet."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "planned"
+    },
+    {
+      "id": "identity",
+      "group": "platform",
+      "fa": "کاربران، پروفایل و دسترسی",
+      "en": "Identity, profiles and access",
+      "state": "beta",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "حساب محلی، نقش، منو و مجوز هر صف",
+          "en": "Local accounts, roles, menus and per-queue grants",
+          "state": "beta"
+        },
+        {
+          "fa": "نام، داخلی، عکس و تغییر رمز خود کاربر",
+          "en": "Own name, extension, avatar and password",
+          "state": "beta"
+        },
+        {
+          "fa": "مجوز مستقل صوت/متن/خروجی",
+          "en": "Independent audio/transcript/export permission",
+          "state": "beta"
+        },
+        {
+          "fa": "جداسازی چندمستاجری کامل چند PBX",
+          "en": "Full multi-tenant multi-PBX isolation",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "built"
+    },
+    {
+      "id": "operations",
+      "group": "platform",
+      "fa": "نصب و بهره‌برداری",
+      "en": "Installation and operations",
+      "state": "beta",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "نصب هدایت‌شده و رمز مدیر انتخابی",
+          "en": "Guided install and chosen admin password",
+          "state": "beta"
+        },
+        {
+          "fa": "برند سازمان، خاموش‌سازی و audit",
+          "en": "Organization branding, disable and audit",
+          "state": "beta"
+        },
+        {
+          "fa": "پشتیبان آرشیو و کاتالوگ/restore محدود",
+          "en": "Archive backup/catalog and limited restore",
+          "state": "beta"
+        },
+        {
+          "fa": "بازیابی کامل نصب، رسانه و حساب‌ها",
+          "en": "Full installation, media and account recovery",
+          "state": "planned"
+        },
+        {
+          "fa": "آرشیو دوره‌ای و پذیرش همه نسخه‌های PBX",
+          "en": "Periodic partitioning and all-PBX-version acceptance",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "کد موجود است؛ پیکربندی و آزمون پذیرش هر محیط جداست.",
+        "en": "Code exists; configuration and acceptance are environment-specific."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "partial"
+    },
+    {
+      "id": "webphone",
+      "group": "live",
+      "fa": "تلفن مرورگر و موبایل",
+      "en": "Browser and mobile phone",
+      "state": "planned",
+      "pilot": false,
+      "features": [
+        {
+          "fa": "WebRTC با WSS/TLS و مسیر SIP مجاز",
+          "en": "WebRTC with WSS/TLS and authorized SIP route",
+          "state": "planned"
+        },
+        {
+          "fa": "کنترل تماس و مجوز دستگاه صوتی",
+          "en": "Call control and audio-device permission",
+          "state": "planned"
+        },
+        {
+          "fa": "تفکیک وب واکنش‌گرا از softphone واقعی",
+          "en": "Responsive web distinct from a real softphone",
+          "state": "planned"
+        }
+      ],
+      "note": {
+        "fa": "برنامهٔ توسعه؛ هنوز مسیر کامل قابل استفاده نیست.",
+        "en": "Planned; a complete usable workflow is not implemented yet."
+      },
+      "acceptance": {
+        "fa": "مجوز، نصب/غیرفعال‌سازی، عملکرد و مسیر خطا باید در محیط هدف تأیید شوند.",
+        "en": "Permissions, installation/disable, function and failure paths need target-environment acceptance."
+      },
+      "implementation": "planned"
+    },
+    {
+      "id": "call_diagnostics",
+      "group": "reports",
+      "fa": "عیب‌یابی پیشرفته تماس",
+      "en": "Advanced call diagnostics",
+      "state": "beta",
+      "implementation": "partial",
+      "pilot": false,
+      "note": {
+        "fa": "هستهٔ اولیهٔ API و worker ساخته شده؛ صفحهٔ عملیاتی و تشخیص رسانه هنوز کامل نیست.",
+        "en": "Initial API and archive worker exist; operational UI and media diagnostics remain incomplete."
+      },
+      "acceptance": {
+        "fa": "یافتهٔ کوتاه‌بودن مکالمه فقط نامزد تاریخی بررسی است. SIP Call-ID، BYE/SDP/RTP، تماس مستقل داخلی و آزمون زیر بار هنوز لازم‌اند؛ debug جدید فعال نشده است.",
+        "en": "Short queue segments are historical review candidates only. SIP Call-ID, BYE/SDP/RTP, standalone internal calls and load acceptance remain; no new debug is enabled."
+      },
+      "features": [
+        {
+          "fa": "سلامت heartbeat و تفکیک منبع زنده از snapshot",
+          "en": "Heartbeat health and live-poll versus snapshot distinction",
+          "state": "beta"
+        },
+        {
+          "fa": "گزارش دستی وابسته به مراجعه مجاز صف و کارتابل API",
+          "en": "Authorized queue-visit manual incidents and case API",
+          "state": "beta"
+        },
+        {
+          "fa": "شواهد و اقدامات تغییرناپذیر، نگهداری بدون حذف خودکار",
+          "en": "Immutable evidence/actions with no automatic history deletion",
+          "state": "beta"
+        },
+        {
+          "fa": "تشخیص مشکوک قطعه کوتاه صف با سیاست نسخه‌دار",
+          "en": "Versioned-policy short queue-segment review candidates",
+          "state": "beta"
+        },
+        {
+          "fa": "داشبورد، Timeline و گزارش بصری اختصاصی Diagnostics",
+          "en": "Dedicated diagnostics dashboard, timeline and visual reports",
+          "state": "planned"
+        },
+        {
+          "fa": "اتصال SIP dialog و تحلیل BYE/CANCEL/SDP",
+          "en": "SIP dialog binding and BYE/CANCEL/SDP analysis",
+          "state": "planned"
+        },
+        {
+          "fa": "رسانه جهت‌دار، Direct Media و بررسی صدای یک‌طرفه",
+          "en": "Directional media, Direct Media and one-way audio investigation",
+          "state": "planned"
+        },
+        {
+          "fa": "عیب‌یابی عمومی تماس داخلی خارج صف",
+          "en": "General standalone internal-call diagnostics",
+          "state": "planned"
+        }
+      ]
+    }
+  ]
+}

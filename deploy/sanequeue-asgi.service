@@ -5,6 +5,7 @@ After=network.target sanequeue-collector.service
 [Service]
 User=sanequeue
 Group=sanequeue
+SupplementaryGroups=asterisk
 WorkingDirectory=/opt/sanequeue
 Environment=QPANEL_CONFIG_FILE=/etc/sanequeue/config.ini
 Environment=SANEQUEUE_RUNTIME=server
@@ -12,6 +13,7 @@ Environment=SANEQUEUE_STATE_DIR=/var/lib/sanequeue
 Environment=SANEQUEUE_COLLECTOR_CONFIG=/etc/sanequeue/collector.ini
 Environment=SANEQUEUE_CONTROL_CONFIG=/etc/sanequeue/control.ini
 EnvironmentFile=/etc/sanequeue/gateway.env
+EnvironmentFile=-/etc/sanequeue/reporting-web.env
 ExecStart=/opt/sanequeue/.venv/bin/uvicorn sanequeue.asgi:app --host 127.0.0.1 --port 5000 --workers 1 --ws-max-size 16384 --timeout-keep-alive 5
 Restart=on-failure
 RestartSec=5

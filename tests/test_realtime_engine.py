@@ -296,7 +296,9 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.sleep(.001)
             self.assertTrue(collector.complete)
             task.cancel()
-            await asyncio.wait_for(asyncio.gather(task, return_exceptions=True), 1)
+            # Transport close itself has a two-second protocol deadline. A
+            # shorter test deadline cancels cleanup on a busy Windows runner.
+            await asyncio.wait_for(asyncio.gather(task, return_exceptions=True), 4)
             self.assertTrue(collector.client.closed.is_set())
 
     async def test_cancel_at_socket_open_completion_closes_new_transport(self):

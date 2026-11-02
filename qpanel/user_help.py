@@ -110,3 +110,10 @@ GUIDES['alerts']['en']['steps'].extend(['Define conditions in Queue policies: ch
 
 GUIDES['telephony']['fa']['steps'].append('گزارش کال‌بک در پایین همین صفحه است: ثبت درخواست، پاسخ درخواست‌کننده، اتصال واقعی مقصد و پایان جدا هستند. مدت فقط وقتی اتصال Bridge و پایان هر دو مشاهده شده باشند نمایش داده می‌شود؛ ردیف‌های قدیمی بدون شواهد، زمان ساختگی ندارند.')
 GUIDES['telephony']['en']['steps'].append('The callback report appears below the settings. Request, requester answer, verified target bridge and end are separate. Duration requires observed bridge connection and end; older rows without evidence have no invented timestamps.')
+GUIDES['surveys']=guide(
+ 'پاسخ کلیدی واقعی مشتری پس از مکالمه؛ مستقل از گزارش فعالیت هپی‌کال کارشناس.',
+ 'Actual customer DTMF responses after a call, separate from agent happy-call work logs.',
+ ['مدیر فنی باید صوت واقعی، نقطهٔ اتصال و نسخهٔ دقیق فرم را تأیید کند؛ ثبت فرم مسیر تماس را خودکار نصب نمی‌کند.', 'مدیر فرم را با حداکثر پنج سؤال، کلیدها و شاخه‌های رو به جلو ثبت می‌کند؛ ستاره برای انصراف است.', 'سرپرست با مجوز منوی نظرسنجی و view/survey_reports هر صف، گزارش همان صف را می‌بیند.', 'CSAT از پاسخ‌های معتبر سؤال رضایت محاسبه می‌شود؛ تعداد دعوت ثبت‌شده، همهٔ تماس‌ها نیست.'],
+ ['A technical operator approves real audio, an explicit hook and the exact form version; saving a form never installs a route.', 'Administrators define up to five questions, numeric keys and forward branches; star opts out.', 'Supervisors need the survey menu plus view/survey_reports grants for each queue.', 'CSAT counts valid answers to the satisfaction question; recorded invitations are not all calls.'],
+ 'شواهد ناقص، انتقال یا پایان توسط مشتری باعث حدس هویت یا شماره‌گیری تازه نمی‌شود. تست واقعی تلفن و بار هنوز لازم است.',
+ 'Missing evidence, transfers or caller-first hangup never cause guessed attribution or a new call. Real telephone and load acceptance remain required.')

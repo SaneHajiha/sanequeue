@@ -23,11 +23,48 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
-      - run: pip install -r requirements/modern.txt pytest httpx2
+      - run: pip install -r requirements/modern.txt -r requirements/reporting.txt pytest httpx2
       - run: pybabel compile -d qpanel/translations
       - run: python -m pytest tests --ignore=tests/historical
       - run: node --check qpanel/themes/qpanel/static/js/operations.js
+      - run: node --check qpanel/themes/qpanel/static/js/context-help.js
       - run: node --check qpanel/themes/qpanel/static/js/planning.js
       - run: node --check qpanel/themes/qpanel/static/js/activity.js
       - run: node --check qpanel/themes/qpanel/static/js/organization.js
       - run: node --check qpanel/themes/qpanel/static/js/telephony.js
+      - run: node --check qpanel/themes/qpanel/static/js/reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/report-analytics.js
+      - run: node --check qpanel/themes/qpanel/static/js/report-exports.js
+      - run: node --check qpanel/themes/qpanel/static/js/recording-audit.js
+      - run: node --check qpanel/themes/qpanel/static/js/work-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/report-plans.js
+      - run: node --check qpanel/themes/qpanel/static/js/shift-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/cdr-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/journey-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/quality-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/ai-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/transcript-search.js
+      - run: node --check qpanel/themes/qpanel/static/js/report-builder.js
+      - run: node --check qpanel/themes/qpanel/static/js/followup-reports.js
+      - run: node --check qpanel/themes/qpanel/static/js/agent-metrics-reports.js
+      - run: node tests/reporting_frontend.cjs
+      - run: node tests/report_builder_frontend.cjs
+      - run: node tests/builder_csv_frontend.cjs
+      - run: node tests/report_plans_frontend.cjs
+      - run: node tests/agent_rankings_frontend.cjs
+      - run: node tests/report_navigation_frontend.cjs
+      - run: node tests/surveys_frontend.cjs
+      - run: node --check qpanel/themes/qpanel/static/js/navigation.js
+      - run: node --check qpanel/themes/qpanel/static/js/incident-notices.js
+      - run: node tests/incident_frontend.cjs
+      - run: node --check qpanel/themes/qpanel/static/js/customer-segments.js
+      - run: node --check qpanel/themes/qpanel/static/js/voice-feedback.js
+      - run: node --check qpanel/themes/qpanel/static/js/generative-reports.js
+      - run: node tests/voice_feedback_frontend.cjs
+      - run: node tests/generative_frontend.cjs
+      - run: node --check qpanel/themes/qpanel/static/js/report-charts.js
+      - run: node tests/report_charts_frontend.cjs
+      - run: node tests/date_picker_frontend.cjs
+      - run: node tests/report_periods_frontend.cjs
+      - run: node --check qpanel/themes/qpanel/static/js/report-date-range.js
+      - run: node --check qpanel/themes/qpanel/static/js/ring-attempts.js

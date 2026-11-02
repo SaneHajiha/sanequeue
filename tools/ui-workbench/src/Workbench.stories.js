@@ -1,0 +1,11 @@
+import {renderWorkbench} from './components.js';
+export default {title:'SaneQueue/Foundations workbench',render:args=>renderWorkbench(args),argTypes:{locale:{control:'select',options:['fa','en']},theme:{control:'select',options:['light','dark']},state:{control:'select',options:['success','loading','empty','error','denied','disabled']}},args:{locale:'fa',theme:'light',state:'success'}};
+export const PersianLight={};
+export const PersianDark={args:{theme:'dark'}};
+export const EnglishLight={args:{locale:'en'}};
+export const EnglishDark={args:{locale:'en',theme:'dark'}};
+export const Loading={args:{state:'loading'}};
+export const Empty={args:{state:'empty'}};
+export const Error={args:{state:'error'}};
+export const Denied={args:{state:'denied'}};
+export const Disabled={args:{state:'disabled'}};

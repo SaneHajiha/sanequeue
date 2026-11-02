@@ -42,3 +42,99 @@ body[data-view=queues] .detail-hero-top{padding:16px 20px}body[data-view=queues]
 @media(max-width:600px){body .queue-focus-card .queue-focus-performance{grid-template-columns:repeat(2,minmax(0,1fr))}.queue-focus-card .queue-focus-performance>div:last-child{grid-column:1/-1}.queue-focus-card .queue-focus-performance small{min-height:0}}
 
 @media(min-width:1100px){body.wallboard #wallboard-stage .wallboard-summary{grid-template-columns:repeat(8,minmax(0,1fr))}body.wallboard #wallboard-stage .wallboard-summary>div{padding:10px 5px}body.wallboard #wallboard-stage .wallboard-summary strong{font-size:28px}body.wallboard #wallboard-stage .wallboard-summary span{font-size:12px}body.wallboard #wallboard-stage .wallboard-header{margin-bottom:12px}body.wallboard #wallboard-stage .wallboard-header h2{font-size:25px}body.wallboard #wallboard-stage .wb-queue-kpis{gap:8px}}
+
+/* Quiet, high-contrast pastel KPI surfaces in light mode. */
+body:not(.dark) .metrics>.metric{background:linear-gradient(145deg,#f8f9ff,#e9edff)!important;border-color:#d8dff9!important;color:#21365d!important;box-shadow:0 7px 20px #4f6a9b12}
+body:not(.dark) .metrics>.metric:nth-child(2){background:linear-gradient(145deg,#fffaf0,#fff1d6)!important;border-color:#efddb9!important}
+body:not(.dark) .metrics>.metric:nth-child(3){background:linear-gradient(145deg,#f3fff9,#daf5e9)!important;border-color:#c8e8da!important}
+body:not(.dark) .metrics>.metric:nth-child(4){background:linear-gradient(145deg,#fff6f8,#ffe9ed)!important;border-color:#f4d4dd!important}
+body:not(.dark) .metrics>.metric:nth-child(5){background:linear-gradient(145deg,#f4fbff,#e2f2ff)!important;border-color:#cfe5f6!important}
+body:not(.dark) .metrics>.metric:nth-child(6){background:linear-gradient(145deg,#fbf6ff,#f0e7ff)!important;border-color:#e2d6f7!important}
+body:not(.dark) .metrics>.metric p,body:not(.dark) .metrics>.metric b,body:not(.dark) .metrics>.metric small{color:#20395d!important}
+body:not(.dark) .metrics>.metric small{border-top-color:#95aacc55;opacity:1}
+body:not(.dark) .metrics>.metric .icon{background:#ffffffad!important;border-color:#cddaf0!important;color:#315cab!important}
+body:not(.dark) .metrics>.metric:hover{transform:none}
+
+/* Chart-first overview with restrained light surfaces and clear labels. */
+#live-view .realtime-graphs{grid-template-columns:minmax(0,1.4fr) minmax(0,.85fr) minmax(0,1fr);gap:12px}
+#live-view .trend-svg{height:185px!important;min-height:185px!important}
+#live-view .trend-svg svg{height:175px!important;min-height:175px!important;max-height:175px!important}
+body:not(.dark) #live-view .insights-strip{background:linear-gradient(100deg,#f7faff,#eef4ff);border-color:#d6e4f5;color:#24446a}
+body:not(.dark) #live-view .source-caption small{color:#516d8c}
+body:not(.dark) #live-view .soft-dot{box-shadow:0 0 0 5px #d5f3e9}
+body:not(.dark) #live-view .capacity-chart .donut:before{background:#fff}
+body:not(.dark) #live-view .capacity-chart .donut span{color:#18395e}
+body:not(.dark) #live-view .capacity-stat-lines>div,body:not(.dark) #live-view .capacity-stat-lines b{color:#29496c}
+body:not(.dark) #live-view .compact-table th{background:#edf4ff!important;color:#294967!important}
+@media(max-width:930px){#live-view .realtime-graphs{grid-template-columns:1fr}#live-view .trend-svg{height:165px!important;min-height:165px!important}#live-view .trend-svg svg{height:155px!important;min-height:155px!important;max-height:155px!important}}
+.queue-focus-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.queue-focus-actions button{min-height:40px;padding:8px 12px;font-size:12px;background:var(--soft);color:var(--ink);border:1px solid var(--line);white-space:nowrap}
+.queue-focus-more{font-size:11px;line-height:1.8;color:var(--muted);margin:0}
+
+/* Command center: a quiet surface and the hierarchy of the selected reference. */
+#live-view .overview-intro{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:14px;align-items:stretch;margin-bottom:16px}
+#live-view .overview-intro-metrics{min-width:0}
+#live-view .overview-intro .metrics{grid-template-columns:repeat(3,minmax(0,1fr));margin:0}
+#live-view .overview-intro .metric{min-height:95px;padding:10px 12px}
+#live-view .overview-intro .metric b{font-size:23px;margin-top:2px}
+#live-view .overview-welcome{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:148px;margin:0 0 18px;padding:20px 30px;border:1px solid #cfdaf4;border-radius:18px;background:#eef2ff;overflow:hidden}
+#live-view .overview-intro .overview-welcome{margin:0}
+#live-view .overview-welcome-copy{min-width:0;position:relative;z-index:1}
+#live-view .overview-welcome h2{font-size:25px;line-height:1.5;margin:8px 0;color:#222d63}
+#live-view .overview-welcome p{font-size:13px;line-height:1.9;color:#52658b;margin:0}
+#live-view .overview-kicker{font-size:10px;font-weight:750;letter-spacing:.12em;color:#526aa4}
+#live-view .overview-welcome-image{width:132px;height:132px;object-fit:contain;flex:0 0 auto}
+body.dark #live-view .overview-welcome{background:#14223e;border-color:#33466b}
+body.dark #live-view .overview-welcome h2{color:#f0f4ff}
+body.dark #live-view .overview-welcome p,body.dark #live-view .overview-kicker{color:#b6c8e7}
+#live-view .realtime-graphs{grid-template-columns:minmax(0,1.6fr) minmax(250px,.78fr) minmax(0,1fr);align-items:stretch}
+#live-view .trend-panel{overflow:visible;min-width:0}
+#live-view .trend-panel:first-child{min-height:300px}
+#live-view .reference-three-panel{grid-template-columns:minmax(0,1.15fr) minmax(0,1.15fr) minmax(0,.95fr);align-items:start}
+#live-view .overview-column{gap:14px}
+#live-view .panel-heading h2{letter-spacing:-.01em}
+#live-view .metric{box-shadow:0 5px 16px #243d6b0b}
+@media(max-width:1100px){#live-view .realtime-graphs{grid-template-columns:repeat(2,minmax(0,1fr))}#live-view .realtime-graphs>.trend-panel:first-child{grid-column:1/-1}}
+@media(max-width:930px){#live-view .overview-intro{grid-template-columns:1fr}#live-view .reference-three-panel{grid-template-columns:1fr}#live-view .realtime-graphs{grid-template-columns:1fr}#live-view .realtime-graphs>.trend-panel:first-child{grid-column:auto}}
+@media(max-width:600px){#live-view .overview-intro .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#live-view .overview-welcome{padding:18px;gap:10px;min-height:116px}#live-view .overview-welcome h2{font-size:19px}#live-view .overview-welcome p{font-size:12px}#live-view .overview-welcome-image{width:78px;height:78px}#live-view .overview-kicker{font-size:9px}}
+
+/* Wallboard follows the selected theme, including its fullscreen surface. */
+body:not(.dark) .wallboard-stage{background:#edf3fb;color:#183553;border-color:#ccdded}
+body:not(.dark) .wallboard-header{border-color:#cbdced}
+body:not(.dark) .wallboard-header h2,body:not(.dark) .wb-card-header h3,body:not(.dark) .wb-journey-heading h3{color:#193955}
+body:not(.dark) .wallboard-header p,body:not(.dark) .wallboard-kicker,body:not(.dark) .wallboard-privacy,body:not(.dark) .wallboard-bottom,body:not(.dark) .wb-card-header small,body:not(.dark) .wb-journey-heading span{color:#496987}
+body:not(.dark) .wallboard-header-tools button,body:not(.dark) .wallboard-toolbar>button{background:#fff;color:#1b4d79;border-color:#c8daed}
+body:not(.dark) .wallboard-toolbar,body:not(.dark) .wallboard-v14-card,body:not(.dark) .wb-journey-area{background:#fff;border-color:#cfdfed}
+body:not(.dark) .wallboard-check,body:not(.dark) .wallboard-stage .wallboard-summary>div,body:not(.dark) .wb-queue-stats>div,body:not(.dark) .wb-two-cols>div,body:not(.dark) .wb-agent,body:not(.dark) .wb-caller{background:#f3f8fe;color:#183553;border-color:#d4e2f1}
+body:not(.dark) .wallboard-stage .wallboard-summary strong,body:not(.dark) .wb-queue-stats b,body:not(.dark) .wb-two-cols h4{color:#193955}
+body:not(.dark) .wallboard-stage .wallboard-summary strong{color:#193955!important}
+body:not(.dark) .wallboard-stage .wallboard-summary span{color:#496987!important}
+body:not(.dark) .wb-hero-numbers>div{background:#eaf2fc;border-color:#cfdfed}
+body:not(.dark) .wb-big-wait strong{color:#995c00}
+body:not(.dark) .wb-big-waittime strong{color:#17628c}
+body:not(.dark) .wb-hero-numbers span,body:not(.dark) .wallboard-private-control{color:#496987}
+body:not(.dark) .wallboard-stage .sq-state--offline{color:#982e49}
+body:not(.dark) .wallboard-stage .sq-state--ready{color:#086145}
+body:not(.dark) .wallboard-stage :is(.sq-state--ringing,.sq-state--busy,.sq-state--held){color:#885200}
+body:not(.dark) .wallboard-stage .sq-state--talking{color:#075b92}
+body:not(.dark) .wallboard-stage .sq-state--paused{color:#633f8a}
+body:not(.dark) .wallboard-stage .sq-journey-empty{color:#496987}
+body:not(.dark) .wallboard-stage .wallboard-summary span,body:not(.dark) .wb-queue-stats small,body:not(.dark) .wb-agent-title small,body:not(.dark) .wb-caller small,body:not(.dark) .wb-empty,body:not(.dark) .wb-empty-state,body:not(.dark) .wb-two-cols h4 em{color:#4b6985}
+body:not(.dark) .wb-wait{color:#925700}
+body:not(.dark) .wb-queue-status{background:#d8f5e9;color:#08634d}
+body:not(.dark) .urgent .wb-queue-status{background:#ffeadf;color:#994123}
+body:not(.dark) .wb-journey-area .sq-journey-card,body:not(.dark) .wallboard-stage .wb-journey-area .journey-card{background:#f3f8fe;color:#183553;border-color:#d4e2f1}
+body:not(.dark) .wb-journey-area :is(.sq-journey-card small,.sq-journey-secondary,.sq-timeline time){color:#4b6985}
+#history-filters[hidden]{display:none!important}
+
+/* Shared table and diagnostic surfaces must also follow light mode. */
+body:not(.dark) .panel th{background:#edf4ff!important;color:#294967!important;border-color:#d4e2f1!important}
+body:not(.dark) .panel td{border-color:#d4e2f1}
+body:not(.dark) .settings-panel .snapshot-box{background:#f2f7fd;color:#234663;border-color:#cbddeb}
+body:not(.dark) .ami-feedback{background:#f2f7fd;color:#234663;border-color:#cbddeb}
+body:not(.dark) .ami-feedback.success{background:#e4f7ee;color:#086145;border-color:#a9d8bf}
+body:not(.dark) .ami-feedback.error{background:#fff0f2;color:#982e49;border-color:#e4b7c2}
+body:is([data-view=surveys],[data-view=voice-feedback]) :is(.toolbar,.monitor-preferences){display:none}
+#voice-feedback-view .panel-heading{flex-wrap:wrap;gap:12px}
+#voice-feedback-view .panel-heading .history-analysis-controls{flex:1 0 100%;padding:0;align-items:end}
+#voice-feedback-view .panel-heading .history-analysis-controls label{min-width:150px}

@@ -11,6 +11,18 @@ from sanequeue.reporting.privacy import display_number
 
 
 class ReportingArchiveTests(unittest.TestCase):
+    def test_queue_connect_peer_is_explicit_and_duplicate_safe(self):
+        event=Event('queue_log','connect',101,'CONNECT',dict(callid='caller-uid',queue='8001',
+            agent='Local/100@from-queue/n',values=['1','agent-uid','0']))
+        self.store.append([event]);self.store.append([event])
+        rows=relations(self.store,'caller-uid')
+        self.assertEqual(len(rows),1)
+        self.assertEqual((rows[0]['relation'],rows[0]['to_kind'],rows[0]['to_id']),
+                         ('queue_connect_peer','uniqueid','agent-uid'))
+        self.assertEqual(json.loads(rows[0]['details']),dict(queue='8001',agent='Local/100@from-queue/n'))
+        invalid=Event('queue_log','bad',102,'CONNECT',dict(callid='caller-uid',queue='8001',agent='100',values=['2']))
+        self.store.append([invalid]);self.assertEqual(len(relations(self.store,'caller-uid')),1)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
@@ -89,6 +101,20 @@ class ReportingArchiveTests(unittest.TestCase):
         with self.store.reader() as db:
             self.assertIsNone(db.execute('SELECT ended FROM legs').fetchone()[0])
 
+    def test_attended_second_initiator_is_not_target_and_bridge_app_has_no_guessed_destination(self):
+        self.store.append([
+            Event('cel','second',110,'ATTENDEDTRANSFER',dict(uniqueid='caller',extra=dict(
+                channel2_name='PJSIP/initiator-2',app='Queue',context='not-a-target',extension='123'))),
+            Event('cel','explicit',120,'ATTENDEDTRANSFER',dict(uniqueid='caller',extra=dict(
+                channel2_name='PJSIP/initiator-2',transfer_target_channel_name='PJSIP/target'))),
+            Event('cel','blind',130,'BLINDTRANSFER',dict(uniqueid='caller',extra=dict(context='from-internal',extension='300')))])
+        edges=relations(self.store,'caller')
+        self.assertEqual([(e['relation'],e['to_id']) for e in edges if e['ts']==110],
+                         [('transfer_second_channel','PJSIP/initiator-2')])
+        with self.store.reader() as db:
+            rows=db.execute('SELECT target,consultation_duration FROM transfers ORDER BY handoff_at').fetchall()
+            self.assertEqual([tuple(row) for row in rows],[('',None),('PJSIP/target',None),('from-internal/300',None)])
+
 
 class ReportingSourceTests(unittest.TestCase):
     setUp = ReportingArchiveTests.setUp
@@ -108,6 +134,8 @@ class ReportingSourceTests(unittest.TestCase):
         path.write_bytes(b'200|v|8001|NONE|ENTERQUEUE||200|1\n' + b'201|v|8001|Local/200|CONNECT|1|dest|1\n' * 4)
         result = importer.ingest(self.store)
         self.assertTrue(result['rotation_detected'])
+        self.assertTrue(result['coverage_gap'])
+        self.assertTrue(importer.ingest(self.store)['coverage_gap'])
         self.assertTrue(self.store.checkpoint('queue_log')['generation'])
         self.assertEqual(self.store.page()[0]['payload']['callid'], 'u')
 

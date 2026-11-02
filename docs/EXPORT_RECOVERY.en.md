@@ -1,0 +1,15 @@
+# Retained private export artifacts
+
+Reports → Background exports → Refresh displays up to 20 recovery records for the current owner and current frozen export grants. Metadata omits source/target paths, other owners and file contents. No quarantine download or automatic restore route exists: an incomplete artifact must not become a completed report.
+
+The existing single export worker reconciles files under its exclusive lock. It retains abandoned files for cancelled/failed jobs, superseded attempts of the currently claimed job, and completed-job staging only while a completed final still exists. Completed final outputs, archive records and customer audio are never moved or deleted by this feature. Queued/running finals remain for normal checksum-authenticated recovery. Unknown filenames, files without a job, symlinks, FIFOs and directories are not automatically moved. Normal execution still removes its own operational temporary files as before.
+
+Defaults: 300-second file age (and terminal-job state age), at most 20 examinations per worker iteration including at most 10 pending intents, and at most 100 pending intents. Completed intent history does not consume the pending quota. A persistent streaming directory iterator avoids repeatedly inspecting only the beginning of a large directory. The 0.1-second work budget is cooperative, not a hard filesystem latency guarantee; SQLite waits use min(0.05, remaining) and a shared progress-handler deadline. The worker's existing disable/load/disk gates still apply, so age is not a cleanup-time SLA.
+
+A durable SQLite FULL intent precedes a non-overwriting hard link, repeated identity checks, source unlink and final bookkeeping. Process death before linking, after linking and after source unlink is replayable. Source changes and target collisions preserve evidence for administrator review. Trust relies on the private directory, service UID and worker lock; atomic conditional unlink against a hostile same-UID process is not claimed.
+
+`quarantine/` lives under the configured private output directory, outside the webroot, mode 0700; worker-created files use 0600. Its metadata is stored in `export_artifacts` in the existing jobs database. Back up the jobs database and private directory together. `quarantined` means privately retained, not validated for download; `pending`, `protected`, `conflict`, `source_changed` and `missing` require the indicated follow-up. Do not publish a retained artifact without validating completeness, its job and current queue grants.
+
+**Retention does not reclaim disk space**, and has no automatic purge. Monitor capacity and arrange a separate archive/backup policy. Existing CPU/memory ceilings do not establish production RTP safety.
+
+The export service journal logs `export_artifact_recovery_unavailable` once on state change, and `export_artifact_recovery_resumed` on recovery. Check directory ownership/permissions, capacity and long database locks. These messages contain no private paths, SQL or file contents. Actual PBX/runtime acceptance remains separate from unit tests.

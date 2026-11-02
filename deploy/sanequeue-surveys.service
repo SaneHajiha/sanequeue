@@ -1,0 +1,30 @@
+[Unit]
+Description=SaneQueue opt-in evidence-scoped customer DTMF surveys
+After=local-fs.target
+ConditionPathExists=/etc/sanequeue/surveys.enabled
+ConditionPathExists=/etc/sanequeue/survey-bindings.json
+
+[Service]
+Type=simple
+User=sanequeue
+Group=sanequeue
+SupplementaryGroups=asterisk
+WorkingDirectory=/opt/sanequeue
+ExecStart=/opt/sanequeue/.venv/bin/python -m sanequeue.surveys.adapter --state /var/lib/sanequeue --config /etc/sanequeue/survey-bindings.json --queue-log /var/log/asterisk/queue_log --sounds /var/lib/asterisk/sounds
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=5
+UMask=0077
+Nice=10
+CPUQuota=10%
+MemoryMax=128M
+TasksMax=48
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sanequeue
+RestrictAddressFamilies=AF_INET AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
