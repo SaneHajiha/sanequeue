@@ -40,6 +40,9 @@ class ReportingThemeTests(unittest.TestCase):
         self.assertLess(html.index('name="from"'),html.index('name="to"'))
         self.assertLess(html.index('name="to"'),html.index('name="time_from"'))
         self.assertLess(html.index('name="time_from"'),html.index('name="time_to"'))
+        self.assertIn('name="time_from" type="text" dir="ltr" inputmode="text" maxlength="8" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]" value="00:00:00"',html)
+        self.assertIn('name="time_to" type="text" dir="ltr" inputmode="text" maxlength="8" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]" value="23:59:59"',html)
+        self.assertIn('<details class="pbx-extra-filters">',html)
 
     def test_report_family_navigation_retains_rankings_and_role_gates(self):
         from jinja2 import Environment,FileSystemLoader

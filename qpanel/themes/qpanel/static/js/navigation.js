@@ -90,7 +90,14 @@
    nav.querySelectorAll('.module-shortcut').forEach(item=>{if(item===link)item.setAttribute('aria-current','location');else item.removeAttribute('aria-current');});
    requestAnimationFrame(()=>{
     const target=document.getElementById(link.dataset.moduleTarget);
-    if(target){target.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});target.tabIndex=-1;target.focus({preventScroll:true});}
+    if(target){
+     // The CDR section uses display:contents so the filter, cards and charts
+     // can share the report grid. Scroll to the page top instead of trying
+     // to scroll a boxless section past the page heading.
+     const cdr=link.dataset.moduleTarget==='history-cdr-section',focusTarget=cdr?(document.getElementById('history-cdr-heading')||target):target;
+     (cdr?(document.querySelector('.topbar')||focusTarget):focusTarget).scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+     focusTarget.tabIndex=-1;focusTarget.focus({preventScroll:true});
+    }
    });
   }
   const view=event.target.closest('button[data-view]');

@@ -237,3 +237,38 @@ On lab revision 1a9f0e8, 42 Linux tests passed and Asterisk PID was unchanged. C
 
 ## PBX call-report redesign — 2026-11-02
 Base: `e0a4fd355543eaa4528a969d86ab1e37fc893de0` (published reporting branch). Local targeted results: 42 pytest cases and 8 subtests passed (`test_reporting_cdr`, `test_reporting_cdr_api`, `test_reporting_theme_integration`, `test_reporting_queries`). Node harnesses passed for charts, navigation, reporting and Persian date picker. Chromium synthetic-data preview exercised the report, advanced filters, trend bucket buttons, clear action, dark mode and 390px viewport without document overflow. Screenshot uses synthetic report data and is kept outside the repository. No multi-version PBX, live load, unit-scope, or full WCAG conformance is certified.
+# PBX call-report visual iteration — 2026-11-03
+
+- Follow-up based on `ecdedaf`: 43 Python reporting tests, the chart frontend
+  test, and the offline Chromium fixture passed. The fixture verifies both
+  metric-definition disclosures remain available after reducing chart clutter.
+
+- Follow-up based on `a3a3fda`: the offline Chromium fixture passed for the
+  current and previous Persian week (Saturday start), rolling three Persian
+  months, clearing the previous selection, desktop/mobile layout, default
+  24-hour times and invalid-time rejection. `report_periods_frontend.cjs`,
+  `date_picker_frontend.cjs`, `report_navigation_frontend.cjs`, and
+  `report_charts_frontend.cjs` passed. The 43 Python reporting tests passed.
+
+- Follow-up based on `454b6b9`: `node tests/report_navigation_frontend.cjs`,
+  `node tests/date_picker_frontend.cjs`, and `node tests/report_charts_frontend.cjs`
+  passed. The fixture can be rebuilt using
+  `python -m tests.render_pbx_visual_fixture <temporary-html>` and exercised
+  with `node tests/pbx_report_visual.cjs`. The browser test requires environment
+  variables `PBX_OFFLINE_HTML` (rendered fixture), `PBX_PLAYWRIGHT` (installed
+  Playwright module), and optionally `PBX_BROWSER` and `PBX_SCREENSHOT`. It
+  intercepts the fixture host and uses only synthetic data.
+
+- Base revision: `77ca1e2` (subsequent working-tree changes: stacked compact
+  extension chart and report-scoped spacing).
+- `python -m unittest tests.test_reporting_theme_integration tests.test_reporting_cdr tests.test_reporting_cdr_api tests.test_reporting_queries`: 43 passed.
+- `node tests/report_charts_frontend.cjs`: passed, including compact stacked
+  bars, missing data, pagination, keyboard access, and stale exports.
+- Offline Chromium at 1487 × 1058 using the real rendered template and
+  synthetic API responses: report navigation, five cards and ten rows,
+  request times, invalid time, reset, extra filters, dark-mode toggle and
+  390-pixel page overflow checked. No page errors observed.
+- Visual comparison with the approved image remains incomplete: remaining
+  differences and the blocked server deployment are recorded in `design-qa.md`.
+  No live PBX data or services were changed by these checks.
+
