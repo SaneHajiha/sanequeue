@@ -239,6 +239,13 @@ On lab revision 1a9f0e8, 42 Linux tests passed and Asterisk PID was unchanged. C
 Base: `e0a4fd355543eaa4528a969d86ab1e37fc893de0` (published reporting branch). Local targeted results: 42 pytest cases and 8 subtests passed (`test_reporting_cdr`, `test_reporting_cdr_api`, `test_reporting_theme_integration`, `test_reporting_queries`). Node harnesses passed for charts, navigation, reporting and Persian date picker. Chromium synthetic-data preview exercised the report, advanced filters, trend bucket buttons, clear action, dark mode and 390px viewport without document overflow. Screenshot uses synthetic report data and is kept outside the repository. No multi-version PBX, live load, unit-scope, or full WCAG conformance is certified.
 # PBX call-report visual iteration — 2026-11-03
 
+- Preview `baebd5ac` on port 18897: 81 Linux tests passed before switch;
+  Asterisk and collector PIDs were unchanged. Live browser successfully
+  downloaded the unique-number CSV and XLSX. A direct authenticated HTTP test
+  received a valid PDF response, but the automated browser observed HTTP 204
+  instead of a PDF download. Browser delivery of PDF is therefore not yet
+  accepted. No production gateway or PBX service was restarted.
+
 - Follow-up based on `22ec741`: 81 Python tests, the chart frontend test and
   the offline Chromium fixture passed with CSV, Excel and PDF aggregate
   downloads. Python tests validate actual workbook/PDF content and the PDF
