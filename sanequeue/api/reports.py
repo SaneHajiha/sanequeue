@@ -811,6 +811,33 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
         return jsonify(data)
 
+    @app.post('/api/history/cdr/unique-inbound/export.csv')
+    @app.post('/api/history/cdr/unique-inbound/export.xlsx')
+    @app.post('/api/history/cdr/unique-inbound/export.pdf')
+    @login_required
+    @safe
+    def history_cdr_unique_inbound_export():
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context();export_csrf()
+        queues=queries.queues(archive);language=request.args.get('lang','fa');format=request.path.rsplit('.',1)[-1]
+        if not numbers or not queues or not all(can_queue(q,'report_export') for q in queues):abort(403)
+        if language not in ('fa','en') or format not in ('csv','xlsx','pdf'):raise ValueError('invalid_unique_inbound_export')
+        if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
+        try:
+            data=cdr_queries.unique_inbound(archive,start,end,filters)
+            if data['state']!='available':raise QueryDeadline('unique_inbound_segment_limit')
+            try:
+                content=(cdr_queries.unique_inbound_csv(data,language) if format=='csv' else
+                         cdr_queries.unique_inbound_document(data,language,format))
+            except (xlsx_stream.SizeLimit,pdf_stream.PdfFailure) as error:
+                raise ExportFailure(str(error)) from None
+        finally:aggregate_gate.release()
+        if (owner!=str(current_user.get_id()) or cdr_context()!=(start,end,filters,numbers) or
+            queries.queues(archive)!=queues or not all(can_queue(q,'report_export') for q in queues)):abort(403)
+        types={'csv':'text/csv; charset=utf-8','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','pdf':'application/pdf'}
+        return Response(content,mimetype=types[format],headers={
+            'Content-Disposition':f'attachment; filename="sanequeue-inbound-numbers.{format}"',
+            'X-SaneQueue-Unit':'distinct_inbound_source_number','Cache-Control':'private, no-store'})
+
     @app.get('/api/history/cdr/outbound-dashboard')
     @login_required
     @safe

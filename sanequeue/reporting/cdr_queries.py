@@ -5,7 +5,10 @@ authorize number searches, mask every number, and separately authorize audio.
 These functions intentionally accept no queue Scope and never call the PBX.
 All full-range aggregates share one bounded SQLite read transaction.
 """
+from collections import Counter
+import csv
 from datetime import datetime
+import io
 import math
 import re
 import unicodedata
@@ -194,16 +197,79 @@ def unique_inbound(archive,start,end,filters=None):
                         (*args,MAX_UNIQUE_INBOUND_SEGMENTS+1)).fetchall()
     if len(rows)>MAX_UNIQUE_INBOUND_SEGMENTS:
         return dict(state='limited',reason='unique_inbound_segment_limit',maximum_segments=MAX_UNIQUE_INBOUND_SEGMENTS)
-    numbers=set();days={};unknown=0
+    numbers=Counter();days={};unknown=0
     for row in rows:
         number=_phone(row['src'])
         if number is None:unknown+=1;continue
         day=datetime.fromtimestamp(row['ts'],_ZONE).date().isoformat()
-        numbers.add(number);item=days.setdefault(day,dict(numbers=set(),segments=0));item['numbers'].add(number);item['segments']+=1
+        numbers[number]+=1;item=days.setdefault(day,dict(numbers=Counter(),segments=0));item['numbers'][number]+=1;item['segments']+=1
+    repeated=sum(count>1 for count in numbers.values())
     return dict(state='available',start=float(start),end=float(end),timezone='Asia/Tehran',
-        total_unique=len(numbers),known_number_segments=sum(item['segments'] for item in days.values()),unknown_number_segments=unknown,
-        by_day=[dict(day=day,unique_numbers=len(item['numbers']),known_number_segments=item['segments']) for day,item in sorted(days.items())],
+        total_unique=len(numbers),repeat_numbers=repeated,
+        repeat_number_percent=(round(100*repeated/len(numbers),2) if numbers else None),
+        known_number_segments=sum(item['segments'] for item in days.values()),unknown_number_segments=unknown,
+        by_day=[dict(day=day,unique_numbers=len(item['numbers']),
+                     repeat_numbers=sum(count>1 for count in item['numbers'].values()),
+                     known_number_segments=item['segments']) for day,item in sorted(days.items())],
         contract=dict(unit='distinct_normalized_inbound_cdr_source_number',source='observed_inbound_cdr_segments',
             source_is_displayed_caller_id=True,unique_conversations_proven=False,customer_identity_proven=False,
+            repeat='more_than_one_cdr_segment_with_same_source_not_proven_repeat_calls',
+            repeat_percent_denominator='known_distinct_inbound_source_numbers',
             unknown_direction_excluded=True,daily_totals_additive=False,country_prefix_equivalence=False,
             maximum_segments=MAX_UNIQUE_INBOUND_SEGMENTS,complete_history=False))
+
+
+def unique_inbound_csv(result,language):
+    """Export bounded aggregates only; source phone numbers never leave memory."""
+    if language not in ('fa','en') or result.get('state')!='available':
+        raise ValueError('invalid_unique_inbound_export')
+    from .exports import persian_date
+    fa=language=='fa'
+    def date(value):
+        return persian_date(value) if fa else value.isoformat()
+    start=datetime.fromtimestamp(result['start'],_ZONE)
+    end=datetime.fromtimestamp(result['end'],_ZONE)
+    stamp=lambda value:date(value.date())+value.strftime(' %H:%M:%S')
+    output=io.StringIO(newline='');writer=csv.writer(output)
+    writer.writerow((['شروع بازه','پایان انحصاری بازه','روز','شماره‌های یکتای روز','شماره‌های چندبخشی روز',
+                      'بخش‌های دارای شماره معلوم روز','شماره‌های یکتای بازه','شماره‌های چندبخشی بازه',
+                      'درصد شماره‌های چندبخشی بازه','بخش‌های دارای شماره نامعلوم بازه','تعریف'] if fa else
+                     ['period_start','period_end_exclusive','day','daily_distinct_numbers','daily_multi_segment_numbers',
+                      'daily_known_number_segments','period_distinct_numbers','period_multi_segment_numbers',
+                      'period_multi_segment_percent','period_unknown_number_segments','definition']))
+    definition=('چند بخش CDR با مبدأ یکسان؛ تکرار تماس یا هویت مشتری اثبات نمی‌شود' if fa else
+                'multiple CDR segments with the same source; repeated calls and identity are not proven')
+    for row in result['by_day'] or [None]:
+        day=date(datetime.fromisoformat(row['day']).date()) if row else ''
+        writer.writerow([stamp(start),stamp(end),day,row['unique_numbers'] if row else '',
+                         row['repeat_numbers'] if row else '',row['known_number_segments'] if row else '',
+                         result['total_unique'],result['repeat_numbers'],
+                         result['repeat_number_percent'] if result['repeat_number_percent'] is not None else '',
+                         result['unknown_number_segments'],definition])
+    return output.getvalue().encode('utf-8-sig')
+
+
+def unique_inbound_document(result,language,format):
+    """Render the same aggregate as a bounded workbook or PDF."""
+    if format not in ('xlsx','pdf'):raise ValueError('invalid_unique_inbound_export')
+    from . import builder_exports,pdf_stream
+    rows=list(csv.reader(io.StringIO(unique_inbound_csv(result,language).decode('utf-8-sig'))))
+    headers,body=rows[0],rows[1:]
+    if format=='pdf' and len(body)>100:raise pdf_stream.PdfFailure('pdf_row_limit')
+    output=io.BytesIO()
+    if format=='xlsx':
+        for row in body:
+            for index in range(3,10):
+                if row[index]:row[index]=float(row[index])
+        writer=builder_exports.Workbook(output,language,headers=headers,max_bytes=4*1024*1024,max_columns=20,
+            title='شماره‌های یکتای ورودی' if language=='fa' else 'Distinct inbound numbers')
+    else:
+        writer=pdf_stream.CustomDocument(output,language,headers=headers,max_columns=20,grouped=True,global_cdr=True,
+            start=result['start'],end=result['end'],queues=[],max_rows=100,max_pages=20,max_bytes=4*1024*1024,
+            filter_items=['چند بخش CDR اثبات تماس تکراری نیست' if language=='fa' else 'Multiple CDR segments do not prove repeated calls'])
+    try:
+        for index in range(0,len(body),200):writer.append(body[index:index+200])
+        writer.close()
+    except BaseException:
+        writer.abort();raise
+    return output.getvalue()

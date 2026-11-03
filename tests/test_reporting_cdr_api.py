@@ -1,5 +1,8 @@
+import csv
+import io
 import unittest
 from unittest.mock import patch
+from zipfile import ZipFile
 
 from tests import test_reporting_queries as fixtures
 from sanequeue.reporting.store import Event
@@ -105,6 +108,87 @@ class CDRAPITests(unittest.TestCase):
         unique=full.get('/api/history/cdr/unique-inbound'+self.query)
         self.assertEqual(unique.status_code,200,unique.json);self.assertEqual(unique.json['total_unique'],0)
         self.assertNotIn('02199999999',unique.get_data(as_text=True))
+
+    def test_repeated_inbound_counts_require_full_number_permission_and_hide_numbers(self):
+        case=self.case
+        with case.archive.writer() as db:db.execute("DELETE FROM report_visits WHERE queue='8002'")
+        inbound=dict(src='09120000001',dst='100',channel='PJSIP/provider-000000aa',
+                     dstchannel='PJSIP/100-000000ab',duration=10,billsec=5,disposition='ANSWERED')
+        case.archive.append([Event('cdr','in1',case.stamp+20,'CDR',inbound),
+                             Event('cdr','in2',case.stamp+21,'CDR',inbound)])
+        while project_batch(case.archive,inventory=dict(observed_at=case.stamp,endpoints=[
+            dict(technology='PJSIP',endpoint='100',category='extension'),
+            dict(technology='PJSIP',endpoint='provider',category='trunk')]))['processed']:
+            pass
+        url='/api/history/cdr/unique-inbound'+self.query
+        self.assertEqual(case.client(role='admin',menus=('reports','users')).get(url).status_code,403)
+        response=case.client(role='admin',menus=('reports','users'),details=True).get(url)
+        self.assertEqual(response.status_code,200,response.json)
+        self.assertEqual((response.json['total_unique'],response.json['repeat_numbers']),(1,1))
+        self.assertEqual(response.json['repeat_number_percent'],100.0)
+        self.assertNotIn('09120000001',response.get_data(as_text=True))
+        export=url.replace('/unique-inbound?', '/unique-inbound/export.csv?')+'&lang=en'
+        self.assertEqual(case.client(role='admin',menus=('reports','users'),details=True).post(export).status_code,403)
+        def ready(**kwargs):
+            client=case.client(role='admin',menus=('reports','users'),**kwargs)
+            with client.session_transaction() as state:state['csrf_token']='token'
+            return client
+        self.assertEqual(ready().post(export,headers={'X-CSRF-Token':'token'}).status_code,403)
+        self.assertEqual(ready(details=True,denied=('report_export',)).post(export,headers={'X-CSRF-Token':'token'}).status_code,403)
+        exported=ready(details=True).post(export,headers={'X-CSRF-Token':'token'})
+        self.assertEqual(exported.status_code,200,exported.get_data(as_text=True))
+        rows=list(csv.DictReader(io.StringIO(exported.data.decode('utf-8-sig'))))
+        self.assertEqual(rows[0]['period_distinct_numbers'],'1')
+        self.assertEqual(rows[0]['period_multi_segment_numbers'],'1')
+        self.assertEqual(rows[0]['period_multi_segment_percent'],'100.0')
+        self.assertNotIn('09120000001',exported.get_data(as_text=True))
+        for fmt in ('xlsx','pdf'):
+            with self.subTest(format=fmt):
+                document=ready(details=True).post(export.replace('export.csv','export.'+fmt),headers={'X-CSRF-Token':'token'})
+                self.assertEqual(document.status_code,200,document.data[:200])
+                if fmt=='pdf':self.assertTrue(document.data.startswith(b'%PDF-'))
+                else:
+                    with ZipFile(io.BytesIO(document.data)) as workbook:
+                        self.assertIn('xl/worksheets/sheet1.xml',workbook.namelist())
+                        self.assertNotIn(b'09120000001',workbook.read('xl/worksheets/sheet1.xml'))
+
+    def test_unique_inbound_export_rechecks_export_permission(self):
+        from sanequeue.reporting.cdr_queries import unique_inbound_csv
+        with self.case.archive.writer() as db:db.execute("DELETE FROM report_visits WHERE queue='8002'")
+        denied=[]
+        client=self.case.client(role='admin',menus=('reports','users'),details=True,denied=denied)
+        with client.session_transaction() as state:state['csrf_token']='token'
+        def revoke(*args,**kwargs):
+            result=unique_inbound_csv(*args,**kwargs)
+            denied.append('report_export')
+            return result
+        with patch('sanequeue.api.reports.cdr_queries.unique_inbound_csv',side_effect=revoke):
+            response=client.post('/api/history/cdr/unique-inbound/export.csv'+self.query+'&lang=en',headers={'X-CSRF-Token':'token'})
+        self.assertEqual(response.status_code,403)
+        self.assertNotIn('period_distinct_numbers',response.get_data(as_text=True))
+
+    def test_unique_inbound_export_refuses_limited_results(self):
+        with self.case.archive.writer() as db:db.execute("DELETE FROM report_visits WHERE queue='8002'")
+        client=self.case.client(role='admin',menus=('reports','users'),details=True)
+        with client.session_transaction() as state:state['csrf_token']='token'
+        with patch('sanequeue.api.reports.cdr_queries.unique_inbound',return_value={'state':'limited'}):
+            response=client.post('/api/history/cdr/unique-inbound/export.csv'+self.query,headers={'X-CSRF-Token':'token'})
+        self.assertEqual(response.status_code,422)
+        self.assertNotIn('text/csv',response.headers.get('Content-Type',''))
+
+    def test_unique_inbound_rechecks_revoked_number_access_before_response(self):
+        from sanequeue.reporting.cdr_queries import unique_inbound
+        with self.case.archive.writer() as db:db.execute("DELETE FROM report_visits WHERE queue='8002'")
+        denied=[]
+        client=self.case.client(role='admin',menus=('reports','users'),details=True,denied=denied)
+        def revoke(*args,**kwargs):
+            result=unique_inbound(*args,**kwargs)
+            denied.append('caller_details')
+            return result
+        with patch('sanequeue.api.reports.cdr_queries.unique_inbound',side_effect=revoke):
+            response=client.get('/api/history/cdr/unique-inbound'+self.query)
+        self.assertEqual(response.status_code,403)
+        self.assertNotIn('repeat_numbers',response.get_data(as_text=True))
 
 
 if __name__=='__main__':unittest.main()

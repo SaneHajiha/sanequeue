@@ -17,6 +17,6 @@ with app.test_request_context('/'):
         user_role='admin', history_available=True, can_view_section=lambda _: True,
         ops_config={'allowed_sections': ['reports', 'audit', 'shifts', 'users'],
                     'report_extensions': [], 'logged_in_user': 'مدیر آزمایشی',
-                    'wait_threshold': 30, 'realtime_push': False},
+                    'wait_threshold': 30, 'realtime_push': False, 'csrf': 'fixture-token'},
         current_version=lambda: 'fixture', has_users=lambda: False)
     Path(sys.argv[1]).write_text(html, encoding='utf-8')

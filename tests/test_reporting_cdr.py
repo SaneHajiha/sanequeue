@@ -1,4 +1,6 @@
+import csv
 from datetime import datetime
+import io
 from pathlib import Path
 import tempfile
 import unittest
@@ -7,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from sanequeue.reporting.store import Archive, Event, QueryDeadline
 from sanequeue.reporting.facts import project_batch
-from sanequeue.reporting.cdr_queries import page, summary, unique_inbound
+from sanequeue.reporting.cdr_queries import page, summary, unique_inbound, unique_inbound_csv, unique_inbound_document
 from sanequeue.reporting.cdr_trend import report as trend
 
 
@@ -73,12 +75,39 @@ class CDRTests(unittest.TestCase):
         data=unique_inbound(self.archive,stamp,stamp+2*86400)
         self.assertEqual((data['total_unique'],data['known_number_segments'],data['unknown_number_segments']),(1,3,1))
         self.assertEqual([row['unique_numbers'] for row in data['by_day']],[1,1])
+        self.assertEqual((data['repeat_numbers'],data['repeat_number_percent']),(1,100.0))
+        self.assertEqual([row['repeat_numbers'] for row in data['by_day']],[1,0])
+        self.assertEqual(data['contract']['repeat_percent_denominator'],'known_distinct_inbound_source_numbers')
         self.assertNotIn('09123456789',str(data));self.assertFalse(data['contract']['unique_conversations_proven'])
         self.assertEqual(unique_inbound(self.archive,stamp,stamp+2*86400,{'hour_from':9,'hour_to':9})['total_unique'],1)
         with self.assertRaises(ValueError):unique_inbound(self.archive,stamp,stamp+2*86400,{'direction':'outbound'})
         with patch('sanequeue.reporting.cdr_queries.MAX_UNIQUE_INBOUND_SEGMENTS',2):
             limited=unique_inbound(self.archive,stamp,stamp+2*86400)
         self.assertEqual(limited['state'],'limited');self.assertNotIn('total_unique',limited)
+
+    def test_repeat_number_share_counts_segments_not_proven_calls(self):
+        stamp=datetime(2026,10,24,9,tzinfo=ZoneInfo('Asia/Tehran')).timestamp()
+        inbound=dict(channel='PJSIP/provider-main-000000af',dstchannel='SIP/200-000000ae')
+        self.seed(self.event('a',stamp,src='09120000001',**inbound),
+                  self.event('b',stamp+1,src='09120000001',**inbound),
+                  self.event('c',stamp+2,src='09120000002',**inbound),
+                  self.event('d',stamp+3,src='anonymous',**inbound))
+        data=unique_inbound(self.archive,stamp,stamp+86400)
+        self.assertEqual((data['total_unique'],data['repeat_numbers'],data['repeat_number_percent']),(2,1,50.0))
+        self.assertEqual(data['by_day'][0]['repeat_numbers'],1)
+        self.assertNotIn('09120000001',str(data))
+        self.assertIn('not_proven_repeat_calls',data['contract']['repeat'])
+        empty=unique_inbound(self.archive,stamp+86400,stamp+172800)
+        self.assertEqual(empty['repeat_numbers'],0)
+        self.assertIsNone(empty['repeat_number_percent'])
+        rows=list(csv.DictReader(io.StringIO(unique_inbound_csv(empty,'en').decode('utf-8-sig'))))
+        self.assertEqual(rows[0]['period_distinct_numbers'],'0')
+        self.assertEqual(rows[0]['period_multi_segment_percent'],'')
+        self.assertEqual(rows[0]['day'],'')
+        with self.assertRaises(ValueError):unique_inbound_csv({'state':'limited'},'fa')
+        from sanequeue.reporting.pdf_stream import PdfFailure
+        limited=dict(data,by_day=data['by_day']*101)
+        with self.assertRaises(PdfFailure):unique_inbound_document(limited,'en','pdf')
 
     def test_trend_buckets_directions_and_limits(self):
         stamp=datetime(2026,10,24,9,tzinfo=ZoneInfo('Asia/Tehran')).timestamp()

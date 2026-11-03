@@ -239,6 +239,18 @@ On lab revision 1a9f0e8, 42 Linux tests passed and Asterisk PID was unchanged. C
 Base: `e0a4fd355543eaa4528a969d86ab1e37fc893de0` (published reporting branch). Local targeted results: 42 pytest cases and 8 subtests passed (`test_reporting_cdr`, `test_reporting_cdr_api`, `test_reporting_theme_integration`, `test_reporting_queries`). Node harnesses passed for charts, navigation, reporting and Persian date picker. Chromium synthetic-data preview exercised the report, advanced filters, trend bucket buttons, clear action, dark mode and 390px viewport without document overflow. Screenshot uses synthetic report data and is kept outside the repository. No multi-version PBX, live load, unit-scope, or full WCAG conformance is certified.
 # PBX call-report visual iteration — 2026-11-03
 
+- Follow-up based on `22ec741`: 81 Python tests, the chart frontend test and
+  the offline Chromium fixture passed with CSV, Excel and PDF aggregate
+  downloads. Python tests validate actual workbook/PDF content and the PDF
+  100-row bound; the browser fixture verifies format selection and download.
+
+- Follow-up based on `d996964`: 81 Python tests covering CDR, API, report
+  queries, theme, outbound and queue outcomes passed; the chart frontend test
+  and offline synthetic Chromium fixture also passed. Added checks cover
+  same-source CDR segment counts across days, null denominator for empty data,
+  no source-number disclosure, CSRF, export permission and mid-request
+  revocation, the bounded-query refusal and the CSV download interaction.
+
 - Follow-up based on `ecdedaf`: 43 Python reporting tests, the chart frontend
   test, and the offline Chromium fixture passed. The fixture verifies both
   metric-definition disclosures remain available after reducing chart clutter.
