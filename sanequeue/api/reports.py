@@ -785,6 +785,16 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if owner!=unit_admin():abort(403)
         return jsonify(rows=rows)
 
+    @app.get('/api/organization/access/changes')
+    @login_required
+    @safe
+    def organization_access_changes():
+        owner=unit_admin();value=request.args.get('limit','100')
+        if not re.fullmatch(r'[0-9]{1,3}',value):raise ValueError('invalid_unit_audit_limit')
+        rows=unit_store.list_change_audit(int(value))
+        if owner!=unit_admin():abort(403)
+        return jsonify(rows=rows)
+
     @app.route('/api/organization/tokens',methods=['GET','POST'])
     @login_required
     @safe
@@ -898,12 +908,12 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             if 'end' in body:raise ValueError('invalid_unit_request')
             body=dict(body);body['end']=local_day(body.pop('end_date'),True)
         specs={
-            'create':({'operation','name','kind','parent'},lambda:unit_store.create_unit(body.get('name'),body.get('kind'),body.get('parent'))),
-            'assign':({'operation','unit_id','endpoint','start','end'},lambda:unit_store.assign_endpoint(body.get('unit_id'),body.get('endpoint'),body.get('start'),body.get('end'))),
-            'member':({'operation','unit_id','username','start','end'},lambda:unit_store.add_member(body.get('unit_id'),body.get('username'),body.get('start'),body.get('end'))),
-            'grant':({'operation','unit_id','username','capability','descendants'},lambda:unit_store.grant(body.get('username'),body.get('unit_id'),body.get('capability'),descendants=body.get('descendants',False))),
-            'revoke':({'operation','id'},lambda:unit_store.revoke(body.get('id'))),
-            'close':({'operation','id','end','membership'},lambda:unit_store.close_interval(body.get('id'),body.get('end'),membership=body.get('membership',False))),
+            'create':({'operation','name','kind','parent'},lambda:unit_store.create_unit(body.get('name'),body.get('kind'),body.get('parent'),actor=owner)),
+            'assign':({'operation','unit_id','endpoint','start','end'},lambda:unit_store.assign_endpoint(body.get('unit_id'),body.get('endpoint'),body.get('start'),body.get('end'),actor=owner)),
+            'member':({'operation','unit_id','username','start','end'},lambda:unit_store.add_member(body.get('unit_id'),body.get('username'),body.get('start'),body.get('end'),actor=owner)),
+            'grant':({'operation','unit_id','username','capability','descendants'},lambda:unit_store.grant(body.get('username'),body.get('unit_id'),body.get('capability'),descendants=body.get('descendants',False),actor=owner)),
+            'revoke':({'operation','id'},lambda:unit_store.revoke(body.get('id'),actor=owner)),
+            'close':({'operation','id','end','membership'},lambda:unit_store.close_interval(body.get('id'),body.get('end'),membership=body.get('membership',False),actor=owner)),
         }
         if op not in specs or set(body)-specs[op][0] or op=='close' and type(body.get('membership',False)) is not bool:
             raise ValueError('invalid_unit_request')

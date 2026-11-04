@@ -25,6 +25,7 @@ const path=require('node:path');
    if(url.pathname==='/api/history/cdr/classification/analysis'){const period=url.searchParams.get('bucket')==='weekday'?'0':'03';return route.fulfill({json:{segments:2,labelled:1,unlabelled:1,rows:[{reason:'پشتیبانی',subreason:'نصب',outcome:'حل شد',count:1},{reason:'',subreason:'',outcome:'',count:1}],timeline:[{period,reason:'پشتیبانی',count:1},{period,reason:'',count:1}]}});}
    if(url.pathname.startsWith('/api/history/cdr/aggregate/')){aggregateExports.push({path:url.pathname,party:url.searchParams.get('party'),origin:url.searchParams.get('origin'),weekdays:url.searchParams.get('weekdays'),bucket:url.searchParams.get('bucket'),csrf:request.headers()['x-csrf-token']});return route.fulfill({contentType:'text/csv',body:'heading\nvalue\n'});}
    if(url.pathname==='/api/organization/tokens')return route.fulfill({json:request.method()==='POST'?{token:'synthetic-only-token',id:'a'.repeat(32),expires:1890000000}:{tokens:[]}});
+   if(url.pathname==='/api/organization/access/changes')return route.fulfill({json:{rows:[{at:1792820000,actor:'admin',operation:'grant',target:'a'.repeat(32)}]}});
    if(url.pathname==='/api/organization/access'){
     if(request.method()==='POST'){writes.push(request.postDataJSON());return route.fulfill({json:{id:'b'.repeat(32),revision:2}});}
     return route.fulfill({json:{units:[{id:'a'.repeat(32),name:'مالی',kind:'unit',parent:null}],assignments:[],members:[],grants:[]}});
@@ -130,6 +131,9 @@ const path=require('node:path');
   await page.addScriptTag({path:path.resolve('qpanel/themes/qpanel/static/js/date-picker.js')});
   await page.addScriptTag({path:path.resolve('qpanel/themes/qpanel/static/js/unit-admin.js')});
   await page.locator('#unit-admin-refresh').click();
+  await page.locator('#unit-access-panel details').filter({has:page.locator('#unit-change-refresh')}).locator('summary').click();
+  await page.locator('#unit-change-refresh').click();
+  await page.waitForFunction(()=>document.getElementById('unit-change-list').textContent.includes('admin'));
   await page.locator('#unit-create-form [name=name]').fill('دفتر مرکزی');
   await page.locator('#unit-create-form button[type=submit], #unit-create-form button:not([type])').click();
   await page.waitForFunction(()=>document.getElementById('unit-admin-feedback').textContent.includes('ثبت شد'));

@@ -127,11 +127,38 @@ class UnitScopeStore:
                   username TEXT NOT NULL,token_id TEXT NOT NULL,dataset TEXT NOT NULL,status INTEGER NOT NULL,
                   PRIMARY KEY(pbx,id));
                 CREATE INDEX IF NOT EXISTS uaa_time ON unit_api_audit(pbx,at DESC,id DESC);
+                CREATE TABLE IF NOT EXISTS unit_change_audit(pbx TEXT NOT NULL,id TEXT NOT NULL,at REAL NOT NULL,
+                  actor TEXT NOT NULL,operation TEXT NOT NULL,target TEXT NOT NULL,PRIMARY KEY(pbx,id));
+                CREATE INDEX IF NOT EXISTS uca_time ON unit_change_audit(pbx,at DESC,id DESC);
                 ''')
                 db.execute('INSERT OR IGNORE INTO unit_meta VALUES(?,0)',(self.pbx,))
         except (sqlite3.Error,OSError) as error:raise ScopeUnavailable('unit_scope_unavailable') from error
 
     def _bump(self,db):db.execute('UPDATE unit_meta SET revision=revision+1 WHERE pbx=?',(self.pbx,))
+
+    def _audit_change(self,db,actor,operation,target):
+        if actor is None:return
+        _user(actor);_id(target)
+        if operation not in ('create','assign','member','grant','revoke','close'):raise ValueError('invalid_unit_audit')
+        if db.execute('SELECT COUNT(*) FROM unit_change_audit WHERE pbx=?',(self.pbx,)).fetchone()[0]>=100000:
+            raise ScopeUnavailable('unit_change_audit_limit')
+        db.execute('INSERT INTO unit_change_audit VALUES(?,?,?,?,?,?)',(self.pbx,uuid.uuid4().hex,time.time(),actor,operation,target))
+
+    def list_change_audit(self,limit=100):
+        if type(limit) is not int or not 1<=limit<=500:raise ValueError('invalid_unit_audit_limit')
+        with self._db() as db:
+            rows=db.execute('''SELECT c.id,c.at,c.actor,c.operation,c.target,
+              COALESCE(u.name,owner.name) unit_name,COALESCE(g.username,m.username) subject,
+              g.capability,a.endpoint
+              FROM unit_change_audit c
+              LEFT JOIN units u ON u.pbx=c.pbx AND u.id=c.target
+              LEFT JOIN unit_grants g ON g.pbx=c.pbx AND g.id=c.target
+              LEFT JOIN unit_members m ON m.pbx=c.pbx AND m.id=c.target
+              LEFT JOIN unit_assignments a ON a.pbx=c.pbx AND a.id=c.target
+              LEFT JOIN units owner ON owner.pbx=c.pbx AND owner.id=COALESCE(g.unit_id,m.unit_id,a.unit_id)
+              WHERE c.pbx=? ORDER BY c.at DESC,c.id DESC LIMIT ?''',
+                            (self.pbx,limit)).fetchall()
+        return [dict(row) for row in rows]
 
     def revision(self):
         with self._db() as db:
@@ -154,7 +181,7 @@ class UnitScopeStore:
             db.commit()
         return result
 
-    def create_unit(self,name,kind,parent=None):
+    def create_unit(self,name,kind,parent=None,*,actor=None):
         name=_name(name)
         if kind not in KINDS:raise ValueError('invalid_unit_kind')
         if parent is not None:_id(parent)
@@ -164,10 +191,10 @@ class UnitScopeStore:
             if kind=='organization':
                 if parent is not None:raise ValueError('invalid_unit_parent')
             elif not previous or KINDS.index(previous['kind'])!=KINDS.index(kind)-1:raise ValueError('invalid_unit_parent')
-            db.execute('INSERT INTO units VALUES(?,?,?,?,?)',(self.pbx,ident,parent,kind,name));self._bump(db)
+            db.execute('INSERT INTO units VALUES(?,?,?,?,?)',(self.pbx,ident,parent,kind,name));self._audit_change(db,actor,'create',ident);self._bump(db)
         return ident
 
-    def _interval(self,table,unit_id,value,start,end):
+    def _interval(self,table,unit_id,value,start,end,actor):
         _id(unit_id);start=_time(start);end=None if end is None else _time(end)
         if end is not None and end<=start:raise ValueError('invalid_unit_interval')
         column='endpoint' if table=='unit_assignments' else 'username'
@@ -183,33 +210,33 @@ class UnitScopeStore:
                                ' AND (? IS NULL OR starts<?) AND (ends IS NULL OR ends>?)',
                                (*args[:-2],end,end,start)).fetchone()
             if overlap:raise ScopeConflict('unit_interval_overlap')
-            db.execute('INSERT INTO '+table+' VALUES(?,?,?,?,?,?)',(self.pbx,ident,unit_id,value,start,end));self._bump(db)
+            db.execute('INSERT INTO '+table+' VALUES(?,?,?,?,?,?)',(self.pbx,ident,unit_id,value,start,end));self._audit_change(db,actor,'assign' if column=='endpoint' else 'member',ident);self._bump(db)
         return ident
 
-    def assign_endpoint(self,unit_id,endpoint,start,end=None):return self._interval('unit_assignments',unit_id,endpoint,start,end)
-    def add_member(self,unit_id,username,start,end=None):return self._interval('unit_members',unit_id,username,start,end)
+    def assign_endpoint(self,unit_id,endpoint,start,end=None,*,actor=None):return self._interval('unit_assignments',unit_id,endpoint,start,end,actor)
+    def add_member(self,unit_id,username,start,end=None,*,actor=None):return self._interval('unit_members',unit_id,username,start,end,actor)
 
-    def close_interval(self,ident,end,*,membership=False):
+    def close_interval(self,ident,end,*,membership=False,actor=None):
         _id(ident);end=_time(end);table='unit_members' if membership else 'unit_assignments'
         with self._db(write=True) as db:
             row=db.execute('SELECT starts,ends FROM '+table+' WHERE pbx=? AND id=?',(self.pbx,ident)).fetchone()
             if not row or row['ends'] is not None or end<=row['starts']:raise ScopeConflict('unit_interval_cannot_close')
-            db.execute('UPDATE '+table+' SET ends=? WHERE pbx=? AND id=?',(end,self.pbx,ident));self._bump(db)
+            db.execute('UPDATE '+table+' SET ends=? WHERE pbx=? AND id=?',(end,self.pbx,ident));self._audit_change(db,actor,'close',ident);self._bump(db)
 
-    def grant(self,username,unit_id,capability,*,descendants=False):
+    def grant(self,username,unit_id,capability,*,descendants=False,actor=None):
         _user(username);_id(unit_id)
         if capability not in CAPABILITIES or type(descendants) is not bool:raise ValueError('invalid_unit_capability')
         ident=uuid.uuid4().hex
         with self._db(write=True) as db:
             if not db.execute('SELECT 1 FROM units WHERE pbx=? AND id=?',(self.pbx,unit_id)).fetchone():raise ValueError('unknown_unit')
-            db.execute('INSERT INTO unit_grants VALUES(?,?,?,?,?,?,1)',(self.pbx,ident,unit_id,username,capability,int(descendants)));self._bump(db)
+            db.execute('INSERT INTO unit_grants VALUES(?,?,?,?,?,?,1)',(self.pbx,ident,unit_id,username,capability,int(descendants)));self._audit_change(db,actor,'grant',ident);self._bump(db)
         return ident
 
-    def revoke(self,ident):
+    def revoke(self,ident,*,actor=None):
         _id(ident)
         with self._db(write=True) as db:
             if db.execute('UPDATE unit_grants SET active=0 WHERE pbx=? AND id=? AND active=1',(self.pbx,ident)).rowcount!=1:raise ScopeConflict('unit_grant_not_active')
-            self._bump(db)
+            self._audit_change(db,actor,'revoke',ident);self._bump(db)
 
     def revoke_subject(self,username):
         """Invalidate organizational grants before a local identity is deleted."""

@@ -47,6 +47,22 @@ class UnitAPITests(unittest.TestCase):
         self.assertEqual(self.case.client(menus=('users',)).get(report).status_code,403)
         self.assertEqual(self.case.client().get(report+'&src=09123456789').status_code,400)
 
+    def test_access_changes_are_audited_atomically_and_hidden_from_other_roles(self):
+        org=self.post(operation='create',kind='organization',name='Private')
+        url='/api/organization/access/changes'
+        self.assertEqual(self.case.client().get(url).status_code,403)
+        rows=self.admin.get(url).json['rows']
+        self.assertEqual([(row['operation'],row['target']) for row in rows],[('create',org)])
+        self.assertEqual(rows[0]['unit_name'],'Private')
+        from sanequeue.security.unit_scope import UnitScopeStore
+        store=UnitScopeStore(self.case.archive.path.parent/'unit-scope.sqlite3')
+        with store._db(write=True) as db:
+            db.execute("CREATE TRIGGER fail_unit_audit BEFORE INSERT ON unit_change_audit BEGIN SELECT RAISE(ABORT,'test'); END")
+        result=self.admin.post('/api/organization/access',json={'operation':'create','kind':'department','name':'Fail','parent':org},headers=self.header)
+        self.assertNotEqual(result.status_code,201)
+        self.assertEqual(len(store.inventory()['units']),1)
+        self.assertEqual(len(store.list_change_audit()),1)
+
     def test_ai_requires_both_permissions_and_rechecks_revocation(self):
         org=self.post(operation='create',kind='organization',name='Org')
         dept=self.post(operation='create',kind='department',name='Dept',parent=org)
