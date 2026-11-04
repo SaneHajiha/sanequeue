@@ -24,6 +24,7 @@ MAX_SCOPE_ASSIGNMENTS=128
 _ID=re.compile(r'[0-9a-f]{32}\Z')
 _USER=re.compile(r'[A-Za-z0-9_.@-]{2,64}\Z')
 _ENDPOINT=re.compile(r'(?:SIP|PJSIP)/[A-Za-z0-9_.-]{1,48}\Z')
+_QUEUE=re.compile(r'[A-Za-z0-9_.-]{1,80}\Z')
 
 
 class ScopeUnavailable(RuntimeError):pass
@@ -104,6 +105,10 @@ class UnitScopeStore:
                   endpoint TEXT NOT NULL,starts REAL NOT NULL,ends REAL,PRIMARY KEY(pbx,id),
                   FOREIGN KEY(pbx,unit_id) REFERENCES units(pbx,id));
                 CREATE INDEX IF NOT EXISTS ua_endpoint ON unit_assignments(pbx,endpoint,starts,ends);
+                CREATE TABLE IF NOT EXISTS unit_queue_assignments(pbx TEXT NOT NULL,id TEXT NOT NULL,unit_id TEXT NOT NULL,
+                  queue TEXT NOT NULL,starts REAL NOT NULL,ends REAL,PRIMARY KEY(pbx,id),
+                  FOREIGN KEY(pbx,unit_id) REFERENCES units(pbx,id));
+                CREATE INDEX IF NOT EXISTS uqa_queue ON unit_queue_assignments(pbx,queue,starts,ends);
                 CREATE TABLE IF NOT EXISTS unit_members(pbx TEXT NOT NULL,id TEXT NOT NULL,unit_id TEXT NOT NULL,
                   username TEXT NOT NULL,starts REAL NOT NULL,ends REAL,PRIMARY KEY(pbx,id),
                   FOREIGN KEY(pbx,unit_id) REFERENCES units(pbx,id));
@@ -143,7 +148,7 @@ class UnitScopeStore:
     def _audit_change(self,db,actor,operation,target):
         if actor is None:return
         _user(actor);_id(target)
-        if operation not in ('create','assign','member','grant','revoke','close'):raise ValueError('invalid_unit_audit')
+        if operation not in ('create','assign','assign_queue','member','grant','revoke','close','close_queue'):raise ValueError('invalid_unit_audit')
         if db.execute('SELECT COUNT(*) FROM unit_change_audit WHERE pbx=?',(self.pbx,)).fetchone()[0]>=100000:
             raise ScopeUnavailable('unit_change_audit_limit')
         db.execute('INSERT INTO unit_change_audit VALUES(?,?,?,?,?,?)',(self.pbx,uuid.uuid4().hex,time.time(),actor,operation,target))
@@ -153,13 +158,14 @@ class UnitScopeStore:
         with self._db() as db:
             rows=db.execute('''SELECT c.id,c.at,c.actor,c.operation,c.target,
               COALESCE(u.name,owner.name) unit_name,COALESCE(g.username,m.username) subject,
-              g.capability,a.endpoint
+              g.capability,a.endpoint,qa.queue
               FROM unit_change_audit c
               LEFT JOIN units u ON u.pbx=c.pbx AND u.id=c.target
               LEFT JOIN unit_grants g ON g.pbx=c.pbx AND g.id=c.target
               LEFT JOIN unit_members m ON m.pbx=c.pbx AND m.id=c.target
               LEFT JOIN unit_assignments a ON a.pbx=c.pbx AND a.id=c.target
-              LEFT JOIN units owner ON owner.pbx=c.pbx AND owner.id=COALESCE(g.unit_id,m.unit_id,a.unit_id)
+              LEFT JOIN unit_queue_assignments qa ON qa.pbx=c.pbx AND qa.id=c.target
+              LEFT JOIN units owner ON owner.pbx=c.pbx AND owner.id=COALESCE(g.unit_id,m.unit_id,a.unit_id,qa.unit_id)
               WHERE c.pbx=? ORDER BY c.at DESC,c.id DESC LIMIT ?''',
                             (self.pbx,limit)).fetchall()
         return [dict(row) for row in rows]
@@ -178,7 +184,7 @@ class UnitScopeStore:
             if revision is None:raise ScopeUnavailable('unit_scope_uninitialized')
             result={'revision':revision[0]}
             for name,table in (('units','units'),('assignments','unit_assignments'),
-                               ('members','unit_members'),('grants','unit_grants')):
+                               ('queue_assignments','unit_queue_assignments'),('members','unit_members'),('grants','unit_grants')):
                 rows=db.execute('SELECT * FROM '+table+' WHERE pbx=? LIMIT 1001',(self.pbx,)).fetchall()
                 if len(rows)>1000:raise ScopeUnavailable('unit_scope_limit')
                 result[name]=[{k:r[k] for k in r.keys() if k!='pbx'} for r in rows]
@@ -219,6 +225,39 @@ class UnitScopeStore:
 
     def assign_endpoint(self,unit_id,endpoint,start,end=None,*,actor=None):return self._interval('unit_assignments',unit_id,endpoint,start,end,actor)
     def add_member(self,unit_id,username,start,end=None,*,actor=None):return self._interval('unit_members',unit_id,username,start,end,actor)
+
+    def assign_queue(self,unit_id,queue,start,end=None,*,actor=None):
+        _id(unit_id);start=_time(start);end=None if end is None else _time(end)
+        if not isinstance(queue,str) or not _QUEUE.fullmatch(queue) or end is not None and end<=start:raise ValueError('invalid_unit_queue')
+        ident=uuid.uuid4().hex
+        with self._db(write=True) as db:
+            if not db.execute('SELECT 1 FROM units WHERE pbx=? AND id=?',(self.pbx,unit_id)).fetchone():raise ValueError('unknown_unit')
+            if db.execute('SELECT 1 FROM unit_queue_assignments WHERE pbx=? AND queue=? AND (? IS NULL OR starts<?) AND (ends IS NULL OR ends>?)',
+                          (self.pbx,queue,end,end,start)).fetchone():raise ScopeConflict('unit_queue_overlap')
+            db.execute('INSERT INTO unit_queue_assignments VALUES(?,?,?,?,?,?)',(self.pbx,ident,unit_id,queue,start,end))
+            self._audit_change(db,actor,'assign_queue',ident);self._bump(db)
+        return ident
+
+    def close_queue(self,ident,end,*,actor=None):
+        _id(ident);end=_time(end)
+        with self._db(write=True) as db:
+            row=db.execute('SELECT starts,ends FROM unit_queue_assignments WHERE pbx=? AND id=?',(self.pbx,ident)).fetchone()
+            if not row or row['ends'] is not None or end<=row['starts']:raise ScopeConflict('unit_interval_cannot_close')
+            db.execute('UPDATE unit_queue_assignments SET ends=? WHERE pbx=? AND id=?',(end,self.pbx,ident))
+            self._audit_change(db,actor,'close_queue',ident);self._bump(db)
+
+    def resolve_queues(self,username,capability,start,end):
+        scope=self.resolve(username,capability,start,end);units=scope['units'];rows=[]
+        with self._db() as db:
+            db.execute('BEGIN')
+            revision=db.execute('SELECT revision FROM unit_meta WHERE pbx=?',(self.pbx,)).fetchone()
+            if not revision or revision[0]!=scope['revision']:raise ScopeConflict('unit_scope_changed')
+            if units:
+                rows=[dict(row) for row in db.execute('SELECT unit_id,queue,starts,ends FROM unit_queue_assignments WHERE pbx=? AND unit_id IN ('+','.join('?' for _ in units)+') AND starts<? AND (ends IS NULL OR ends>?) ORDER BY queue,starts LIMIT ?',
+                        (self.pbx,*units,end,start,MAX_SCOPE_ASSIGNMENTS+1))]
+                if len(rows)>MAX_SCOPE_ASSIGNMENTS:raise ScopeUnavailable('unit_scope_limit')
+            db.commit()
+        return dict(scope,queue_assignments=rows)
 
     def close_interval(self,ident,end,*,membership=False,actor=None):
         _id(ident);end=_time(end);table='unit_members' if membership else 'unit_assignments'
@@ -296,7 +335,7 @@ class UnitScopeStore:
     def audit_api(self,username,token_id,dataset,status):
         """Record bounded access metadata, never credentials, filters or data."""
         _user(username);_id(token_id)
-        if dataset not in ('summary','cdr','trend','export.csv','export.xlsx','export.pdf','recording_play','recording_download') or type(status) is not int or not 100<=status<=599:
+        if dataset not in ('summary','queues','cdr','trend','export.csv','export.xlsx','export.pdf','recording_play','recording_download') or type(status) is not int or not 100<=status<=599:
             raise ValueError('invalid_unit_audit')
         with self._db(write=True) as db:
             if db.execute('SELECT COUNT(*) FROM unit_api_audit WHERE pbx=?',(self.pbx,)).fetchone()[0]>=100000:

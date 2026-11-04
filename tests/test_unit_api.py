@@ -73,6 +73,35 @@ class UnitAPITests(unittest.TestCase):
         self.assertNotEqual(denied.status_code,200)
         self.assertNotIn('totals',denied.json)
 
+    def test_queue_summary_respects_historical_unit_and_excludes_handover_visit(self):
+        org=self.post(operation='create',kind='organization',name='Org')
+        dept=self.post(operation='create',kind='department',name='Dept',parent=org)
+        first=self.post(operation='create',kind='unit',name='Site',parent=dept)
+        second=self.post(operation='create',kind='unit',name='Other',parent=dept)
+        self.post(operation='assign_queue',unit_id=first,queue='8001',start=self.case.stamp-10,end=self.case.stamp+50)
+        self.post(operation='assign_queue',unit_id=second,queue='8001',start=self.case.stamp+50)
+        self.post(operation='grant',unit_id=first,username='test',capability='summary')
+        c=self.case
+        c.archive.append([c.event('cross','8001','ENTERQUEUE',45,['','09']),c.event('cross','8001','ABANDON',55,['1','1','10']),
+                          c.event('later','8001','ENTERQUEUE',60,['','09']),c.event('later','8001','ABANDON',70,['1','1','10'])])
+        while project_batch(c.archive)['processed']:pass
+        url='/api/organization/reports/queues?from=2026-10-24&to=2026-10-25'
+        response=self.admin.get(url);self.assertEqual(response.status_code,200,response.get_data(as_text=True))
+        self.assertEqual(response.json['queues'][0]['visits'],1)
+        self.assertEqual(response.json['eligibility'],'closed_visits_contained_in_assignment')
+        self.assertNotIn('09123456789',response.get_data(as_text=True))
+        from sanequeue.security.unit_scope import UnitScopeStore
+        from sanequeue.reporting.unit_queue import summary as queue_summary
+        store=UnitScopeStore(self.case.archive.path.parent/'unit-scope.sqlite3')
+        store.grant('other-manager',second,'summary')
+        other_report=queue_summary(c.archive,store,'other-manager',self.case.stamp-10,self.case.stamp+100)
+        self.assertEqual(other_report['queues'][0]['visits'],1)
+        self.assertEqual(self.case.client(menus=('users',)).get(url).status_code,403)
+        overlap=self.admin.post('/api/organization/access',json={'operation':'assign_queue','unit_id':first,'queue':'8001','start':self.case.stamp},headers=self.header)
+        self.assertEqual(overlap.status_code,409)
+        with patch('sanequeue.security.unit_scope.UnitScopeStore.still_current',return_value=False):
+            self.assertEqual(self.admin.get(url).status_code,409)
+
     def test_access_changes_are_audited_atomically_and_hidden_from_other_roles(self):
         org=self.post(operation='create',kind='organization',name='Private')
         url='/api/organization/access/changes'
@@ -352,6 +381,7 @@ class UnitAPITests(unittest.TestCase):
         org=self.post(operation='create',kind='organization',name='Org')
         dept=self.post(operation='create',kind='department',name='Dept',parent=org)
         unit=self.post(operation='create',kind='unit',name='Site',parent=dept)
+        self.post(operation='assign_queue',unit_id=unit,queue='8001',start=self.case.stamp-10)
         self.post(operation='assign',unit_id=unit,endpoint='PJSIP/100',start=self.case.stamp-10)
         self.post(operation='grant',unit_id=unit,username='test',capability='summary')
         self.post(operation='grant',unit_id=unit,username='test',capability='call_details')
@@ -386,6 +416,9 @@ class UnitAPITests(unittest.TestCase):
         self.assertEqual(visible.status_code,200);self.assertNotIn('09123456789',visible.get_data(as_text=True))
         result=anonymous.get(url.replace('/cdr?','/summary?'),headers=authorization,base_url='https://localhost')
         self.assertEqual(result.status_code,200);self.assertEqual(result.json['totals']['segments_started'],1)
+        queue_result=anonymous.get(url.replace('/cdr?','/queues?'),headers=authorization,base_url='https://localhost')
+        self.assertEqual(queue_result.status_code,200);self.assertEqual(queue_result.json['queues'][0]['visits'],1)
+        self.assertNotIn('09123456789',queue_result.get_data(as_text=True))
         trend=anonymous.get(url.replace('/cdr?','/trend?')+'&bucket=day',headers=authorization,base_url='https://localhost')
         self.assertEqual(trend.status_code,200);self.assertEqual(sum(r['inbound'] for r in trend.json['rows']),1)
         export_url=url.replace('/cdr?','/export.csv?')

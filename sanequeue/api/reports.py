@@ -51,7 +51,7 @@ from sanequeue.reporting.audio import byte_range, open_recording, duration_secon
 from sanequeue.reporting.privacy import display_number
 from sanequeue.reporting.store import Archive, QueryDeadline
 from sanequeue.security.unit_scope import UnitScopeStore, ScopeUnavailable, ScopeConflict
-from sanequeue.reporting import unit_cdr, ai_report
+from sanequeue.reporting import unit_cdr, unit_queue, ai_report
 
 
 def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), own_since=lambda: 0,
@@ -833,7 +833,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     @app.get('/api/organization/integration/<dataset>')
     @safe
     def organization_integration(dataset):
-        if dataset not in ('summary','cdr','trend','export.csv','export.xlsx','export.pdf'):abort(404)
+        if dataset not in ('summary','queues','cdr','trend','export.csv','export.xlsx','export.pdf'):abort(404)
         if not request.is_secure:abort(403)
         if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
         header=request.headers.get('Authorization','')
@@ -851,14 +851,16 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         end=datetime.combine(last,datetime.min.time(),ZoneInfo('Asia/Tehran')).timestamp()
         allowed=unit_cdr._FILTERS
         extra={'from','to'}|({'cursor','limit'} if dataset=='cdr' else {'bucket','calendar'} if dataset=='trend' else set())
+        if dataset=='queues':allowed=frozenset()
         if set(request.args)-allowed-extra:raise ValueError('invalid_unit_report_filter')
         filters={key:request.args[key] for key in allowed if request.args.get(key) not in (None,'')}
         if 'weekdays' in filters:filters['weekdays']=filters['weekdays'].split(',')
         api_scope=unit_store.resolve(owner,'api',start,end)
-        required=unit_store.resolve(owner,'summary' if dataset in ('summary','trend') else 'call_details',start,end)
+        required=unit_store.resolve(owner,'summary' if dataset in ('summary','trend','queues') else 'call_details',start,end)
         if api_scope['revision']!=required['revision']:raise ScopeConflict('unit_scope_changed')
         if not required['units'] or not set(required['units']).issubset(api_scope['units']):abort(403)
         if dataset=='summary':data=unit_cdr.summary(archive,unit_store,owner,start,end,filters,allow_full=account.get('role') in ('admin','supervisor'))
+        elif dataset=='queues':data=unit_queue.summary(archive,unit_store,owner,start,end)
         elif dataset=='trend':
             data=unit_cdr.trend(archive,unit_store,owner,start,end,filters,bucket=request.args.get('bucket','day'),calendar=request.args.get('calendar','persian'),allow_full=account.get('role') in ('admin','supervisor'))
         elif dataset=='cdr':
@@ -903,20 +905,22 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             day=datetime.fromisoformat(value).date()
             if following:day+=timedelta(days=1)
             return datetime.combine(day,datetime.min.time(),ZoneInfo('Asia/Tehran')).timestamp()
-        if op in ('assign','member') and ('start_date' in body or 'end_date' in body):
+        if op in ('assign','assign_queue','member') and ('start_date' in body or 'end_date' in body):
             if 'start' in body or 'end' in body or not isinstance(body.get('start_date'),str):raise ValueError('invalid_unit_request')
             body=dict(body);body['start']=local_day(body.pop('start_date'))
             day=body.pop('end_date',None);body['end']=local_day(day,True) if day else None
-        if op=='close' and 'end_date' in body:
+        if op in ('close','close_queue') and 'end_date' in body:
             if 'end' in body:raise ValueError('invalid_unit_request')
             body=dict(body);body['end']=local_day(body.pop('end_date'),True)
         specs={
             'create':({'operation','name','kind','parent'},lambda:unit_store.create_unit(body.get('name'),body.get('kind'),body.get('parent'),actor=owner)),
             'assign':({'operation','unit_id','endpoint','start','end'},lambda:unit_store.assign_endpoint(body.get('unit_id'),body.get('endpoint'),body.get('start'),body.get('end'),actor=owner)),
+            'assign_queue':({'operation','unit_id','queue','start','end'},lambda:unit_store.assign_queue(body.get('unit_id'),body.get('queue'),body.get('start'),body.get('end'),actor=owner)),
             'member':({'operation','unit_id','username','start','end'},lambda:unit_store.add_member(body.get('unit_id'),body.get('username'),body.get('start'),body.get('end'),actor=owner)),
             'grant':({'operation','unit_id','username','capability','descendants'},lambda:unit_store.grant(body.get('username'),body.get('unit_id'),body.get('capability'),descendants=body.get('descendants',False),actor=owner)),
             'revoke':({'operation','id'},lambda:unit_store.revoke(body.get('id'),actor=owner)),
             'close':({'operation','id','end','membership'},lambda:unit_store.close_interval(body.get('id'),body.get('end'),membership=body.get('membership',False),actor=owner)),
+            'close_queue':({'operation','id','end'},lambda:unit_store.close_queue(body.get('id'),body.get('end'),actor=owner)),
         }
         if op not in specs or set(body)-specs[op][0] or op=='close' and type(body.get('membership',False)) is not bool:
             raise ValueError('invalid_unit_request')
@@ -927,6 +931,17 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             ident=specs[op][1]()
         app.logger.info('organization access changed actor=%r operation=%s',owner,op)
         return jsonify(id=ident,revision=unit_store.revision()),201
+
+    @app.get('/api/organization/reports/queues')
+    @login_required
+    @safe
+    def organization_queue_summary():
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        owner=str(current_user.get_id());_,start,end=context()
+        if set(request.args)-{'from','to'}:raise ValueError('invalid_unit_report_filter')
+        data=unit_queue.summary(archive,unit_store,owner,start,end)
+        if str(current_user.get_id())!=owner or 'reports' not in sections():abort(403)
+        return jsonify(data)
 
     @app.get('/api/organization/reports/cdr/summary')
     @login_required
