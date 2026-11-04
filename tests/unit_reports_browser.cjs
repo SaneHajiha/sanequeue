@@ -26,6 +26,7 @@ const path=require('node:path');
    if(url.pathname.startsWith('/api/history/cdr/aggregate/')){aggregateExports.push({path:url.pathname,party:url.searchParams.get('party'),origin:url.searchParams.get('origin'),weekdays:url.searchParams.get('weekdays'),bucket:url.searchParams.get('bucket'),csrf:request.headers()['x-csrf-token']});return route.fulfill({contentType:'text/csv',body:'heading\nvalue\n'});}
    if(url.pathname==='/api/organization/tokens')return route.fulfill({json:request.method()==='POST'?{token:'synthetic-only-token',id:'a'.repeat(32),expires:1890000000}:{tokens:[]}});
    if(url.pathname==='/api/organization/reports/queues')return route.fulfill({json:{queues:[{queue:'8001',visits:2,answered:1,abandoned:1,average_wait_seconds:8,sla_percent:100}]}});
+   if(url.pathname==='/api/organization/reports/queues/visits')return route.fulfill({json:{rows:[{queue:'8001',entered:1792820000,caller:'***',outcome:'answered',wait_seconds:2,talk_seconds:10}],next:null}});
    if(url.pathname==='/api/organization/access/changes')return route.fulfill({json:{rows:[{at:1792820000,actor:'admin',operation:'grant',target:'a'.repeat(32)}]}});
    if(url.pathname==='/api/organization/access'){
     if(request.method()==='POST'){writes.push(request.postDataJSON());return route.fulfill({json:{id:'b'.repeat(32),revision:2}});}
@@ -41,6 +42,8 @@ const path=require('node:path');
   await page.addScriptTag({path:path.resolve('qpanel/themes/qpanel/static/js/unit-reports.js')});
   await page.click('#unit-report-run');await page.waitForSelector('#unit-report-table tbody tr');
   await page.locator('#unit-queue-run').click();await page.waitForFunction(()=>document.getElementById('unit-queue-table').textContent.includes('8001'));
+  await page.locator('#history-unit-section details').filter({has:page.locator('#unit-queue-visits-run')}).locator('summary').click();
+  await page.locator('#unit-queue-visits-run').click();await page.waitForFunction(()=>document.getElementById('unit-queue-visits-table').textContent.includes('8001'));
   assert.equal(await page.locator('#unit-report-table audio').count(),1);
   assert.equal(await page.locator('#unit-report-table a').count(),0);
   assert.match(await page.locator('#unit-trend-table').textContent(),/۱/);

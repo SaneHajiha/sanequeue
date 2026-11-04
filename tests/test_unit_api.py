@@ -81,6 +81,7 @@ class UnitAPITests(unittest.TestCase):
         self.post(operation='assign_queue',unit_id=first,queue='8001',start=self.case.stamp-10,end=self.case.stamp+50)
         self.post(operation='assign_queue',unit_id=second,queue='8001',start=self.case.stamp+50)
         self.post(operation='grant',unit_id=first,username='test',capability='summary')
+        self.post(operation='grant',unit_id=first,username='test',capability='call_details')
         c=self.case
         c.archive.append([c.event('cross','8001','ENTERQUEUE',45,['','09']),c.event('cross','8001','ABANDON',55,['1','1','10']),
                           c.event('later','8001','ENTERQUEUE',60,['','09']),c.event('later','8001','ABANDON',70,['1','1','10'])])
@@ -90,6 +91,19 @@ class UnitAPITests(unittest.TestCase):
         self.assertEqual(response.json['queues'][0]['visits'],1)
         self.assertEqual(response.json['eligibility'],'closed_visits_contained_in_assignment')
         self.assertNotIn('09123456789',response.get_data(as_text=True))
+        visit_url='/api/organization/reports/queues/visits?from=2026-10-24&to=2026-10-25'
+        masked=self.admin.get(visit_url);self.assertEqual(masked.status_code,200)
+        self.assertEqual(len(masked.json['rows']),1);self.assertNotIn('09123456789',masked.get_data(as_text=True))
+        self.assertNotIn('callid',masked.get_data(as_text=True));self.assertNotIn('agent',masked.get_data(as_text=True))
+        number_grant=self.post(operation='grant',unit_id=first,username='test',capability='full_numbers')
+        self.assertIn('09123456789',self.admin.get(visit_url).get_data(as_text=True))
+        self.assertNotIn('09123456789',self.case.client(role='viewer').get(visit_url).get_data(as_text=True))
+        c.archive.append([c.event('extra','8001','ENTERQUEUE',1,['','098']),c.event('extra','8001','ABANDON',2,['1','1','1'])])
+        while project_batch(c.archive)['processed']:pass
+        first_page=self.admin.get(visit_url+'&limit=1').json;self.assertIsNotNone(first_page['next'])
+        self.assertEqual(len(self.admin.get(visit_url+'&limit=1&cursor='+first_page['next']).json['rows']),1)
+        self.post(operation='revoke',id=number_grant)
+        self.assertEqual(self.admin.get(visit_url+'&limit=1&cursor='+first_page['next']).status_code,409)
         from sanequeue.security.unit_scope import UnitScopeStore
         from sanequeue.reporting.unit_queue import summary as queue_summary
         store=UnitScopeStore(self.case.archive.path.parent/'unit-scope.sqlite3')
@@ -419,6 +433,8 @@ class UnitAPITests(unittest.TestCase):
         queue_result=anonymous.get(url.replace('/cdr?','/queues?'),headers=authorization,base_url='https://localhost')
         self.assertEqual(queue_result.status_code,200);self.assertEqual(queue_result.json['queues'][0]['visits'],1)
         self.assertNotIn('09123456789',queue_result.get_data(as_text=True))
+        queue_visits=anonymous.get(url.replace('/cdr?','/queue-visits?'),headers=authorization,base_url='https://localhost')
+        self.assertEqual(queue_visits.status_code,200);self.assertEqual(len(queue_visits.json['rows']),1)
         trend=anonymous.get(url.replace('/cdr?','/trend?')+'&bucket=day',headers=authorization,base_url='https://localhost')
         self.assertEqual(trend.status_code,200);self.assertEqual(sum(r['inbound'] for r in trend.json['rows']),1)
         export_url=url.replace('/cdr?','/export.csv?')

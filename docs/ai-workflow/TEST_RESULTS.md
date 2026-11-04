@@ -367,3 +367,8 @@ Follow-up: 41 unit/API/CDR/theme tests passed with `..\venv\Scripts\python.exe -
 
 - `python -m unittest tests.test_unit_scope tests.test_unit_api tests.test_identity_lifecycle tests.test_reporting_cdr tests.test_reporting_cdr_api tests.test_reporting_queries tests.test_reporting_cdr_builder_jobs tests.test_reporting_cdr_plans`: ۱۴۲ آزمون موفق؛ آزمون مستقل تکمیلی مرز واگذاری و جداسازی مدیر واحد دوم نیز موفق بود.
 - آزمون مرورگر `tests/unit_reports_browser.cjs` با fixture ساختگی، ثبت انتساب صف و نمایش خلاصهٔ صف را تأیید کرد. فقط مراجعهٔ بسته و کاملاً داخل بازهٔ انتساب شمرده می‌شود؛ تماس واقعی، جزئیات صف و ضبط صف آزمون یا پیاده‌سازی کامل نشده‌اند.
+
+### ریز محدود مراجعه‌های صف واحد — ۱۴ آبان ۱۴۰۵
+
+- `python -m unittest tests.test_unit_scope tests.test_unit_api tests.test_identity_lifecycle tests.test_reporting_cdr tests.test_reporting_cdr_api tests.test_reporting_queries tests.test_reporting_cdr_builder_jobs tests.test_reporting_cdr_plans`: ۱۴۲ آزمون موفق. پوشاندن شماره، مرز واگذاری، محدودهٔ واحد، مجوز ریز، API و ابطال صفحه‌بندی با تغییر دسترسی بررسی شد.
+- آزمون مرورگر `tests/unit_reports_browser.cjs` با دادهٔ ساختگی، نمایش ریز مراجعه‌های صف را تأیید کرد. ضبط صف، خروجی مستقل صف، هم‌زمانی چندفرایندی و پذیرش تماس واقعی هنوز کامل یا آزموده نشده‌اند.

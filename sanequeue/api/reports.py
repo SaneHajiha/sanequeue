@@ -833,7 +833,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     @app.get('/api/organization/integration/<dataset>')
     @safe
     def organization_integration(dataset):
-        if dataset not in ('summary','queues','cdr','trend','export.csv','export.xlsx','export.pdf'):abort(404)
+        if dataset not in ('summary','queues','queue-visits','cdr','trend','export.csv','export.xlsx','export.pdf'):abort(404)
         if not request.is_secure:abort(403)
         if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
         header=request.headers.get('Authorization','')
@@ -850,8 +850,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         start=datetime.combine(first,datetime.min.time(),ZoneInfo('Asia/Tehran')).timestamp()
         end=datetime.combine(last,datetime.min.time(),ZoneInfo('Asia/Tehran')).timestamp()
         allowed=unit_cdr._FILTERS
-        extra={'from','to'}|({'cursor','limit'} if dataset=='cdr' else {'bucket','calendar'} if dataset=='trend' else set())
-        if dataset=='queues':allowed=frozenset()
+        extra={'from','to'}|({'cursor','limit'} if dataset in ('cdr','queue-visits') else {'bucket','calendar'} if dataset=='trend' else set())
+        if dataset in ('queues','queue-visits'):allowed=frozenset()
         if set(request.args)-allowed-extra:raise ValueError('invalid_unit_report_filter')
         filters={key:request.args[key] for key in allowed if request.args.get(key) not in (None,'')}
         if 'weekdays' in filters:filters['weekdays']=filters['weekdays'].split(',')
@@ -861,6 +861,12 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if not required['units'] or not set(required['units']).issubset(api_scope['units']):abort(403)
         if dataset=='summary':data=unit_cdr.summary(archive,unit_store,owner,start,end,filters,allow_full=account.get('role') in ('admin','supervisor'))
         elif dataset=='queues':data=unit_queue.summary(archive,unit_store,owner,start,end)
+        elif dataset=='queue-visits':
+            limit=request.args.get('limit','50')
+            if not re.fullmatch(r'[0-9]{1,3}',limit):raise ValueError('invalid_unit_page_limit')
+            secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+            data=unit_queue.visits(archive,unit_store,owner,start,end,cursor=request.args.get('cursor'),limit=int(limit),
+                                   secret=secret,allow_full=account.get('role') in ('admin','supervisor'))
         elif dataset=='trend':
             data=unit_cdr.trend(archive,unit_store,owner,start,end,filters,bucket=request.args.get('bucket','day'),calendar=request.args.get('calendar','persian'),allow_full=account.get('role') in ('admin','supervisor'))
         elif dataset=='cdr':
@@ -941,6 +947,21 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if set(request.args)-{'from','to'}:raise ValueError('invalid_unit_report_filter')
         data=unit_queue.summary(archive,unit_store,owner,start,end)
         if str(current_user.get_id())!=owner or 'reports' not in sections():abort(403)
+        return jsonify(data)
+
+    @app.get('/api/organization/reports/queues/visits')
+    @login_required
+    @safe
+    def organization_queue_visits():
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        owner=str(current_user.get_id());current_role=role();_,start,end=context()
+        if set(request.args)-{'from','to','cursor','limit'}:raise ValueError('invalid_unit_report_filter')
+        limit=request.args.get('limit','50')
+        if not re.fullmatch(r'[0-9]{1,3}',limit):raise ValueError('invalid_unit_page_limit')
+        secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+        data=unit_queue.visits(archive,unit_store,owner,start,end,cursor=request.args.get('cursor'),limit=int(limit),
+                               secret=secret,allow_full=current_role in ('admin','supervisor'))
+        if str(current_user.get_id())!=owner or role()!=current_role or 'reports' not in sections():abort(403)
         return jsonify(data)
 
     @app.get('/api/organization/reports/cdr/summary')
