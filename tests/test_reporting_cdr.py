@@ -1,4 +1,6 @@
+import csv
 from datetime import datetime
+import io
 from pathlib import Path
 import tempfile
 import unittest
@@ -7,7 +9,8 @@ from zoneinfo import ZoneInfo
 
 from sanequeue.reporting.store import Archive, Event, QueryDeadline
 from sanequeue.reporting.facts import project_batch
-from sanequeue.reporting.cdr_queries import page, summary, unique_inbound
+from sanequeue.reporting.cdr_queries import page, summary, unique_inbound, unique_inbound_csv, unique_inbound_document
+from sanequeue.reporting.cdr_trend import report as trend
 
 
 class CDRTests(unittest.TestCase):
@@ -61,6 +64,24 @@ class CDRTests(unittest.TestCase):
         self.assertEqual(sum(row['segments_started'] for row in data['endpoints']),
                          data['totals']['segments_started'])
 
+    def test_endpoint_performance_dispositions_remain_distinct(self):
+        self.seed(self.event('answered'),self.event('busy',151,disposition='BUSY'),
+                  self.event('no-answer',152,disposition='NO ANSWER'),
+                  self.event('failed',153,disposition='FAILED'),self.event('unknown',154,disposition='UNKNOWN'))
+        data=summary(self.archive,100,200);row=data['endpoints'][0]
+        self.assertEqual(row['segments_started'],5)
+        self.assertEqual((row['answered_segments'],row['unanswered_segments'],row['unknown_disposition_segments']),(1,3,1))
+        self.assertEqual((row['no_answer_segments'],row['busy_segments'],row['other_failed_segments']),(1,1,1))
+
+    def test_multiple_observed_endpoints_are_bounded_and_do_not_include_unknown(self):
+        self.seed(self.event('one'),self.event('two',151,channel='SIP/200-000000ab'),
+                  self.event('unknown',152,channel='SIP/300-000000ab'))
+        data=summary(self.archive,100,200,{'endpoint':'PJSIP/100, SIP/200'})
+        self.assertEqual(data['totals']['segments_started'],2)
+        self.assertEqual({row['endpoint'] for row in data['endpoints']},{'PJSIP/100','SIP/200'})
+        for bad in ('PJSIP/100,',','.join(['SIP/200']*21),'PJSIP/100,SIP/200\' OR 1'):
+            with self.assertRaises(ValueError):summary(self.archive,100,200,{'endpoint':bad})
+
     def test_unique_inbound_counts_numbers_not_segments_or_people(self):
         stamp=datetime(2026,10,24,9,tzinfo=ZoneInfo('Asia/Tehran')).timestamp()
         inbound=dict(channel='PJSIP/provider-main-000000af',dstchannel='SIP/200-000000ae')
@@ -72,12 +93,105 @@ class CDRTests(unittest.TestCase):
         data=unique_inbound(self.archive,stamp,stamp+2*86400)
         self.assertEqual((data['total_unique'],data['known_number_segments'],data['unknown_number_segments']),(1,3,1))
         self.assertEqual([row['unique_numbers'] for row in data['by_day']],[1,1])
+        self.assertEqual((data['repeat_numbers'],data['repeat_number_percent']),(1,100.0))
+        self.assertEqual([row['repeat_numbers'] for row in data['by_day']],[1,0])
+        self.assertEqual(data['contract']['repeat_percent_denominator'],'known_distinct_inbound_source_numbers')
         self.assertNotIn('09123456789',str(data));self.assertFalse(data['contract']['unique_conversations_proven'])
         self.assertEqual(unique_inbound(self.archive,stamp,stamp+2*86400,{'hour_from':9,'hour_to':9})['total_unique'],1)
         with self.assertRaises(ValueError):unique_inbound(self.archive,stamp,stamp+2*86400,{'direction':'outbound'})
         with patch('sanequeue.reporting.cdr_queries.MAX_UNIQUE_INBOUND_SEGMENTS',2):
             limited=unique_inbound(self.archive,stamp,stamp+2*86400)
         self.assertEqual(limited['state'],'limited');self.assertNotIn('total_unique',limited)
+
+    def test_repeat_number_share_counts_segments_not_proven_calls(self):
+        stamp=datetime(2026,10,24,9,tzinfo=ZoneInfo('Asia/Tehran')).timestamp()
+        inbound=dict(channel='PJSIP/provider-main-000000af',dstchannel='SIP/200-000000ae')
+        self.seed(self.event('a',stamp,src='09120000001',**inbound),
+                  self.event('b',stamp+1,src='09120000001',**inbound),
+                  self.event('c',stamp+2,src='09120000002',**inbound),
+                  self.event('d',stamp+3,src='anonymous',**inbound))
+        data=unique_inbound(self.archive,stamp,stamp+86400)
+        self.assertEqual((data['total_unique'],data['repeat_numbers'],data['repeat_number_percent']),(2,1,50.0))
+        self.assertEqual(data['by_day'][0]['repeat_numbers'],1)
+        self.assertNotIn('09120000001',str(data))
+        self.assertIn('not_proven_repeat_calls',data['contract']['repeat'])
+        empty=unique_inbound(self.archive,stamp+86400,stamp+172800)
+        self.assertEqual(empty['repeat_numbers'],0)
+        self.assertIsNone(empty['repeat_number_percent'])
+        rows=list(csv.DictReader(io.StringIO(unique_inbound_csv(empty,'en').decode('utf-8-sig'))))
+        self.assertEqual(rows[0]['period_distinct_numbers'],'0')
+        self.assertEqual(rows[0]['period_multi_segment_percent'],'')
+        self.assertEqual(rows[0]['day'],'')
+        with self.assertRaises(ValueError):unique_inbound_csv({'state':'limited'},'fa')
+        from sanequeue.reporting.pdf_stream import PdfFailure
+        limited=dict(data,by_day=data['by_day']*101)
+        with self.assertRaises(PdfFailure):unique_inbound_document(limited,'en','pdf')
+
+    def test_organizational_cdr_scope_is_historical_and_fails_closed(self):
+        from sanequeue.security.unit_scope import UnitScopeStore
+        store=UnitScopeStore(Path(self.temp.name)/'units.db');store.initialize()
+        org=store.create_unit('Org','organization');dept=store.create_unit('Dept','department',org)
+        unit=store.create_unit('Sales','unit',dept);other=store.create_unit('Support','unit',dept)
+        store.assign_endpoint(unit,'PJSIP/100',100,160)
+        store.assign_endpoint(other,'PJSIP/100',160,300)
+        store.assign_endpoint(other,'SIP/200',100,300)
+        store.grant('manager',unit,'call_details');store.grant('manager',unit,'summary')
+        self.seed(self.event('allowed',150),self.event('after-transfer',160),
+                  self.event('other',155,channel='PJSIP/provider-main-000000aa',dstchannel='SIP/200-000000ab'),
+                  self.event('unknown',156,channel='unknown',dstchannel=''))
+        detailed=store.resolve('manager','call_details',100,300)
+        self.assertEqual([r['id'] for r in page(self.archive,100,300,unit_scope=detailed)['rows']],['allowed'])
+        aggregate=summary(self.archive,100,300,unit_scope=store.resolve('manager','summary',100,300))
+        self.assertEqual(aggregate['totals']['segments_started'],1)
+        self.assertEqual(aggregate['scope'],'organization_unit')
+        empty=store.resolve('other','call_details',100,300)
+        self.assertEqual(page(self.archive,100,300,unit_scope=empty)['rows'],[])
+        with self.assertRaises(ValueError):summary(self.archive,100,300,unit_scope=detailed)
+        with self.assertRaises(ValueError):page(self.archive,100,301,unit_scope=detailed)
+
+    def test_unit_summary_resolves_scope_and_rechecks_revocation(self):
+        from sanequeue.security.unit_scope import UnitScopeStore, ScopeConflict
+        from sanequeue.reporting.unit_cdr import summary as scoped_summary, UnitAccessDenied
+        store=UnitScopeStore(Path(self.temp.name)/'units.db');store.initialize()
+        org=store.create_unit('Org','organization');dept=store.create_unit('Dept','department',org)
+        unit=store.create_unit('Sales','unit',dept)
+        store.assign_endpoint(unit,'PJSIP/100',100,200)
+        grant=store.grant('manager',unit,'summary')
+        self.seed(self.event('allowed',150),self.event('out-of-period',210))
+        data=scoped_summary(self.archive,store,'manager',100,300,{'direction':'outbound'})
+        self.assertEqual(data['totals']['segments_started'],1)
+        self.assertNotIn('trunk_traffic',data);self.assertNotIn('endpoints',data)
+        self.assertNotIn('09123456789',str(data))
+        with self.assertRaises(ValueError):
+            scoped_summary(self.archive,store,'manager',100,300,{'src':'09123456789'})
+        with self.assertRaises(UnitAccessDenied):
+            scoped_summary(self.archive,store,'other',100,300)
+        original=summary
+        def revoke_during_query(*args,**kwargs):
+            result=original(*args,**kwargs);store.revoke(grant);return result
+        with patch('sanequeue.reporting.unit_cdr.cdr_queries.summary',side_effect=revoke_during_query):
+            with self.assertRaises(ScopeConflict):scoped_summary(self.archive,store,'manager',100,300)
+        with self.assertRaises(UnitAccessDenied):
+            scoped_summary(self.archive,store,'manager',100,300)
+
+    def test_trend_buckets_directions_and_limits(self):
+        stamp=datetime(2026,10,24,9,tzinfo=ZoneInfo('Asia/Tehran')).timestamp()
+        self.seed(self.event('out',stamp),self.event('in',stamp+3600,
+            channel='PJSIP/provider-main-000000af',dstchannel='SIP/200-000000ae'),
+            self.event('unclassified',stamp+86400,channel='unknown',dstchannel=''))
+        hourly=trend(self.archive,stamp,stamp+2*86400,bucket='hour')
+        self.assertEqual([row['outbound'] for row in hourly['rows']],[1,0,0])
+        self.assertEqual([row['inbound'] for row in hourly['rows']],[0,1,0])
+        self.assertEqual(hourly['rows'][-1]['unknown'],1)
+        self.assertEqual(len(trend(self.archive,stamp,stamp+2*86400,bucket='day')['rows']),2)
+        self.assertEqual(trend(self.archive,stamp,stamp+2*86400,bucket='week')['rows'][0]['period'],'2026-10-24')
+        self.assertEqual(trend(self.archive,stamp,stamp+2*86400,bucket='month')['rows'][0]['period'],'2026-10')
+        self.assertEqual(trend(self.archive,stamp,stamp+2*86400,bucket='month',calendar='persian')['rows'][0]['period'],'1405/08')
+        with self.assertRaises(ValueError):trend(self.archive,stamp,stamp+86400,bucket='year')
+        with patch('sanequeue.reporting.cdr_trend.MAX_SEGMENTS',2),self.assertRaises(QueryDeadline):
+            trend(self.archive,stamp,stamp+2*86400)
+        with patch('sanequeue.reporting.cdr_trend.MAX_BUCKETS',1),self.assertRaises(QueryDeadline):
+            trend(self.archive,stamp,stamp+2*86400,bucket='hour')
 
     def test_numeric_filters_normalize_unicode_and_never_interpolate(self):
         self.seed(self.event('a', outbound_cnum='02177777777', did='8001'),
@@ -121,6 +235,15 @@ class CDRTests(unittest.TestCase):
         result = page(self.archive, stamp, stamp+86400, dict(hour_from=23,hour_to=2,weekdays=[0]))
         self.assertEqual([r['id'] for r in result['rows']], ['saturday'])
         self.assertEqual(page(self.archive, stamp, stamp+7200)['rows'][0]['id'], 'saturday')
+
+    def test_daily_time_filter_is_inclusive_and_handles_overnight(self):
+        stamp=datetime(2026,10,24,9,30,0,tzinfo=ZoneInfo('Asia/Tehran')).timestamp()
+        self.seed(self.event('first',stamp),self.event('later',stamp+90),self.event('night',stamp+14*3600))
+        result=page(self.archive,stamp,stamp+86400,dict(time_from='09:30',time_to='09:30'))
+        self.assertEqual([r['id'] for r in result['rows']],['first'])
+        result=page(self.archive,stamp,stamp+86400,dict(time_from='23:00',time_to='09:30'))
+        self.assertEqual({r['id'] for r in result['rows']},{'first','night'})
+        with self.assertRaises(ValueError):page(self.archive,stamp,stamp+86400,dict(time_from='25:00'))
 
     def test_exact_inventory_frozen_across_replay_and_late_version(self):
         first = self.event('a')

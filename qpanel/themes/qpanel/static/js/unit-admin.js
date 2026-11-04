@@ -1,0 +1,33 @@
+(()=>{'use strict';
+ const $=id=>document.getElementById(id),panel=$('unit-access-panel');if(!panel)return;
+ const fa=document.documentElement.lang==='fa',t=(a,b)=>fa?a:b,out=$('unit-admin-feedback');let inventory=null,busy=false;
+ panel.querySelectorAll('input[type="date"]').forEach(input=>window.SaneQueueDates?.enhance(input));
+ const text=(tag,value)=>{const e=document.createElement(tag);e.textContent=value??'—';return e;};
+ const getConfig=()=>{try{return JSON.parse($('ops-config').textContent);}catch{return {};}};
+ async function request(method,body){const options={method,credentials:'same-origin',headers:{}};if(body){options.headers['Content-Type']='application/json';options.headers['X-CSRF-Token']=getConfig().csrf||'';options.body=JSON.stringify(body);}
+  const r=await fetch('/api/organization/access',options);if(!r.ok)throw Error(String(r.status));return r.json();}
+ function render(data){inventory=data;const units=data.units||[],names=new Map(units.map(u=>[u.id,u.name]));
+  panel.querySelectorAll('.unit-select,.unit-parent-select').forEach(select=>{const previous=select.value;select.replaceChildren();
+   if(select.classList.contains('unit-parent-select'))select.append(new Option(t('بدون والد','No parent'),''));
+   for(const u of units){const label=(u.parent?(names.get(u.parent)||'')+' / ':'')+u.name;const option=new Option(label,u.id);option.dataset.kind=u.kind;select.append(option);}if([...select.options].some(o=>o.value===previous))select.value=previous;});
+  const host=$('unit-admin-list'),fragment=document.createDocumentFragment();fragment.append(text('h3',t('مجوزهای فعال','Active permissions')));
+  const list=document.createElement('ul');for(const g of (data.grants||[]).filter(g=>g.active)){const li=document.createElement('li');
+   li.append(text('span',`${g.username} · ${names.get(g.unit_id)||'—'} · ${g.capability}${g.descendants?' +':''} `));
+   const button=text('button',t('لغو','Revoke'));button.type='button';button.addEventListener('click',()=>mutate({operation:'revoke',id:g.id}));li.append(button);list.append(li);}
+  if(!list.children.length)list.append(text('li',t('مجوزی ثبت نشده است.','No grants configured.')));fragment.append(list);
+  const open=$('unit-open-interval');open.replaceChildren();for(const [list,membership] of [[data.assignments||[],false],[data.members||[],true]])for(const item of list.filter(x=>x.ends==null)){const option=new Option((membership?t('عضویت','Membership'):t('داخلی','Extension'))+' · '+(item.username||item.endpoint)+' · '+(names.get(item.unit_id)||'—'),item.id);option.dataset.membership=String(membership);open.append(option);}
+  fragment.append(text('h3',t('انتساب‌های داخلی','Extension assignments')));const assignments=document.createElement('ul');
+  for(const a of data.assignments||[]){const li=text('li',`${names.get(a.unit_id)||'—'} · ${a.endpoint} · ${new Date(a.starts*1000).toLocaleDateString(fa?'fa-IR':'en-GB')} — ${a.ends?new Date((a.ends-1)*1000).toLocaleDateString(fa?'fa-IR':'en-GB'):t('باز','Open')}`);assignments.append(li);}
+  if(!assignments.children.length)assignments.append(text('li',t('انتسابی ثبت نشده است.','No assignments configured.')));fragment.append(assignments);host.replaceChildren(fragment);
+ }
+ async function refresh(){try{render(await request('GET'));out.textContent='';}catch{out.textContent=t('ساختار در دسترس نیست؛ مجوز مدیریت و گزارش سراسری لازم است.','Structure unavailable; global management and reporting permissions are required.');}}
+ async function mutate(body){if(busy)return;busy=true;try{await request('POST',body);await refresh();out.textContent=t('تغییر ثبت شد.','Change saved.');}catch{out.textContent=t('ثبت انجام نشد؛ مقادیر، تداخل تاریخ و دسترسی را بررسی کنید.','Could not save; check values, date overlap and permissions.');}finally{busy=false;}}
+ $('unit-admin-refresh').addEventListener('click',refresh);
+ $('unit-create-form').addEventListener('submit',event=>{event.preventDefault();const f=event.currentTarget;mutate({operation:'create',name:f.elements.name.value,kind:f.elements.kind.value,parent:f.elements.parent.value||null});});
+ for(const id of ['unit-assign-form','unit-member-form'])$(id).addEventListener('submit',event=>{event.preventDefault();const f=event.currentTarget;
+  try{const body={operation:id==='unit-assign-form'?'assign':'member',unit_id:f.elements.unit_id.value,start_date:f.elements.start.value,end_date:f.elements.end.value||null};
+   if(body.operation==='assign')body.endpoint=f.elements.endpoint.value.trim();else body.username=f.elements.username.value.trim();mutate(body);
+  }catch{out.textContent=t('تاریخ معتبر وارد کنید.','Enter a valid date.');}});
+ $('unit-grant-form').addEventListener('submit',event=>{event.preventDefault();const f=event.currentTarget;mutate({operation:'grant',unit_id:f.elements.unit_id.value,username:f.elements.username.value.trim(),capability:f.elements.capability.value,descendants:f.elements.descendants.checked});});
+ $('unit-close-form').addEventListener('submit',event=>{event.preventDefault();const f=event.currentTarget,select=$('unit-open-interval');if(!select.selectedOptions.length)return;mutate({operation:'close',id:select.value,end_date:f.elements.end.value,membership:select.selectedOptions[0].dataset.membership==='true'});});
+})();

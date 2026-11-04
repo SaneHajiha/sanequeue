@@ -58,3 +58,136 @@ body[data-view="reports"] .monitor-preferences { display: none !important; }
 
 /* PBX reports: keep common filters visible and secondary filters optional. */
 .history-cdr-primary{padding:16px 0;align-items:end}.history-cdr-primary>label{flex:1 1 155px}.history-cdr-primary>label:first-child{flex:2 1 240px}.history-cdr-primary>.history-cdr-advanced{order:2}.history-cdr-primary>button{order:1;min-width:140px}.history-cdr-advanced summary:focus-visible{outline:2px solid #3b82f6;outline-offset:4px}.history-cdr-result{margin-block:24px;border-top:1px solid var(--line);padding-top:16px}.history-cdr-result h3{margin:0 0 8px}.history-cdr-result .report-note{margin:0 0 12px}
+
+.history-filters label[hidden]{display:none!important}#history-cdr-table audio{min-width:190px;max-width:230px;height:36px}#history-cdr-table td:last-child{min-width:210px}#history-cdr-trend-bucket{min-height:40px}
+
+.history-cdr-charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.history-cdr-charts .history-cdr-result{min-width:0}@media(max-width:1050px){.history-cdr-charts{grid-template-columns:1fr}}
+
+.pbx-report-heading[hidden]{display:none}.pbx-report-heading{padding:8px 2px 0}.pbx-report-heading h2{font-size:1.5rem;margin:6px 0}.pbx-report-heading p{color:var(--muted);margin:0}body[data-report-target="history-cdr-section"] .reports-workspace>.report-intro{display:none}body[data-report-target="history-cdr-section"] #history-cdr-section>.panel-heading:first-child{display:none}
+
+/* PBX report workspace: keep the date and common filters together above results. */
+body[data-report-target="history-cdr-section"] .reports-workspace{gap:12px}
+body[data-report-target="history-cdr-section"] #history-cdr-section:not([hidden]){display:contents}
+body[data-report-target="history-cdr-section"] .history-navigation{order:0}
+body[data-report-target="history-cdr-section"] #history-cdr-heading{order:1}
+body[data-report-target="history-cdr-section"] #history-filters{order:2;margin-bottom:-12px;border-radius:12px 12px 0 0;border-bottom:0;padding:18px 20px 12px}
+body[data-report-target="history-cdr-section"] #history-cdr-filters{order:3;background:var(--card);border:1px solid var(--line);border-top:0;border-radius:0 0 12px 12px;padding:12px 20px 18px}
+body[data-report-target="history-cdr-section"] #history-cdr-time-help{order:4}
+body[data-report-target="history-cdr-section"] #history-cdr-feedback{order:5}
+body[data-report-target="history-cdr-section"] #history-cdr-summary{order:6}
+body[data-report-target="history-cdr-section"] .history-cdr-charts{order:7}
+body[data-report-target="history-cdr-section"] #history-cdr-section>.history-cdr-result{order:8}
+body[data-report-target="history-cdr-section"] .history-cdr-secondary{order:9}
+body[data-report-target="history-cdr-section"] #history-cdr-section>.history-analysis-details,body[data-report-target="history-cdr-section"] .report-scope-info{order:10}
+body[data-report-target="history-cdr-section"] #history-feedback{display:none}
+#history-cdr-summary{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+#history-cdr-summary .history-kpi{min-height:112px;border:1px solid var(--line);border-radius:10px;background:var(--card);box-shadow:0 2px 7px #142b4810;padding:18px}
+#history-cdr-summary .history-kpi:nth-child(1){border-top:3px solid #2563eb}#history-cdr-summary .history-kpi:nth-child(2){border-top:3px solid #10a579}#history-cdr-summary .history-kpi:nth-child(3){border-top:3px solid #e14b68}#history-cdr-summary .history-kpi:nth-child(4){border-top:3px solid #8564db}
+.history-cdr-charts{gap:12px}.history-cdr-charts .history-cdr-result,body[data-report-target="history-cdr-section"] #history-cdr-section>.history-cdr-result,body[data-report-target="history-cdr-section"] .history-cdr-secondary{margin:0;padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--card);min-width:0}
+#history-cdr-section>.history-cdr-result .table-wrap{overflow:auto}#history-cdr-table td,#history-cdr-table th{padding:12px 14px;text-align:start;vertical-align:middle}#history-cdr-table th{background:var(--surface-alt,var(--card));font-weight:650}#history-cdr-table td{font-size:13px}#history-cdr-table td.pbx-recording{min-width:210px}#history-cdr-table td:last-child{min-width:80px}
+.pbx-direction,.pbx-result{font-weight:650}.pbx-row-details summary{cursor:pointer;color:var(--accent,#2563eb)}.pbx-row-details>div{display:flex;gap:12px;justify-content:space-between;padding:5px}.pbx-row-details strong{font-weight:600}
+body[data-report-target="history-cdr-section"] #history-cdr-time-help,body[data-report-target="history-cdr-section"] #history-cdr-feedback{margin:0 4px;font-size:12px;color:var(--muted)}
+@media(max-width:900px){#history-cdr-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:480px){#history-cdr-summary{grid-template-columns:1fr 1fr}#history-cdr-summary .history-kpi{min-height:92px;padding:12px}}
+
+body[data-report-target="history-cdr-section"] #history-cdr-section>section{order:9;margin:0;padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--card)}body[data-report-target="history-cdr-section"] #history-cdr-section>.history-cdr-result{order:8}
+
+/* Light, compact five-metric call-report composition. */
+body[data-report-target="history-cdr-section"] #history-cdr-summary{grid-template-columns:repeat(5,minmax(0,1fr))}
+body[data-report-target="history-cdr-section"] .pbx-report-extra-help{order:10}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-report-chart{border:0;padding:0;margin:10px 0;background:transparent}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-report-chart figcaption strong{display:none}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-chart-note{font-size:11px;margin:4px 0}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-chart-legend{margin:6px 0}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .report-note{font-size:12px;line-height:1.7}
+body[data-report-target="history-cdr-section"] .pbx-more-table>summary,.history-cdr-secondary>summary{cursor:pointer;color:var(--accent);font-weight:650;min-height:40px;align-content:center}
+body[data-report-target="history-cdr-section"] #history-cdr-summary .history-kpi:nth-child(5){border-top:3px solid #28a5d5}
+body[data-report-target="history-cdr-section"] #history-cdr-summary .history-kpi small{font-size:11px;color:var(--muted)}
+body[data-report-target="history-cdr-section"] #history-cdr-filters .history-cdr-advanced{margin-top:2px}
+body[data-report-target="history-cdr-section"] #history-cdr-filters .history-cdr-advanced>summary{padding-inline:4px}
+body[data-report-target="history-cdr-section"] #history-cdr-filters .history-cdr-advanced .history-analysis-controls{padding:12px 4px}
+@media(min-width:761px){body[data-report-target="history-cdr-section"] .history-navigation{display:none}}
+@media(max-width:1050px){body[data-report-target="history-cdr-section"] #history-cdr-summary{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:600px){body[data-report-target="history-cdr-section"] #history-cdr-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+body[data-report-target="history-cdr-section"] #history-cdr-filters>button[type=submit]{order:3}
+body[data-report-target="history-cdr-section"] #history-cdr-filters>button[type=reset]{order:4}
+.pbx-chip{display:inline-block;padding:3px 9px;border-radius:6px;font-size:12px;font-weight:650;background:var(--soft);color:var(--ink)}
+body:not(.dark) .pbx-chip.direction-inbound,body:not(.dark) .pbx-chip.status-ANSWERED{background:#e0f7ee;color:#06714c}
+body:not(.dark) .pbx-chip.direction-outbound{background:#e7f1ff;color:#1555a4}
+body:not(.dark) .pbx-chip.direction-internal{background:#f1eaff;color:#6b36a1}
+body:not(.dark) .pbx-chip.status-FAILED,body:not(.dark) .pbx-chip.status-BUSY{background:#fff0f2;color:#ae3047}
+
+.pbx-interval-tabs{display:flex;gap:2px;flex-wrap:wrap}.pbx-interval-tabs button{border:1px solid var(--line);background:var(--card);color:var(--ink);min-height:36px;padding:4px 12px;font:inherit;border-radius:6px;cursor:pointer}.pbx-interval-tabs button[aria-pressed="true"]{background:#176bea;color:#fff;border-color:#176bea}.pbx-interval-tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* PBX call report: keep the approved dense desktop composition while preserving
+   the shared date picker, chart controls and the other reporting views. */
+body[data-report-target="history-cdr-section"] .reports-workspace{gap:8px}
+body[data-report-target="history-cdr-section"] .pbx-report-heading h2{margin:0 0 3px;font-size:20px}
+body[data-report-target="history-cdr-section"] .pbx-report-heading p{margin:0;font-size:12px}
+body[data-report-target="history-cdr-section"] .pbx-report-heading .report-eyebrow{display:none}
+body[data-report-target="history-cdr-section"] #history-filters{display:grid;grid-template-columns:minmax(310px,2.5fr) repeat(4,minmax(105px,1fr));align-items:end;gap:8px;padding:12px 14px 8px;margin-bottom:-8px}
+body[data-report-target="history-cdr-section"] #history-filters .sq-range-presets{grid-column:auto;flex-wrap:wrap;gap:4px;padding:0;margin:0;border:0}
+body[data-report-target="history-cdr-section"] #history-filters .sq-range-caption{flex:1 0 100%;margin:0}
+body[data-report-target="history-cdr-section"] #history-filters .sq-range-presets button{min-height:32px;padding:3px 8px;border-radius:5px}
+body[data-report-target="history-cdr-section"] #history-filters .sq-range-presets button[aria-pressed=true]{background:#176bea;border-color:#176bea;color:#fff}
+body[data-report-target="history-cdr-section"] #history-filters>label,body[data-report-target="history-cdr-section"] #history-filters>.sq-date-field{min-width:0;gap:4px;font-size:12px}
+body[data-report-target="history-cdr-section"] #history-filters input,body[data-report-target="history-cdr-section"] #history-filters .sq-date-trigger{min-height:36px;padding:5px 8px;border-radius:5px;font-size:12px}
+body[data-report-target="history-cdr-section"] #history-filters .sq-date{gap:0}
+body[data-report-target="history-cdr-section"] #history-filters .sq-date-native{font-size:10px;line-height:1}
+body[data-report-target="history-cdr-section"] #history-filters .sq-range-summary{grid-column:1/-1;margin:0;padding:0;font-size:11px}
+body[data-report-target="history-cdr-section"] #history-cdr-filters{padding:8px 14px 12px;gap:8px}
+body[data-report-target="history-cdr-section"] #history-cdr-filters>label{flex:1 1 150px;gap:4px;font-size:12px}
+body[data-report-target="history-cdr-section"] #history-cdr-filters .history-cdr-advanced{flex:1 0 100%;margin:0;border:0;border-top:1px solid var(--line);border-radius:0}
+body[data-report-target="history-cdr-section"] #history-cdr-filters .history-cdr-advanced>summary{min-height:30px;padding:5px 0;font-weight:650}
+body[data-report-target="history-cdr-section"] #history-cdr-filters .history-cdr-advanced .history-analysis-controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:4px 0 6px}
+body[data-report-target="history-cdr-section"] #history-cdr-filters .history-cdr-advanced label{min-width:0;gap:4px;font-size:12px}
+body[data-report-target="history-cdr-section"] #history-cdr-filters input,body[data-report-target="history-cdr-section"] #history-cdr-filters select,body[data-report-target="history-cdr-section"] #history-cdr-filters>button{min-height:36px;border-radius:5px}
+body[data-report-target="history-cdr-section"] #history-cdr-filters>button{min-width:125px}
+body[data-report-target="history-cdr-section"] #history-cdr-summary{gap:8px}
+body[data-report-target="history-cdr-section"] #history-cdr-summary .history-kpi{min-height:82px;padding:11px 13px;border-top-width:1px;border-radius:7px;box-shadow:0 1px 4px #183b6310}
+body[data-report-target="history-cdr-section"] #history-cdr-summary .history-kpi span{font-size:12px}
+body[data-report-target="history-cdr-section"] #history-cdr-summary .history-kpi strong{font-size:20px;line-height:1.25;margin:5px 0}
+body[data-report-target="history-cdr-section"] .history-cdr-charts{gap:8px}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .history-cdr-result,body[data-report-target="history-cdr-section"] #history-cdr-section>.history-cdr-result{padding:12px 14px;border-radius:7px}
+body[data-report-target="history-cdr-section"] .history-cdr-charts h3,body[data-report-target="history-cdr-section"] #history-cdr-section>.history-cdr-result h3{font-size:14px;margin:0}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-report-chart{margin:4px 0}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-report-chart figcaption>span{font-size:11px;line-height:1.4}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-chart-legend{margin:4px 0;gap:10px;font-size:11px}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-chart-viewport svg{max-height:220px;width:100%}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-chart-note,body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-chart-tooltip,body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-chart-navigation{font-size:11px;line-height:1.4;margin:3px 0}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-report-chart details{margin:0}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-report-chart summary{padding:3px 0}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-chart-actions{padding-top:2px}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .sq-chart-actions button{min-height:32px;padding:3px 8px}
+body[data-report-target="history-cdr-section"] #history-cdr-table td,body[data-report-target="history-cdr-section"] #history-cdr-table th{padding:8px 10px;font-size:12px}
+@media(max-width:1200px){body[data-report-target="history-cdr-section"] #history-filters{grid-template-columns:repeat(4,minmax(0,1fr))}body[data-report-target="history-cdr-section"] #history-filters .sq-range-presets{grid-column:1/-1;flex-wrap:wrap}body[data-report-target="history-cdr-section"] #history-filters .sq-range-caption{flex:0 0 auto}}
+@media(max-width:760px){body[data-report-target="history-cdr-section"] #history-filters{grid-template-columns:repeat(2,minmax(0,1fr))}body[data-report-target="history-cdr-section"] #history-cdr-filters .history-cdr-advanced .history-analysis-controls{grid-template-columns:repeat(2,minmax(0,1fr))}body[data-report-target="history-cdr-section"] .history-cdr-charts{grid-template-columns:1fr}}
+body[data-report-target="history-cdr-section"] #history-cdr-filters .pbx-extra-filters{grid-column:1/-1;border-top:1px solid var(--line)}
+body[data-report-target="history-cdr-section"] #history-cdr-filters .pbx-extra-filters>summary{cursor:pointer;padding:7px 0;font-size:12px;color:var(--accent)}
+body[data-report-target="history-cdr-section"] .history-cdr-charts>section:has(#history-cdr-trend-chart){order:2}
+body[data-report-target="history-cdr-section"] .history-cdr-charts>section:has(#history-cdr-endpoint-chart){order:1}
+/* Reduce duplicated heading and inherited panel spacing on this report only. */
+body[data-report-target="history-cdr-section"] .page-heading{height:0;min-height:0;margin:0;position:relative}
+body[data-report-target="history-cdr-section"] .page-heading>div:first-child{display:none}
+body[data-report-target="history-cdr-section"] .heading-actions{position:absolute;inset-inline-end:0;top:0;z-index:1}
+body[data-report-target="history-cdr-section"] #history-cdr-filters .history-cdr-advanced{padding:0}
+body[data-report-target="history-cdr-section"] #history-cdr-filters input,body[data-report-target="history-cdr-section"] #history-cdr-filters select{padding:5px 8px}
+body[data-report-target="history-cdr-section"] #history-cdr-time-help,body[data-report-target="history-cdr-section"] #history-cdr-feedback{padding:0;line-height:1.5}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .panel-heading,body[data-report-target="history-cdr-section"] #history-cdr-section>.history-cdr-result>.panel-heading{padding:0;background:transparent;border:0}
+body[data-report-target="history-cdr-section"] .history-cdr-charts .report-note,body[data-report-target="history-cdr-section"] #history-cdr-section>.history-cdr-result>.report-note{padding:3px 0;line-height:1.5}
+@media(min-width:1201px){body[data-report-target="history-cdr-section"] #history-filters .sq-range-presets{flex-wrap:nowrap;overflow-x:auto}body[data-report-target="history-cdr-section"] #history-filters .sq-range-caption{position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden}}
+body[data-report-target="history-cdr-section"] #history-cdr-filters{gap:4px}
+body[data-report-target="history-cdr-section"] #history-cdr-filters .history-cdr-advanced .history-analysis-controls{gap:6px}
+body[data-report-target="history-cdr-section"] #history-cdr-filters .history-cdr-advanced label{line-height:1.25}
+body[data-report-target="history-cdr-section"] #history-cdr-filters input,body[data-report-target="history-cdr-section"] #history-cdr-filters select{height:34px;min-height:34px}
+body[data-report-target="history-cdr-section"] #history-cdr-filters .pbx-extra-filters>summary{padding:3px 0;line-height:18px}
+body[data-report-target="history-cdr-section"] #history-filters .sq-range-presets button{white-space:nowrap;flex:0 0 auto}
+body[data-report-target="history-cdr-section"] .module-navigation .nav-item[data-view="reports"].active{background:transparent;color:var(--ink);font-weight:400}
+body[data-report-target="history-cdr-section"] .module-navigation .nav-item[data-view="reports"].active:hover{background:var(--soft);color:var(--ink)}
+/* Override the generic non-live panel margins and headings for this view. */
+body[data-report-target="history-cdr-section"] #reports-view #history-filters{margin-bottom:-8px}
+body[data-report-target="history-cdr-section"] #reports-view .history-cdr-charts .panel-heading,body[data-report-target="history-cdr-section"] #reports-view #history-cdr-section>.history-cdr-result>.panel-heading{padding:0;background:transparent;border:0}
+body[data-report-target="history-cdr-section"] #history-cdr-trend-feedback:empty{display:none}
+body[data-report-target="history-cdr-section"] .pbx-metric-explanation{font-size:11px;color:var(--muted)}
+body[data-report-target="history-cdr-section"] .pbx-metric-explanation summary{cursor:pointer;padding:3px 0;color:var(--accent)}
+body[data-report-target="history-cdr-section"] .pbx-metric-explanation p{line-height:1.6;margin:4px 0}

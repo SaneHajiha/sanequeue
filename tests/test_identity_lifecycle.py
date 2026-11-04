@@ -47,6 +47,23 @@ class IdentityLifecycleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'cannot_delete_self'):delete_account(self.path,'admin','admin')
         with self.assertRaisesRegex(ValueError,'last_admin'):delete_account(self.path,'admin','other')
 
+    def test_organizational_grants_do_not_survive_account_recreation(self):
+        from sanequeue.security.unit_scope import UnitScopeStore
+        for name in ('admin','victim'):set_account(self.path,name,'admin' if name=='admin' else 'viewer','','Synthetic-password-123')
+        store=UnitScopeStore(self.root/'units.sqlite3');store.initialize()
+        org=store.create_unit('Org','organization');dept=store.create_unit('Dept','department',org)
+        unit=store.create_unit('Unit','unit',dept)
+        store.assign_endpoint(unit,'PJSIP/100',100,200)
+        store.grant('victim',unit,'summary');store.add_member(unit,'victim',100,200)
+        token=store.issue_token('victim',1)['token']
+        old=store.resolve('victim','summary',100,200);self.assertTrue(old['units'])
+        delete_account(self.path,'victim','admin',lambda:store.revoke_subject('victim'))
+        self.assertIsNone(store.authenticate_token(token))
+        self.assertFalse(store.still_current(old))
+        set_account(self.path,'victim','viewer','','Synthetic-password-123')
+        self.assertFalse(store.resolve('victim','summary',100,200)['units'])
+        self.assertFalse(store.inventory()['members'])
+
     def test_account_limit_rejects_before_corrupting_readable_registry(self):
         registry={f'user{index}':dict(role='viewer',phone='',password_hash='pbkdf2:sha256:synthetic') for index in range(100)}
         write_accounts(self.path,registry)

@@ -15,3 +15,12 @@ def diagnostics_preview_request(path):
     """Only private incident storage/workflow; no collection/control routes."""
     return path == '/api/diagnostics/incidents' or re.fullmatch(
         r'/api/diagnostics/incidents/(?:[0-9a-f]{32}|[0-9a-f]{64})', path) is not None
+
+
+def cdr_unique_export_request(path):
+    """Only read-only aggregate exports; route enforces CSRF and permissions."""
+    return path in {
+        '/api/history/cdr/unique-inbound/export.csv',
+        '/api/history/cdr/unique-inbound/export.xlsx',
+        '/api/history/cdr/unique-inbound/export.pdf',
+    }

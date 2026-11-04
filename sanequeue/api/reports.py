@@ -11,6 +11,7 @@ from pathlib import Path
 import sqlite3
 import time
 from threading import BoundedSemaphore
+from contextlib import nullcontext
 from zoneinfo import ZoneInfo
 
 from flask import abort, jsonify, request, Response, g, session
@@ -36,7 +37,8 @@ from sanequeue.reporting import builder_exports
 from sanequeue.reporting import pdf_stream,xlsx_stream
 from sanequeue.reporting.report_builder import definition as builder_definition
 from sanequeue.reporting import adherence, adherence_source
-from sanequeue.reporting import cdr_queries
+from sanequeue.reporting import cdr_queries, cdr_reasons, cdr_aggregate_export
+from sanequeue.reporting import cdr_trend
 from sanequeue.reporting import cdr_builder
 from sanequeue.reporting import outbound_dashboard
 from sanequeue.reporting import journey
@@ -47,11 +49,15 @@ from sanequeue.reporting.recording_scope import ownership as recording_ownership
 from sanequeue.reporting.audio import byte_range, open_recording, duration_seconds, AudioDurationUnavailable
 from sanequeue.reporting.privacy import display_number
 from sanequeue.reporting.store import Archive, QueryDeadline
+from sanequeue.security.unit_scope import UnitScopeStore, ScopeUnavailable, ScopeConflict
+from sanequeue.reporting import unit_cdr, ai_report
 
 
 def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), own_since=lambda: 0,
             recording_root='/var/spool/asterisk/monitor', pbx='primary',reason_label=lambda queue,reason:reason,
-            known_agents=lambda: (), planning_path=None, shift_identity=None):
+            known_agents=lambda: (), planning_path=None, shift_identity=None,
+            account_exists=lambda username: False, account_guard=nullcontext,
+            account_context=lambda username: None):
     archive = Archive(path, pbx=pbx)
     aggregate_gate = BoundedSemaphore(1)
     export_store = JobStore(archive.path.parent/'export-jobs.sqlite3', archive.path.parent/'private-exports')
@@ -61,6 +67,17 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     quality_store=QualityStore(archive.path.parent/'quality.sqlite3',pbx=pbx)
     ai_store=AIJobs(archive.path.parent/'ai-jobs.sqlite3',pbx=pbx)
     plans_store=SavedReports(archive.path.parent/'report-plans.sqlite3',pbx=pbx)
+    unit_store=UnitScopeStore(archive.path.parent/'unit-scope.sqlite3',pbx=pbx)
+    reason_store=cdr_reasons.Reasons(archive.path.parent/'cdr-reasons.sqlite3',pbx=pbx)
+    try:
+        reason_store.initialize();reasons_ready=True
+    except (OSError,sqlite3.Error,ValueError,cdr_reasons.ReasonUnavailable):
+        reasons_ready=False;app.logger.warning('CDR classification storage unavailable')
+    app.extensions['sanequeue_unit_scope']=unit_store
+    try:
+        unit_store.initialize();unit_ready=True
+    except (OSError,sqlite3.Error,ValueError,ScopeUnavailable):
+        unit_ready=False;app.logger.warning('Organizational scope storage unavailable')
     try:
         plans_store.initialize();plans_ready=True
     except (OSError,sqlite3.Error,ValueError,PlanUnavailable):
@@ -165,6 +182,18 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                 response = app.make_response((jsonify(error='report_plans_unavailable'), 503))
             except PlanConflict:
                 response = app.make_response((jsonify(error='report_plan_conflict_or_quota'), 409))
+            except ScopeUnavailable:
+                response = app.make_response((jsonify(error='unit_scope_unavailable'), 503))
+            except cdr_reasons.ReasonUnavailable:
+                response = app.make_response((jsonify(error='cdr_reason_unavailable'), 503))
+            except ScopeConflict:
+                response = app.make_response((jsonify(error='unit_scope_conflict'), 409))
+            except pdf_stream.PdfFailure:
+                response = app.make_response((jsonify(error='unit_pdf_unavailable_or_limit'), 422))
+            except unit_cdr.UnitAccessDenied:
+                response = app.make_response((jsonify(error='report_access_denied'), 403))
+            except ai_report.AIReportUnavailable as error:
+                response = app.make_response((jsonify(error=str(error)), 503))
             except work_sessions.SessionUnavailable:
                 response = app.make_response((jsonify(error='work_sessions_unavailable'), 503))
             except work_sessions.SessionAccessDenied:
@@ -374,7 +403,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if plan is None:return False
         if plan.get('cdr_definition') is not None:
             if role()!='admin' or 'users' not in sections() or set(queries.queues(archive))!=set(plan['queues']):return False
-            if any(key in plan.get('cdr_filters',{}) for key in ('src','dst','party','origin','outbound_cid','did','src_length','dst_length')) and not all(can_queue(queue,'caller_details') for queue in plan['queues']):return False
+            if any(key in plan.get('cdr_filters',{}) for key in ('src','dst','party','origin','outbound_cid','did','endpoint','src_length','dst_length')) and not all(can_queue(queue,'caller_details') for queue in plan['queues']):return False
         return all(can_queue(queue,cap) for queue in plan['queues'] for cap in ('view','report_export'))
 
     def plan_context(ident=None):
@@ -417,7 +446,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             if role()!='admin' or 'users' not in sections() or set(queues)!=set(queries.queues(archive)):abort(403)
             cdr_builder.definition(body['cdr_definition'])
             _,_,cdr_filters=cdr_queries._where(archive,0,86400,body.get('cdr_filters') or {})
-            if any(key in cdr_filters for key in ('src','dst','party','origin','outbound_cid','did','src_length','dst_length')) and not all(can_queue(queue,'caller_details') for queue in queues):abort(403)
+            if any(key in cdr_filters for key in ('src','dst','party','origin','outbound_cid','did','endpoint','src_length','dst_length')) and not all(can_queue(queue,'caller_details') for queue in queues):abort(403)
             body['cdr_filters']=cdr_filters
         plan=plans_store.save(owner,body.get('name'),queues,outcome=body.get('outcome'),format=body.get('format','xlsx'),
             language=body.get('language','fa'),period=body.get('period','yesterday'),at=body.get('at','08:00'),
@@ -715,15 +744,295 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         all_queues=queries.queues(archive)
         if not all(can_queue(queue,'view') for queue in all_queues):abort(403)
         numbers=bool(all_queues) and all(can_queue(queue,'caller_details') for queue in all_queues)
-        keys=('src','dst','party','origin','outbound_cid','did','match','src_length','dst_length',
-              'direction','disposition','trunk','hour_from','hour_to','duration_min','duration_max',
+        keys=('src','dst','party','origin','outbound_cid','did','endpoint','match','src_length','dst_length',
+              'direction','disposition','trunk','hour_from','hour_to','time_from','time_to','duration_min','duration_max',
               'billsec_min','billsec_max')
         filters={key:request.args[key] for key in keys if request.args.get(key) not in (None,'')}
         if request.args.get('weekdays'):
             filters['weekdays']=request.args['weekdays'].split(',')
-        if not numbers and any(key in filters for key in ('src','dst','party','origin','outbound_cid','did','src_length','dst_length')):
+        if not numbers and any(key in filters for key in ('src','dst','party','origin','outbound_cid','did','endpoint','src_length','dst_length')):
             abort(403)
         return start,end,filters,numbers
+
+    def unit_admin():
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        cdr_context()
+        queues=queries.queues(archive)
+        # Managing other users' grants requires the existing strongest global
+        # reporting authority; a queue-limited administrator cannot elevate.
+        if not queues or not all(can_queue(q,'caller_details') and can_queue(q,'report_export') for q in queues):
+            abort(403)
+        return str(current_user.get_id())
+
+    @app.after_request
+    def unit_integration_audit(response):
+        event=g.get('unit_integration_audit')
+        if event:
+            try:unit_store.audit_api(event['username'],event['token_id'],event['dataset'],response.status_code)
+            except (ValueError,ScopeUnavailable,ScopeConflict,OSError,sqlite3.Error):
+                response=app.make_response((jsonify(error='unit_audit_unavailable'),503))
+                response.headers['Cache-Control']='private, no-store'
+        return response
+
+    @app.get('/api/organization/access/audit')
+    @login_required
+    @safe
+    def organization_access_audit():
+        owner=unit_admin()
+        value=request.args.get('limit','100')
+        if not re.fullmatch(r'[0-9]{1,3}',value):raise ValueError('invalid_unit_audit_limit')
+        rows=unit_store.list_api_audit(int(value))
+        if owner!=unit_admin():abort(403)
+        return jsonify(rows=rows)
+
+    @app.route('/api/organization/tokens',methods=['GET','POST'])
+    @login_required
+    @safe
+    def organization_tokens():
+        if not request.is_secure:abort(403)
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        owner=str(current_user.get_id())
+        if 'reports' not in sections():abort(403)
+        if request.method=='GET':return jsonify(tokens=unit_store.list_tokens(owner))
+        export_csrf()
+        if request.content_length is None or request.content_length>1024:raise ValueError('invalid_token_request')
+        body=request.get_json(silent=True)
+        if not isinstance(body,dict) or set(body)!={'days'}:raise ValueError('invalid_token_request')
+        with account_guard():
+            if not account_exists(owner) or 'reports' not in sections():abort(403)
+            now=time.time();scope=unit_store.resolve(owner,'api',now,now+1)
+            if not scope['units']:abort(403)
+            token=unit_store.issue_token(owner,body['days'])
+        return jsonify(token),201
+
+    @app.post('/api/organization/tokens/revoke')
+    @login_required
+    @safe
+    def organization_token_revoke():
+        if not request.is_secure:abort(403)
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        owner=str(current_user.get_id());export_csrf()
+        if 'reports' not in sections():abort(403)
+        body=request.get_json(silent=True)
+        if not isinstance(body,dict) or set(body)!={'id'}:raise ValueError('invalid_token_request')
+        unit_store.revoke_token(owner,body['id'])
+        return jsonify(revoked=True)
+
+    @app.get('/api/organization/integration/<dataset>')
+    @safe
+    def organization_integration(dataset):
+        if dataset not in ('summary','cdr','trend','export.csv','export.xlsx','export.pdf'):abort(404)
+        if not request.is_secure:abort(403)
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        header=request.headers.get('Authorization','')
+        if not header.startswith('Bearer '):abort(401)
+        token=header[7:];identity=unit_store.authenticate_token(token,consume=True)
+        if not identity:abort(401)
+        g.unit_integration_audit=dict(username=identity['username'],token_id=identity['id'],dataset=dataset)
+        owner=identity['username'];account=account_context(owner)
+        if not isinstance(account,dict) or 'reports' not in account.get('sections',()):abort(403)
+        today=datetime.now(ZoneInfo('Asia/Tehran')).date()
+        first=datetime.fromisoformat(request.args.get('from',today.isoformat())).date()
+        last=datetime.fromisoformat(request.args.get('to',today.isoformat())).date()+timedelta(days=1)
+        if not 0<(last-first).days<=366:raise ValueError('invalid_report_range')
+        start=datetime.combine(first,datetime.min.time(),ZoneInfo('Asia/Tehran')).timestamp()
+        end=datetime.combine(last,datetime.min.time(),ZoneInfo('Asia/Tehran')).timestamp()
+        allowed=unit_cdr._SAFE_FILTERS
+        extra={'from','to'}|({'cursor','limit'} if dataset=='cdr' else {'bucket','calendar'} if dataset=='trend' else set())
+        if set(request.args)-allowed-extra:raise ValueError('invalid_unit_report_filter')
+        filters={key:request.args[key] for key in allowed if request.args.get(key) not in (None,'')}
+        if 'weekdays' in filters:filters['weekdays']=filters['weekdays'].split(',')
+        api_scope=unit_store.resolve(owner,'api',start,end)
+        required=unit_store.resolve(owner,'summary' if dataset in ('summary','trend') else 'call_details',start,end)
+        if api_scope['revision']!=required['revision']:raise ScopeConflict('unit_scope_changed')
+        if not required['units'] or not set(required['units']).issubset(api_scope['units']):abort(403)
+        if dataset=='summary':data=unit_cdr.summary(archive,unit_store,owner,start,end,filters)
+        elif dataset=='trend':
+            data=unit_cdr.trend(archive,unit_store,owner,start,end,filters,bucket=request.args.get('bucket','day'),calendar=request.args.get('calendar','persian'))
+        elif dataset=='cdr':
+            limit=request.args.get('limit','50')
+            if not re.fullmatch(r'[0-9]{1,3}',limit):raise ValueError('invalid_unit_page_limit')
+            secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+            data=unit_cdr.details(archive,unit_store,owner,start,end,filters,cursor=request.args.get('cursor'),limit=int(limit),
+                                  secret=secret,allow_full=account.get('role') in ('admin','supervisor'))
+        else:
+            if account.get('role') not in ('admin','supervisor'):abort(403)
+            secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+            format=dataset.split('.')[1]
+            produce={'csv':unit_cdr.export_csv,'xlsx':unit_cdr.export_xlsx,'pdf':unit_cdr.export_pdf}[format]
+            data=produce(archive,unit_store,owner,start,end,filters,secret=secret,allow_full=True)
+        if (not unit_store.still_current(api_scope) or unit_store.authenticate_token(token)!=identity or
+            account_context(owner)!=account):abort(403)
+        if dataset.startswith('export.'):
+            mime={'csv':'text/csv','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','pdf':'application/pdf'}[format]
+            return Response(data,mimetype=mime,headers={'Content-Disposition':'attachment; filename="unit-cdr.'+format+'"'})
+        return jsonify(data)
+
+    @app.get('/api/organization/access')
+    @login_required
+    @safe
+    def organization_access_inventory():
+        owner=unit_admin();data=unit_store.inventory()
+        if unit_admin()!=owner:abort(403)
+        return jsonify(data)
+
+    @app.post('/api/organization/access')
+    @login_required
+    @safe
+    def organization_access_modify():
+        owner=unit_admin();export_csrf()
+        if request.content_length is None or request.content_length>8192:raise ValueError('invalid_unit_request')
+        body=request.get_json(silent=True)
+        if not isinstance(body,dict):raise ValueError('invalid_unit_request')
+        op=body.get('operation')
+        def local_day(value,following=False):
+            if not isinstance(value,str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}',value):raise ValueError('invalid_unit_date')
+            day=datetime.fromisoformat(value).date()
+            if following:day+=timedelta(days=1)
+            return datetime.combine(day,datetime.min.time(),ZoneInfo('Asia/Tehran')).timestamp()
+        if op in ('assign','member') and ('start_date' in body or 'end_date' in body):
+            if 'start' in body or 'end' in body or not isinstance(body.get('start_date'),str):raise ValueError('invalid_unit_request')
+            body=dict(body);body['start']=local_day(body.pop('start_date'))
+            day=body.pop('end_date',None);body['end']=local_day(day,True) if day else None
+        if op=='close' and 'end_date' in body:
+            if 'end' in body:raise ValueError('invalid_unit_request')
+            body=dict(body);body['end']=local_day(body.pop('end_date'),True)
+        specs={
+            'create':({'operation','name','kind','parent'},lambda:unit_store.create_unit(body.get('name'),body.get('kind'),body.get('parent'))),
+            'assign':({'operation','unit_id','endpoint','start','end'},lambda:unit_store.assign_endpoint(body.get('unit_id'),body.get('endpoint'),body.get('start'),body.get('end'))),
+            'member':({'operation','unit_id','username','start','end'},lambda:unit_store.add_member(body.get('unit_id'),body.get('username'),body.get('start'),body.get('end'))),
+            'grant':({'operation','unit_id','username','capability','descendants'},lambda:unit_store.grant(body.get('username'),body.get('unit_id'),body.get('capability'),descendants=body.get('descendants',False))),
+            'revoke':({'operation','id'},lambda:unit_store.revoke(body.get('id'))),
+            'close':({'operation','id','end','membership'},lambda:unit_store.close_interval(body.get('id'),body.get('end'),membership=body.get('membership',False))),
+        }
+        if op not in specs or set(body)-specs[op][0] or op=='close' and type(body.get('membership',False)) is not bool:
+            raise ValueError('invalid_unit_request')
+        with account_guard():
+            if unit_admin()!=owner:abort(403)
+            if op in ('grant','member') and not account_exists(body.get('username')):
+                raise ValueError('unknown_unit_user')
+            ident=specs[op][1]()
+        app.logger.info('organization access changed actor=%r operation=%s',owner,op)
+        return jsonify(id=ident,revision=unit_store.revision()),201
+
+    @app.get('/api/organization/reports/cdr/summary')
+    @login_required
+    @safe
+    def organization_cdr_summary():
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        owner=str(current_user.get_id());_,start,end=context()
+        allowed=unit_cdr._SAFE_FILTERS
+        filters={key:request.args[key] for key in allowed if request.args.get(key) not in (None,'')}
+        if set(request.args)-allowed-{'from','to'}:raise ValueError('invalid_unit_report_filter')
+        if 'weekdays' in filters:filters['weekdays']=filters['weekdays'].split(',')
+        data=unit_cdr.summary(archive,unit_store,owner,start,end,filters)
+        if str(current_user.get_id())!=owner or 'reports' not in sections():abort(403)
+        return jsonify(data)
+
+    @app.get('/api/organization/reports/cdr/trend')
+    @login_required
+    @safe
+    def organization_cdr_trend():
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        owner=str(current_user.get_id());_,start,end=context()
+        allowed=unit_cdr._SAFE_FILTERS
+        if set(request.args)-allowed-{'from','to','bucket','calendar'}:raise ValueError('invalid_unit_report_filter')
+        filters={key:request.args[key] for key in allowed if request.args.get(key) not in (None,'')}
+        if 'weekdays' in filters:filters['weekdays']=filters['weekdays'].split(',')
+        data=unit_cdr.trend(archive,unit_store,owner,start,end,filters,
+                            bucket=request.args.get('bucket','day'),calendar=request.args.get('calendar','persian'))
+        if str(current_user.get_id())!=owner or 'reports' not in sections():abort(403)
+        return jsonify(data)
+
+    @app.get('/api/organization/reports/cdr')
+    @login_required
+    @safe
+    def organization_cdr_details():
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        owner=str(current_user.get_id());current_role=role();_,start,end=context()
+        allowed=unit_cdr._SAFE_FILTERS
+        if set(request.args)-allowed-{'from','to','cursor','limit'}:raise ValueError('invalid_unit_report_filter')
+        filters={key:request.args[key] for key in allowed if request.args.get(key) not in (None,'')}
+        if 'weekdays' in filters:filters['weekdays']=filters['weekdays'].split(',')
+        limit=request.args.get('limit','50')
+        if not re.fullmatch(r'[0-9]{1,3}',limit):raise ValueError('invalid_unit_page_limit')
+        secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+        data=unit_cdr.details(archive,unit_store,owner,start,end,filters,cursor=request.args.get('cursor'),limit=int(limit),secret=secret,
+                              allow_full=current_role in ('admin','supervisor'))
+        if str(current_user.get_id())!=owner or role()!=current_role or 'reports' not in sections():abort(403)
+        return jsonify(data)
+
+    @app.post('/api/organization/reports/cdr/export.<format>')
+    @login_required
+    @safe
+    def organization_cdr_export(format):
+        if format not in ('csv','xlsx','pdf'):abort(404)
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        owner=str(current_user.get_id());current_role=role();_,start,end=context();export_csrf()
+        if current_role not in ('admin','supervisor'):abort(403)
+        allowed=unit_cdr._SAFE_FILTERS
+        if set(request.args)-allowed-{'from','to'}:raise ValueError('invalid_unit_report_filter')
+        filters={key:request.args[key] for key in allowed if request.args.get(key) not in (None,'')}
+        if 'weekdays' in filters:filters['weekdays']=filters['weekdays'].split(',')
+        secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+        scope=unit_store.resolve(owner,'export',start,end)
+        produce={'csv':unit_cdr.export_csv,'xlsx':unit_cdr.export_xlsx,'pdf':unit_cdr.export_pdf}[format]
+        data=produce(archive,unit_store,owner,start,end,filters,secret=secret,allow_full=True)
+        if str(current_user.get_id())!=owner or role()!=current_role or 'reports' not in sections() or not unit_store.still_current(scope):abort(403)
+        mime={'csv':'text/csv','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','pdf':'application/pdf'}[format]
+        return Response(data,mimetype=mime,headers={'Content-Disposition':'attachment; filename="unit-cdr.'+format+'"'})
+
+    @app.post('/api/organization/reports/ai')
+    @login_required
+    @safe
+    def organization_ai_report():
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        owner=str(current_user.get_id());_,start,end=context();export_csrf()
+        if request.content_length is None or request.content_length>8192:raise ValueError('invalid_ai_report_request')
+        body=request.get_json(silent=True)
+        if not isinstance(body,dict) or set(body)!={'question'}:raise ValueError('invalid_ai_report_request')
+        ai_scope=unit_store.resolve(owner,'ai_report',start,end)
+        summary_scope=unit_store.resolve(owner,'summary',start,end)
+        if not summary_scope['units'] or not set(summary_scope['units']).issubset(ai_scope['units']):abort(403)
+        if ai_scope['revision']!=summary_scope['revision']:raise ScopeConflict('unit_scope_changed')
+        unit_store.consume_ai_budget(owner,ai_scope)
+        intent=ai_report.parse(body['question'])
+        if not unit_store.still_current(ai_scope) or str(current_user.get_id())!=owner or 'reports' not in sections():abort(403)
+        if intent['metric']=='unsupported':
+            return jsonify(state='unsupported',message='این پرسش در گزارش هوشمند فعلی پشتیبانی نمی‌شود؛ محدودهٔ زمانی را در فیلتر انتخاب کنید.')
+        filters={} if intent['direction']=='all' else {'direction':intent['direction']}
+        metric=intent['metric'];compare=metric.startswith('compare_')
+        if compare:metric=metric[len('compare_'):]
+        def extract(totals):
+            known_outcomes=totals['answered_segments']+totals['unanswered_segments']
+            values={'count':totals['segments_started'],'answered':totals['answered_segments'],
+               'unanswered':totals['unanswered_segments'],'average_duration':totals['average_duration_seconds'],
+               'average_talk':totals['average_billsec_seconds'],'average_answered_talk':totals['average_answered_billsec'],
+               'total_talk':totals['known_billsec_sum'],
+               'answer_rate':100*totals['answered_segments']/known_outcomes if known_outcomes else None}
+            if metric not in values:raise ValueError('invalid_ai_report_metric')
+            samples=totals['known_duration_count'] if metric=='average_duration' else (
+                totals['known_billsec_count'] if metric in ('average_talk','total_talk') else
+                totals['known_answered_billsec_count'] if metric=='average_answered_talk' else None)
+            return dict(value=values[metric],known_samples=samples,denominator=known_outcomes if metric=='answer_rate' else None)
+        result=extract(unit_cdr.summary(archive,unit_store,owner,start,end,filters)['totals'])
+        comparison=None
+        if compare:
+            zone=ZoneInfo('Asia/Tehran')
+            start_day=datetime.fromtimestamp(start,zone).date();end_day=datetime.fromtimestamp(end,zone).date()
+            previous_start=datetime.combine(start_day-timedelta(days=(end_day-start_day).days),datetime.min.time(),zone).timestamp()
+            previous_ai=unit_store.resolve(owner,'ai_report',previous_start,start)
+            previous_summary=unit_store.resolve(owner,'summary',previous_start,start)
+            if (previous_ai['revision']!=ai_scope['revision'] or previous_summary['revision']!=ai_scope['revision']):raise ScopeConflict('unit_scope_changed')
+            if not previous_summary['units'] or not set(previous_summary['units']).issubset(previous_ai['units']):abort(403)
+            previous=extract(unit_cdr.summary(archive,unit_store,owner,previous_start,start,filters)['totals'])
+            current_value=result['value'];previous_value=previous['value']
+            comparison=dict(start=previous_start,end=start,**previous,
+                difference=current_value-previous_value if current_value is not None and previous_value is not None else None)
+        if not unit_store.still_current(ai_scope) or str(current_user.get_id())!=owner or 'reports' not in sections():abort(403)
+        return jsonify(state='available',metric=metric,direction=intent['direction'],**result,comparison=comparison,
+                       unit='percent' if metric=='answer_rate' else 'seconds' if metric in ('average_duration','average_talk','average_answered_talk','total_talk') else 'cdr_segments',
+                       start=start,end=end,complete_history=False)
 
     @app.get('/api/history/cdr')
     @login_required
@@ -733,16 +1042,137 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         before=None
         if request.args.get('before_time') is not None:
             before=(request.args['before_time'],request.args.get('before_id'))
-        data=cdr_queries.page(archive,start,end,filters,before=before)
+        data=cdr_queries.page(archive,start,end,filters,before=before,limit=request.args.get('limit',100))
         if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
         secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
         for row in data['rows']:
             for key in ('src','dst','internal_caller_ext','outbound_cid','did'):
                 if row.get(key) is not None:
                     row[key]=display_number(row[key],mode='full' if numbers else 'masked',secret=secret,tenant='default',pbx=pbx,version='1')
+            for key,capability in (('can_play','recording_play'),('can_download','recording_download')):
+                row[key]=bool(row['has_recording'] and recording_permitted(archive,row['id'],capability,can_queue))
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        data['audio_granted']=any(row['can_play'] or row['can_download'] for row in data['rows'])
         data['can_search_numbers']=numbers
         data['filters']={} if not numbers else data['filters']
         return jsonify(data)
+
+    @app.route('/api/history/cdr/classification/catalog',methods=['GET','POST'])
+    @login_required
+    @safe
+    def history_cdr_reason_catalog():
+        if not reasons_ready:raise cdr_reasons.ReasonUnavailable('cdr_reason_unavailable')
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context()
+        if not numbers:abort(403)
+        if request.method=='POST':
+            export_csrf()
+            if request.content_length is None or request.content_length>4096:raise ValueError('invalid_cdr_reason_catalog')
+            body=request.get_json(silent=True)
+            if not isinstance(body,dict) or set(body)!={'reason','subreason','active'}:raise ValueError('invalid_cdr_reason_catalog')
+            if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+            result=reason_store.set_catalog(body['reason'],body['subreason'],body['active'],owner)
+        else:result=reason_store.catalog()
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        return jsonify(items=result)
+
+    @app.route('/api/history/cdr/<path:segment_id>/classification',methods=['GET','POST'])
+    @login_required
+    @safe
+    def history_cdr_classification(segment_id):
+        if not reasons_ready:raise cdr_reasons.ReasonUnavailable('cdr_reason_unavailable')
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context()
+        if not numbers:abort(403)
+        clause,args,_=cdr_queries._where(archive,start,end,filters)
+        with archive.reader() as db:
+            cdr_queries._functions(db)
+            row=db.execute('SELECT 1 '+cdr_queries._JOIN+' WHERE '+clause+' AND c.source_key=? LIMIT 1',(*args,segment_id)).fetchone()
+        if not row:abort(404)
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        if request.method=='POST':
+            export_csrf()
+            if request.content_length is None or request.content_length>4096:raise ValueError('invalid_cdr_reason')
+            body=request.get_json(silent=True)
+            if not isinstance(body,dict) or set(body)!={'reason','subreason','outcome'}:raise ValueError('invalid_cdr_reason')
+            data=reason_store.set(segment_id,body['reason'],body['subreason'],body['outcome'],owner)
+        else:data=reason_store.get(segment_id)
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        return jsonify(classification=data,unit='cdr_segment')
+
+    def cdr_classification_analysis(start,end,filters,bucket=None):
+        if not reasons_ready:raise cdr_reasons.ReasonUnavailable('cdr_reason_unavailable')
+        clause,args,_=cdr_queries._where(archive,start,end,filters)
+        with archive.reader() as db:
+            cdr_queries._functions(db)
+            rows=db.execute('SELECT c.source_key,c.ts '+cdr_queries._JOIN+' WHERE '+clause+' LIMIT 50001',args).fetchall()
+        if len(rows)>50000:raise QueryDeadline('cdr_reason_segment_limit')
+        return reason_store.summarize([row['source_key'] for row in rows],timestamps=[row['ts'] for row in rows] if bucket else None,bucket=bucket)
+
+    @app.get('/api/history/cdr/classification/analysis')
+    @login_required
+    @safe
+    def history_cdr_classification_analysis():
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context()
+        if not numbers:abort(403)
+        result=cdr_classification_analysis(start,end,filters,bucket=request.args.get('bucket') or None)
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        return jsonify(result)
+
+    @app.post('/api/history/cdr/aggregate/<dataset>/export.<format>')
+    @login_required
+    @safe
+    def history_cdr_aggregate_export(dataset,format):
+        if dataset not in ('performance','reasons','reasons-timeline') or format not in ('csv','xlsx','pdf'):abort(404)
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context();export_csrf()
+        queues=queries.queues(archive)
+        if not numbers or not queues or not all(can_queue(q,'report_export') for q in queues):abort(403)
+        if dataset=='performance':
+            result=cdr_queries.summary(archive,start,end,filters)
+            headers=['داخلی مشاهده‌شده','بخش تماس','پاسخ‌داده','بدون پاسخ','مشغول','سایر ناموفق','نامعلوم','نرخ پاسخ وضعیت معلوم','مجموع مکالمه (ثانیه)','میانگین مکالمه پاسخ‌داده (ثانیه)']
+            rows=[]
+            for row in sorted(result['endpoints'],key=lambda item:-item['segments_started']):
+                denominator=row['answered_segments']+row['unanswered_segments']
+                rows.append([row['endpoint'],row['segments_started'],row['answered_segments'],row['no_answer_segments'],row['busy_segments'],row['other_failed_segments'],row['unknown_disposition_segments'],round(100*row['answered_segments']/denominator,2) if denominator else None,row['known_billsec_sum'],row['average_answered_billsec']])
+            title='عملکرد داخلی مشاهده‌شده؛ بخش CDR'
+        elif dataset=='reasons':
+            result=cdr_classification_analysis(start,end,filters)
+            headers=['وضعیت برچسب','دلیل','زیرگروه','نتیجه','تعداد بخش CDR','درصد از کل']
+            rows=[['ثبت‌شده' if row['is_labeled'] else 'ثبت‌نشده',row['reason'],row['subreason'],row['outcome'],row['count'],round(100*row['count']/result['segments'],2) if result['segments'] else None] for row in result['rows']]
+            title='تحلیل دلیل دستی بخش CDR'
+        else:
+            bucket=request.args.get('bucket')
+            if bucket not in ('hour','weekday','day','month'):raise ValueError('invalid_cdr_reason_bucket')
+            result=cdr_classification_analysis(start,end,filters,bucket=bucket)
+            headers=['بازه','وضعیت برچسب','دلیل','تعداد بخش CDR']
+            weekdays=['شنبه','یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه']
+            def period(value):
+                if bucket=='hour':return value+':00'
+                if bucket=='weekday':return weekdays[int(value)]
+                if bucket=='day':return exports.persian_date(datetime.fromisoformat(value).date())
+                return value
+            rows=[[period(row['period']),'ثبت‌شده' if row['reason'] else 'ثبت‌نشده',row['reason'],row['count']] for row in result['timeline']]
+            title={'hour':'دلیل تماس بر اساس ساعت روز','weekday':'دلیل تماس بر اساس روز هفته','day':'دلیل تماس بر اساس روز','month':'دلیل تماس بر اساس ماه شمسی'}[bucket]
+        content=cdr_aggregate_export.render(headers,rows,format,start=start,end=end,title=title)
+        if (str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers) or
+            queries.queues(archive)!=queues or not all(can_queue(q,'report_export') for q in queues)):abort(403)
+        mime={'csv':'text/csv','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','pdf':'application/pdf'}[format]
+        return Response(content,mimetype=mime,headers={'Content-Disposition':'attachment; filename="pbx-'+dataset+'.'+format+'"'})
+
+    @app.get('/api/history/cdr/<path:recording_id>/recording')
+    @login_required
+    @safe
+    def history_cdr_recording(recording_id):
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context()
+        download=request.args.get('download')=='1'
+        capability='recording_download' if download else 'recording_play'
+        clause,args,_=cdr_queries._where(archive,start,end,filters)
+        with archive.reader() as db:
+            cdr_queries._functions(db)
+            row=db.execute('SELECT c.recording,c.ts '+cdr_queries._JOIN+' WHERE '+clause+
+                           ' AND c.source_key=?',(*args,recording_id)).fetchone()
+        if not row or not row['recording']:abort(404)
+        if not recording_permitted(archive,recording_id,capability,can_queue):abort(403)
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        return serve_recording(row,recording_id,download)
 
     @app.get('/api/history/cdr/summary')
     @login_required
@@ -764,6 +1194,19 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         data['filters']={} if not numbers else data['filters']
         return jsonify(data)
 
+    @app.get('/api/history/cdr/trend')
+    @login_required
+    @safe
+    def history_cdr_trend():
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context()
+        bucket=request.args.get('bucket','day');calendar=request.args.get('calendar','gregorian')
+        if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
+        try:data=cdr_trend.report(archive,start,end,filters,bucket=bucket,calendar=calendar)
+        finally:aggregate_gate.release()
+        if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
+        if not numbers:data['filters']={}
+        return jsonify(data)
+
     @app.get('/api/history/cdr/unique-inbound')
     @login_required
     @safe
@@ -775,6 +1218,33 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         finally:aggregate_gate.release()
         if str(current_user.get_id())!=owner or cdr_context()!=(start,end,filters,numbers):abort(403)
         return jsonify(data)
+
+    @app.post('/api/history/cdr/unique-inbound/export.csv')
+    @app.post('/api/history/cdr/unique-inbound/export.xlsx')
+    @app.post('/api/history/cdr/unique-inbound/export.pdf')
+    @login_required
+    @safe
+    def history_cdr_unique_inbound_export():
+        owner=str(current_user.get_id());start,end,filters,numbers=cdr_context();export_csrf()
+        queues=queries.queues(archive);language=request.args.get('lang','fa');format=request.path.rsplit('.',1)[-1]
+        if not numbers or not queues or not all(can_queue(q,'report_export') for q in queues):abort(403)
+        if language not in ('fa','en') or format not in ('csv','xlsx','pdf'):raise ValueError('invalid_unique_inbound_export')
+        if not aggregate_gate.acquire(blocking=False):return jsonify(error='report_aggregate_busy'),429
+        try:
+            data=cdr_queries.unique_inbound(archive,start,end,filters)
+            if data['state']!='available':raise QueryDeadline('unique_inbound_segment_limit')
+            try:
+                content=(cdr_queries.unique_inbound_csv(data,language) if format=='csv' else
+                         cdr_queries.unique_inbound_document(data,language,format))
+            except (xlsx_stream.SizeLimit,pdf_stream.PdfFailure) as error:
+                raise ExportFailure(str(error)) from None
+        finally:aggregate_gate.release()
+        if (owner!=str(current_user.get_id()) or cdr_context()!=(start,end,filters,numbers) or
+            queries.queues(archive)!=queues or not all(can_queue(q,'report_export') for q in queues)):abort(403)
+        types={'csv':'text/csv; charset=utf-8','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','pdf':'application/pdf'}
+        return Response(content,mimetype=types[format],headers={
+            'Content-Disposition':f'attachment; filename="sanequeue-inbound-numbers.{format}"',
+            'X-SaneQueue-Unit':'distinct_inbound_source_number','Cache-Control':'private, no-store'})
 
     @app.get('/api/history/cdr/outbound-dashboard')
     @login_required

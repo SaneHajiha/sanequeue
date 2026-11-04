@@ -1,5 +1,7 @@
 # راهنمای کاربردی گزارش‌گیری SaneQueue
 
+برای قابلیت‌های در حال توسعهٔ مرکز تلفن در شاخهٔ `feature/pbx-reports-units`، از جمله عملکرد داخلی و ثبت و تحلیل دلیل تماس، [راهنمای مرکز تلفن](PBX_REPORT_GUIDE.fa.md) را ببینید. این راهنما به‌تنهایی نصب آن نسخه را تأیید نمی‌کند.
+
 این راهنما برای شاخهٔ `feature/reporting-phase2` است. امکانات قابل مشاهده به نقش کاربر، مجوز صف، پوشش داده و نسخهٔ نصب‌شده وابسته‌اند. [راهنمای نصب پایلوت](PILOT_BETA27.fa.md) و [محدودیت‌های باز](REPORTING_COMPLETION_CHECKLIST.fa.md) را نیز بخوانید.
 
 ![نمونهٔ آزمایشگاهی گزارش با داده‌های ساختگی](../tools/ui-workbench/tests/report-design.spec.js-snapshots/report-design-fa-light-1440-win32.png)

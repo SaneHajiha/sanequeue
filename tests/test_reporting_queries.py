@@ -142,7 +142,9 @@ class ReportTests(unittest.TestCase):
         install(app, self.archive.path, role=lambda: role, sections=lambda: set(menus),
                 can_queue=lambda q, action: q == '8001' and action not in denied and (action != 'caller_details' or details),
                 own_interfaces=lambda: ('Local/100@from-queue/n',), recording_root=self.root / 'audio',
-                known_agents=lambda: known, planning_path=planning_path, shift_identity=shift_identity)
+                known_agents=lambda: known, planning_path=planning_path, shift_identity=shift_identity,
+                account_exists=lambda username:username=='test',
+                account_context=lambda username:dict(role=role,sections=tuple(sorted(menus))) if username=='test' else None)
         client = app.test_client()
         with client.session_transaction() as session:
             session.update(_user_id='test', _fresh=True)

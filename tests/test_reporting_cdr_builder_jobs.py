@@ -73,6 +73,7 @@ class CDRBuilderJobTests(unittest.TestCase):
 
     def test_cdr_limits_and_invalid_number_filters_fail_closed(self):
         with self.assertRaises(ValueError):self.create(format='csv',cdr_filters={'src':'100'})
+        with self.assertRaises(ValueError):self.create(format='csv',cdr_filters={'endpoint':'PJSIP/100'})
         ident=self.create(format='pdf')
         with patch('sanequeue.reporting.pdf_stream.MAX_ROWS',1):
             result=self.worker.run_once()

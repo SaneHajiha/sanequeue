@@ -35,7 +35,7 @@ def current_cdr_modes(spec,archive,accounts_path,policy_path):
     if set(archive_queues(archive))!=set(spec['queues']):return None
     modes=current_modes(spec['owner'],spec['queues'],accounts_path,policy_path)
     if modes is None:return None
-    if any(mode!='full' for mode in modes.values()) and any(key in spec.get('cdr_filters',{}) for key in ('src','dst','party','origin','outbound_cid','did','src_length','dst_length')):
+    if any(mode!='full' for mode in modes.values()) and any(key in spec.get('cdr_filters',{}) for key in ('src','dst','party','origin','outbound_cid','did','endpoint','src_length','dst_length')):
         return None
     return modes
 

@@ -221,7 +221,7 @@ class JobStore:
             if any(mode not in ('full','masked') for mode in number_modes.values()):raise ValueError('invalid_cdr_export_number_policy')
             spec['cdr_definition']=cdr_builder.definition(cdr_definition)
             _,_,spec['cdr_filters']=cdr_queries._where(SimpleNamespace(pbx=pbx),start,end,cdr_filters or {})
-            if any(mode!='full' for mode in number_modes.values()) and any(key in spec['cdr_filters'] for key in ('src','dst','party','origin','outbound_cid','did','src_length','dst_length')):
+            if any(mode!='full' for mode in number_modes.values()) and any(key in spec['cdr_filters'] for key in ('src','dst','party','origin','outbound_cid','did','endpoint','src_length','dst_length')):
                 raise ValueError('invalid_cdr_export_number_filter')
             spec['dataset']='cdr_segments';spec['unit']='cdr_segment';spec['consistency']='worker_start_snapshot'
         if request_key is not None and (not isinstance(request_key,str) or not re.fullmatch('[A-Za-z0-9_.:-]{1,128}',request_key)):
@@ -358,7 +358,7 @@ class ExportWorker:
             if any(mode not in ('full','masked') for mode in spec['number_modes'].values()):raise ExportFailure('cdr_export_spec_invalid')
             cdr_builder.definition(spec['cdr_definition']);cdr_queries._where(self.archive,spec['start'],spec['end'],spec['cdr_filters'])
             if set(queries.queues(self.archive))!=set(spec['scope']['queues']):raise ExportFailure('export_access_revoked')
-            if any(mode!='full' for mode in spec['number_modes'].values()) and any(key in spec['cdr_filters'] for key in ('src','dst','party','origin','outbound_cid','did','src_length','dst_length')):
+            if any(mode!='full' for mode in spec['number_modes'].values()) and any(key in spec['cdr_filters'] for key in ('src','dst','party','origin','outbound_cid','did','endpoint','src_length','dst_length')):
                 raise ExportFailure('cdr_export_spec_invalid')
             return
         if spec.get('outcome_class') is not None:

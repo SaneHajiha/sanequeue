@@ -1,0 +1,28 @@
+(()=>{'use strict';
+ const $=id=>document.getElementById(id),section=$('history-pbx-reasons-section'),dates=$('history-filters');if(!section||!dates)return;
+ const fa=document.documentElement.lang==='fa',t=(a,b)=>fa?a:b,locale=fa?'fa-IR':'en-GB',out=$('pbx-reason-feedback'),host=$('pbx-reason-table'),kpis=$('pbx-reason-kpis'),chart=$('pbx-reason-chart'),filters=$('pbx-reason-filters'),bucket=$('pbx-reason-bucket');let serial=0;
+ const node=(tag,text)=>{const n=document.createElement(tag);if(text!=null)n.textContent=String(text);return n;};
+ const n=value=>Number(value).toLocaleString(locale,{maximumFractionDigits:1});
+ const reasonLabel=value=>value?(value===t('بدون دلیل ثبت‌شده','Unlabeled')?value+t(' (ثبت‌شده)',' (labeled)'):value):t('بدون دلیل ثبت‌شده','Unlabeled');
+ function clear(message=''){serial++;host.replaceChildren();kpis.replaceChildren();$('pbx-reason-timeline-table').replaceChildren();window.SaneQueueReportCharts?.clear(chart);window.SaneQueueReportCharts?.clear($('pbx-reason-timeline-chart'));out.textContent=message;}
+ for(const el of [dates,filters])for(const event of ['change','input'])el.addEventListener(event,()=>clear(t('فیلتر تغییر کرد؛ دوباره تحلیل را اجرا کنید.','Filter changed; run the analysis again.')));
+ filters.addEventListener('submit',async event=>{event.preventDefault();if(!dates.reportValidity()||!filters.reportValidity())return;clear();const generation=serial,p=new URLSearchParams({from:dates.elements.from.value,to:dates.elements.to.value});for(const [key,value] of new FormData(filters))if(value)p.set(key,value);
+  const button=$('pbx-reason-run');button.disabled=true;out.textContent=t('در حال محاسبه…','Calculating…');
+  try{const response=await fetch('/api/history/cdr/classification/analysis?'+p,{credentials:'same-origin'});if(!response.ok||response.redirected)throw Error('request');const data=await response.json();
+   if(generation!==serial||section.hidden||document.body.dataset.view!=='reports')return;
+   [[t('کل بخش‌ها','Segments'),data.segments],[t('دارای دلیل','Labeled'),data.labelled],[t('بدون دلیل ثبت‌شده','Unlabeled'),data.unlabelled]].forEach(([label,value])=>{const card=node('article');card.className='history-kpi';card.append(node('span',label),node('strong',n(value)));kpis.append(card);});
+   const table=node('table'),thead=node('thead'),heading=node('tr');[t('وضعیت برچسب','Label state'),t('دلیل','Reason'),t('زیرگروه','Subreason'),t('نتیجه','Outcome'),t('تعداد','Count'),t('درصد از کل','Share')].forEach(value=>{const th=node('th',value);th.scope='col';heading.append(th);});thead.append(heading);table.append(thead);const tbody=node('tbody'),groups=new Map();
+   for(const row of data.rows){const tr=node('tr'),reason=reasonLabel(row.reason);[row.reason?t('ثبت‌شده','Labeled'):t('ثبت‌نشده','Unlabeled'),reason,row.subreason||'—',row.outcome||'—',n(row.count),data.segments?n(100*row.count/data.segments)+'%':'—'].forEach(v=>tr.append(node('td',v)));tbody.append(tr);groups.set(row.reason,(groups.get(row.reason)||0)+row.count);}table.append(tbody);host.append(table);
+   const top=[...groups].sort((a,b)=>b[1]-a[1]).slice(0,20);window.SaneQueueReportCharts?.render(chart,{type:'bar',title:t('۲۰ دلیل پرتعداد','Top 20 reasons'),unit:t('بخش CDR','CDR segments'),labels:top.map(x=>reasonLabel(x[0])),series:[{label:t('تعداد','Count'),values:top.map(x=>x[1])}]});
+   const timeRows=data.timeline||[],periods=[...new Set(timeRows.map(row=>row.period))].sort(),topReasons=[...groups].sort((a,b)=>b[1]-a[1]).slice(0,4).map(row=>row[0]);
+   const weekdays=fa?['شنبه','یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه']:['Saturday','Sunday','Monday','Tuesday','Wednesday','Thursday','Friday'];
+   const periodLabel=value=>bucket.value==='weekday'?weekdays[Number(value)]||value:bucket.value==='hour'?value+':00':value.length===10?(window.SaneQueueReportPeriods?.display(value)||value):value;
+   const lookup=new Map(timeRows.map(row=>[JSON.stringify([row.period,row.reason]),row.count]));
+   const series=topReasons.map(reason=>({label:reasonLabel(reason),values:periods.map(period=>lookup.get(JSON.stringify([period,reason]))||0)}));
+   if(!series.length)series.push({label:t('تعداد','Count'),values:[]});
+   window.SaneQueueReportCharts?.render($('pbx-reason-timeline-chart'),{type:'column',title:t('روند دلایل تماس','Call reason timeline'),unit:t('بخش CDR','CDR segments'),labels:periods.map(periodLabel),series});
+   const timelineTable=node('table'),timelineHead=node('tr');[t('بازه','Period'),t('دلیل','Reason'),t('تعداد','Count')].forEach(v=>{const th=node('th',v);th.scope='col';timelineHead.append(th);});timelineTable.append(timelineHead);for(const row of timeRows){const tr=node('tr');[periodLabel(row.period),reasonLabel(row.reason),n(row.count)].forEach(v=>tr.append(node('td',v)));timelineTable.append(tr);}$('pbx-reason-timeline-table').append(timelineTable);
+   out.textContent=data.segments?t('نمودار حداکثر ۲۰ دلیل را نمایش می‌دهد.','Chart shows at most 20 reasons.'):t('داده‌ای در این بازه نیست.','No data in this period.');
+  }catch{if(generation===serial)out.textContent=t('تحلیل در دسترس نیست؛ مجوز را بررسی کنید یا بازه را کوتاه‌تر انتخاب کنید.','Analysis unavailable; check permission or narrow the period.');}finally{button.disabled=false;}});
+ const hide=()=>{if(section.hidden||document.body.dataset.view!=='reports')clear();};new MutationObserver(hide).observe(section,{attributes:true,attributeFilter:['hidden']});new MutationObserver(hide).observe(document.body,{attributes:true,attributeFilter:['data-view']});
+})();

@@ -18,7 +18,7 @@
   if(kpis)kpis.hidden=target!=='history-summary-section';
   if(reportPicker)reportPicker.value=target;
   // These views either use PBX-wide filters or provide their own queue selector.
-  const globalPbx=new Set(['history-cdr-section','history-outbound-dashboard-section','history-builder-section','history-transcript-section']);
+  const globalPbx=new Set(['history-cdr-section','history-pbx-performance-section','history-pbx-reasons-section','history-outbound-dashboard-section','history-builder-section','history-transcript-section','history-unit-section']);
   const filterForm=document.getElementById('history-filters');
   const filterActions=document.getElementById('history-filter-actions');
   const queueControl=document.getElementById('history-filter-queue');
@@ -27,11 +27,15 @@
   const extensionCard=document.getElementById('extension-report-card');
   if(filterForm)filterForm.hidden=target==='history-transcript-section';
   // These sections have their own explicit run or preview controls.
-  if(filterActions)filterActions.hidden=['history-cdr-section','history-outbound-dashboard-section','history-builder-section'].includes(target);
+  if(filterActions)filterActions.hidden=['history-cdr-section','history-pbx-performance-section','history-pbx-reasons-section','history-outbound-dashboard-section','history-builder-section','history-unit-section'].includes(target);
   if(queueControl)queueControl.hidden=globalPbx.has(target);
+  for(const id of ['history-filter-time-from','history-filter-time-to']){const field=document.getElementById(id);if(field)field.hidden=target!=='history-cdr-section';}
   if(pauseControl)pauseControl.hidden=!['history-outbound-section','history-work-section'].includes(target);
   if(outcomeControl)outcomeControl.hidden=!['history-calls-section','history-export-jobs-section'].includes(target);
-  if(extensionCard)extensionCard.hidden=!['history-summary-section','history-cdr-section'].includes(target);
+  if(extensionCard)extensionCard.hidden=target!=='history-summary-section';
+  const heading=document.getElementById('history-cdr-heading');if(heading)heading.hidden=target!=='history-cdr-section';
+  document.body.dataset.reportTarget=target;
+  if(target==='history-cdr-section'){const family=nav.querySelector('[data-report-family="contact-center"]');if(family)family.open=false;}
  }
  // One report at a time, using only the server-authorized navigation items.
  // Native links and the full report remain available when JavaScript is off.
@@ -86,7 +90,14 @@
    nav.querySelectorAll('.module-shortcut').forEach(item=>{if(item===link)item.setAttribute('aria-current','location');else item.removeAttribute('aria-current');});
    requestAnimationFrame(()=>{
     const target=document.getElementById(link.dataset.moduleTarget);
-    if(target){target.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});target.tabIndex=-1;target.focus({preventScroll:true});}
+    if(target){
+     // The CDR section uses display:contents so the filter, cards and charts
+     // can share the report grid. Scroll to the page top instead of trying
+     // to scroll a boxless section past the page heading.
+     const cdr=link.dataset.moduleTarget==='history-cdr-section',focusTarget=cdr?(document.getElementById('history-cdr-heading')||target):target;
+     (cdr?(document.querySelector('.topbar')||focusTarget):focusTarget).scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+     focusTarget.tabIndex=-1;focusTarget.focus({preventScroll:true});
+    }
    });
   }
   const view=event.target.closest('button[data-view]');

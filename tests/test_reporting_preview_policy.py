@@ -1,5 +1,6 @@
 from sanequeue.reporting.preview_policy import builder_preview_request
 from sanequeue.reporting.preview_policy import diagnostics_preview_request
+from sanequeue.reporting.preview_policy import cdr_unique_export_request
 
 
 def test_preview_allows_only_specific_builder_routes_not_call_control_or_prefixes():
@@ -20,3 +21,12 @@ def test_preview_incident_workflow_exception_never_allows_collection_or_pbx_cont
                  '/api/diagnostics/incidents/'+('a'*33),'/api/diagnostics/incidents/'+('a'*32)+'/capture',
                  '/api/control','/api/ami/connect'):
         assert not diagnostics_preview_request(path)
+
+
+def test_preview_unique_export_exception_is_exact_and_never_allows_control():
+    for ext in ('csv','xlsx','pdf'):
+        assert cdr_unique_export_request('/api/history/cdr/unique-inbound/export.'+ext)
+    for path in ('/api/control','/api/ami/connect','/api/history/cdr/unique-inbound',
+                 '/api/history/cdr/unique-inbound/export.csv/extra',
+                 '/api/history/cdr/unique-inbound/export.zip'):
+        assert not cdr_unique_export_request(path)

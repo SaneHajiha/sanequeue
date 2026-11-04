@@ -245,10 +245,10 @@ class Document:
 
 class CustomDocument(Document):
     """Private builder output: every chosen column is printed for every row."""
-    def __init__(self,output,language,*,headers,grouped=False,global_cdr=False,filter_items=None,max_columns=12,**kwargs):
+    def __init__(self,output,language,*,headers,grouped=False,global_cdr=False,unit_scoped=False,filter_items=None,max_columns=12,**kwargs):
         if not isinstance(max_columns,int) or not 1<=max_columns<=26 or not isinstance(headers,list) or not 1<=len(headers)<=max_columns:raise ValueError('invalid_pdf_columns')
         self.custom_headers=[_text(header) for header in headers]
-        self.grouped=bool(grouped);self.global_cdr=bool(global_cdr)
+        self.grouped=bool(grouped);self.global_cdr=bool(global_cdr);self.unit_scoped=bool(unit_scoped)
         if filter_items is None:filter_items=[]
         if not isinstance(filter_items,list) or len(filter_items)>20:raise ValueError('invalid_pdf_filters')
         self.filter_items=[_text(item) for item in filter_items]
@@ -267,14 +267,18 @@ class CustomDocument(Document):
         self.pages+=1;pdf=self.pdf;pdf.setFillColor('#10283f');pdf.rect(0,self.height-75,self.width,75,fill=1,stroke=0)
         edge=self.width-self.margin if self.fa else self.margin
         title=('گزارش سفارشی مرکز تلفن' if self.fa else 'Custom PBX report') if self.global_cdr else ('گزارش سفارشی صف' if self.fa else 'Custom queue report')
+        if self.unit_scoped:title='گزارش تماس واحدهای مجاز' if self.fa else 'Authorized unit call report'
         self._draw(title,edge,self.height-35,17,'#ffffff',right=self.fa)
-        self._draw('آمار گروهی' if self.fa and self.grouped else 'ریز مراجعه‌ها' if self.fa else 'Grouped results' if self.grouped else 'Visit details',edge,self.height-57,9,'#d5e3ef',right=self.fa)
+        subtitle=('آمار گروهی' if self.fa and self.grouped else 'ریز مراجعه‌ها' if self.fa else 'Grouped results' if self.grouped else 'Visit details')
+        if self.unit_scoped:subtitle='ریز بخش‌های تماس' if self.fa else 'Call segment details'
+        self._draw(subtitle,edge,self.height-57,9,'#d5e3ef',right=self.fa)
         if self.fa:
             self._draw('شروع:',edge,self.height-98,8,right=True);self._draw(self._stamp(self.start),edge-34,self.height-98,8,right=True)
             self._draw('پایان (شامل نیست):',edge-270,self.height-98,8,right=True);self._draw(self._stamp(self.end),edge-370,self.height-98,8,right=True)
         else:self._draw(self._stamp(self.start)+' to '+self._stamp(self.end)+' | End exclusive',edge,self.height-98,8)
         queue_text=', '.join(self.queues)
         scope=('سراسری؛ بخش CDR، نه مکالمهٔ یکتا' if self.fa else 'Global CDR segments, not unique conversations') if self.global_cdr else ('صف‌ها: ' if self.fa else 'Queues: ')+queue_text
+        if self.unit_scoped:scope='واحدهای مجاز؛ بخش CDR، نه مکالمهٔ یکتا' if self.fa else 'Authorized units; CDR segments, not unique conversations'
         for index,line in enumerate(self._lines(scope,self.width-2*self.margin,8,2)):
             self._draw(line,edge,self.height-115-index*12,8,right=self.fa)
         self.y=self.height-145

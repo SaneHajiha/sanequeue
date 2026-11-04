@@ -79,6 +79,11 @@ module.app.config['SANEQUEUE_ACCOUNT_CANONICALIZER']=lambda username:canonical_u
 def account_sections(username,role):
     account=read_accounts(ACCOUNTS_PATH).get(username)
     return sections_for(role,account) if account is not None else frozenset()
+def report_account_context(username):
+    account=read_accounts(ACCOUNTS_PATH).get(username)
+    if account is None:return None
+    role=account.get('role','viewer')
+    return dict(role=role,sections=tuple(sorted(sections_for(role,account))))
 module.app.config['SANEQUEUE_MENU_PROVIDER']=account_sections
 from sanequeue.security.profile import install as install_profile
 install_profile(module.app,ACCOUNTS_PATH,STATE,sync_accounts)
@@ -87,7 +92,7 @@ install_organization(module.app,STATE,lambda:cfg.get_value_set_default('roles',c
 
 @module.app.before_request
 def maintenance_controls():
-    from sanequeue.reporting.preview_policy import builder_preview_request, diagnostics_preview_request
+    from sanequeue.reporting.preview_policy import builder_preview_request, diagnostics_preview_request, cdr_unique_export_request
     report_job_request=(request.path in ('/api/history/export-jobs','/api/history/work-sessions','/api/history/quality/forms','/api/history/plans') or
         re.fullmatch(r'/api/history/plans/[0-9a-f]{32}/(?:archive|run)',request.path) is not None or
         re.fullmatch(r'/api/history/visits/[0-9a-f]{64}/reviews',request.path) is not None or
@@ -95,7 +100,7 @@ def maintenance_controls():
         re.fullmatch(r'/api/history/ai-jobs/[0-9a-f]{32}',request.path) is not None or
         re.fullmatch(r'/api/history/export-jobs/[0-9a-f]{32}/cancel',request.path) is not None or
         re.fullmatch(r'/api/history/work-sessions/[0-9a-f]{32}/close',request.path) is not None)
-    if os.getenv('SANEQUEUE_REPORTING_PREVIEW') == '1' and request.method not in ('GET','HEAD','OPTIONS') and request.path != '/login' and not (report_job_request or builder_preview_request(request.path) or diagnostics_preview_request(request.path)):
+    if os.getenv('SANEQUEUE_REPORTING_PREVIEW') == '1' and request.method not in ('GET','HEAD','OPTIONS') and request.path != '/login' and not (report_job_request or builder_preview_request(request.path) or diagnostics_preview_request(request.path) or cdr_unique_export_request(request.path)):
         return jsonify(error='reporting_preview_read_only'),403
     if module_disabled() and (request.path in ('/api/control','/api/members/pause') or request.path.startswith('/api/ami/')):
         return jsonify(error='module_disabled'),503
@@ -652,7 +657,10 @@ def local_accounts_api():
         username=str(obj.get('username','')).strip()
         if obj.get('action')=='delete':
             with ACCOUNT_LOCK:
-                try:delete_account(ACCOUNTS_PATH,username,current_user.get_id(),lambda:POLICIES.remove_subject(username))
+                def revoke_account_access():
+                    module.app.extensions['sanequeue_unit_scope'].revoke_subject(username)
+                    POLICIES.remove_subject(username)
+                try:delete_account(ACCOUNTS_PATH,username,current_user.get_id(),revoke_account_access)
                 except ValueError as error:return jsonify(error=str(error)),404 if str(error)=='unknown_user' else 409
                 sync_accounts()
                 registry=module.app.config.get('SANEQUEUE_AUTH_SESSIONS')
@@ -1194,6 +1202,9 @@ install_reports(module.app, STATE/'history.sqlite3',
     can_queue=lambda queue,action:POLICIES.access(current_user.get_id() or '',cfg.get_value_set_default('roles',current_user.get_id() or '','viewer'),queue,action),
     own_interfaces=report_own_interfaces,
     known_agents=report_known_agents,
+    account_exists=lambda username: username in read_accounts(ACCOUNTS_PATH),
+    account_guard=lambda: ACCOUNT_LOCK,
+    account_context=report_account_context,
     planning_path=PLANNING.path,
     shift_identity=report_shift_identity,
     own_since=lambda:read_accounts(ACCOUNTS_PATH).get(current_user.get_id(),{}).get('phone_assigned_at',0),

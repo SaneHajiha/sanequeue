@@ -234,3 +234,105 @@ Contextual report filters and queue card navigation: 25 local backend tests and 
 
 On lab revision 1a9f0e8, 42 Linux tests passed and Asterisk PID was unchanged. Chrome inspected light operation, queue and report screens; global CDR search for a test extension returned results without queue parameter, three extension suggestions were shown, contextual queue visibility switched correctly, and the queue card opened the selected waiting view. No live monitoring command was issued. Screenshots cover selected desktop/mobile states, not a full accessibility or Voiping parity audit.
 
+
+## PBX call-report redesign — 2026-11-02
+Base: `e0a4fd355543eaa4528a969d86ab1e37fc893de0` (published reporting branch). Local targeted results: 42 pytest cases and 8 subtests passed (`test_reporting_cdr`, `test_reporting_cdr_api`, `test_reporting_theme_integration`, `test_reporting_queries`). Node harnesses passed for charts, navigation, reporting and Persian date picker. Chromium synthetic-data preview exercised the report, advanced filters, trend bucket buttons, clear action, dark mode and 390px viewport without document overflow. Screenshot uses synthetic report data and is kept outside the repository. No multi-version PBX, live load, unit-scope, or full WCAG conformance is certified.
+# PBX call-report visual iteration — 2026-11-03
+
+- Preview `baebd5ac` on port 18897: 81 Linux tests passed before switch;
+  Asterisk and collector PIDs were unchanged. Live browser successfully
+  downloaded the unique-number CSV and XLSX. A direct authenticated HTTP test
+  received a valid PDF response, but the automated browser observed HTTP 204
+  instead of a PDF download. Browser delivery of PDF is therefore not yet
+  accepted. No production gateway or PBX service was restarted.
+
+- Follow-up based on `22ec741`: 81 Python tests, the chart frontend test and
+  the offline Chromium fixture passed with CSV, Excel and PDF aggregate
+  downloads. Python tests validate actual workbook/PDF content and the PDF
+  100-row bound; the browser fixture verifies format selection and download.
+
+- Follow-up based on `d996964`: 81 Python tests covering CDR, API, report
+  queries, theme, outbound and queue outcomes passed; the chart frontend test
+  and offline synthetic Chromium fixture also passed. Added checks cover
+  same-source CDR segment counts across days, null denominator for empty data,
+  no source-number disclosure, CSRF, export permission and mid-request
+  revocation, the bounded-query refusal and the CSV download interaction.
+
+- Follow-up based on `ecdedaf`: 43 Python reporting tests, the chart frontend
+  test, and the offline Chromium fixture passed. The fixture verifies both
+  metric-definition disclosures remain available after reducing chart clutter.
+
+- Follow-up based on `a3a3fda`: the offline Chromium fixture passed for the
+  current and previous Persian week (Saturday start), rolling three Persian
+  months, clearing the previous selection, desktop/mobile layout, default
+  24-hour times and invalid-time rejection. `report_periods_frontend.cjs`,
+  `date_picker_frontend.cjs`, `report_navigation_frontend.cjs`, and
+  `report_charts_frontend.cjs` passed. The 43 Python reporting tests passed.
+
+- Follow-up based on `454b6b9`: `node tests/report_navigation_frontend.cjs`,
+  `node tests/date_picker_frontend.cjs`, and `node tests/report_charts_frontend.cjs`
+  passed. The fixture can be rebuilt using
+  `python -m tests.render_pbx_visual_fixture <temporary-html>` and exercised
+  with `node tests/pbx_report_visual.cjs`. The browser test requires environment
+  variables `PBX_OFFLINE_HTML` (rendered fixture), `PBX_PLAYWRIGHT` (installed
+  Playwright module), and optionally `PBX_BROWSER` and `PBX_SCREENSHOT`. It
+  intercepts the fixture host and uses only synthetic data.
+
+- Base revision: `77ca1e2` (subsequent working-tree changes: stacked compact
+  extension chart and report-scoped spacing).
+- `python -m unittest tests.test_reporting_theme_integration tests.test_reporting_cdr tests.test_reporting_cdr_api tests.test_reporting_queries`: 43 passed.
+- `node tests/report_charts_frontend.cjs`: passed, including compact stacked
+  bars, missing data, pagination, keyboard access, and stale exports.
+- Offline Chromium at 1487 × 1058 using the real rendered template and
+  synthetic API responses: report navigation, five cards and ten rows,
+  request times, invalid time, reset, extra filters, dark-mode toggle and
+  390-pixel page overflow checked. No page errors observed.
+- Visual comparison with the approved image remains incomplete: remaining
+  differences and the blocked server deployment are recorded in `design-qa.md`.
+  No live PBX data or services were changed by these checks.
+
+# 2026-11-04 organizational access and AI prototype
+
+PBX classification and aggregate export follow-up: `..\venv\Scripts\python.exe -m unittest tests.test_cdr_reasons tests.test_reporting_cdr_api tests.test_reporting_cdr tests.test_reporting_cdr_builder tests.test_reporting_cdr_builder_jobs tests.test_reporting_cdr_plans tests.test_reporting_pdf tests.test_unit_api` passed 151 tests. A later targeted 75-test run checked the four reason time buckets, permission rechecks and endpoint-filter worker gating. Synthetic Chromium exercised reason editing, analysis, both aggregate exports and extension drilldown; screenshots used synthetic data. Initial SQLite rollback test failed cleanup because the test connection remained open; it was closed and the test passed. No production deployment, live PBX, full visual comparison or load acceptance was performed.
+
+Reason timeline export follow-up: `..\venv\Scripts\python.exe -m unittest tests.test_cdr_reasons tests.test_reporting_cdr_api tests.test_reporting_pdf tests.test_reporting_cdr_plans tests.test_reporting_cdr_builder_jobs` passed 90 tests. A later targeted 75-test run rechecked grouping and access after label-state distinction. Synthetic Chromium exercised CSV downloads for performance, reasons and timeline with filters and CSRF. Persian Excel/PDF output was structurally tested; full visual PDF review remains open.
+
+CDR reason backup follow-up: `..\venv\Scripts\python.exe -m unittest tests.test_cdr_reason_backup tests.test_cdr_reasons tests.test_reporting_cdr_api tests.test_reporting_cdr_plans` passed 55 tests, including SQLite WAL backup, restore into a new directory, history preservation, corruption detection and refusal to overwrite. No live server or automatic-backup integration was tested.
+
+PBX endpoint performance follow-up: `..\venv\Scripts\python.exe -m unittest tests.test_reporting_cdr tests.test_reporting_cdr_api tests.test_unit_api tests.test_reporting_theme_integration` passed 40 tests. Synthetic Chromium exercised the new observed-endpoint table, SVG chart and advanced party filter; no production data or visual comparison against the approved mockup was performed.
+
+Organizational API access audit: `..\venv\Scripts\python.exe -m unittest tests.test_unit_api tests.test_unit_scope tests.test_identity_lifecycle tests.test_reporting_cdr_api tests.test_ai_report` passed 38 tests with synthetic data. The test checks privileged access to metadata, absence of the token and caller number, and refusal to deliver data when audit storage fails. Real server, audit retention and load remain untested.
+
+Bearer trend/export follow-up: `..\venv\Scripts\python.exe -m unittest tests.test_unit_api tests.test_unit_scope tests.test_reporting_cdr_api tests.test_reporting_pdf tests.test_ai_report` passed 43 tests. The bearer API test was extended and rerun separately to cover masked/full number exports and token revocation during file generation. Tests simulate HTTPS in Flask; no external network or real reverse proxy was used.
+
+Scoped bearer API follow-up: `..\venv\Scripts\python.exe -m unittest tests.test_unit_api tests.test_unit_scope tests.test_identity_lifecycle tests.test_reporting_cdr tests.test_reporting_cdr_api tests.test_ai_report` passed 53 tests. Tests exercise TLS requirement, hashed tokens, expiration/rate limit/revocation, permission intersections, masked numbers, role ceiling and permission revocation while querying. Synthetic Chromium tested token display once. HTTPS reverse proxy, multi-process identity changes, live PBX and external clients were not tested.
+
+AI previous-period comparison: `..\venv\Scripts\python.exe -m unittest tests.test_unit_api tests.test_ai_report tests.test_reporting_cdr tests.test_unit_scope` passed 31 tests. Synthetic browser smoke passed with a mocked comparison response. The initial comparison fixture failed because its timestamp fell in the current period; its dates were corrected and the suite rerun. No live model was called.
+
+Organizational trend follow-up: `..\venv\Scripts\python.exe -m unittest tests.test_unit_api tests.test_unit_scope tests.test_reporting_cdr tests.test_reporting_cdr_api` passed 37 tests. Synthetic Chromium exercised the actual SVG chart, the trend table and month selection. The first browser attempt used an ambiguous summary selector and failed; after fixing the selector the browser smoke passed. No real server data or deployment was used.
+
+AI aggregate metric follow-up: `..\venv\Scripts\python.exe -m unittest tests.test_unit_api tests.test_ai_report tests.test_reporting_cdr tests.test_reporting_cdr_api` passed 33 tests including unknown outcomes and known-duration samples. A zero-denominator assertion was added afterwards and was verified by a subsequent targeted test run. Provider responses were mocked; real model classification was not tested.
+
+Scoped PDF follow-up: `..\venv\Scripts\python.exe -m unittest tests.test_unit_api tests.test_unit_scope tests.test_reporting_cdr_api tests.test_reporting_pdf` passed 35 tests; browser smoke passed using synthetic data. An initial invocation named the nonexistent module `tests.test_pdf_stream` and failed to import it; the command above uses the correct existing test module. No production server or live OpenAI test was performed.
+
+Scoped Excel follow-up: `..\venv\Scripts\python.exe -m unittest tests.test_unit_api tests.test_reporting_cdr_api tests.test_unit_scope tests.test_ai_report` passed 22 tests, including masking and revocation while generating CSV/XLSX. Synthetic rendered-template Chromium smoke passed. No live server or OpenAI connection tested.
+
+Scoped CSV follow-up: `..\venv\Scripts\python.exe -m unittest tests.test_unit_api tests.test_unit_scope tests.test_identity_lifecycle tests.test_reporting_cdr tests.test_ai_report` passed 37 tests, including independent export/number grants, CSRF, masked output and revocation during generation. Rendered-template Chromium smoke passed using synthetic responses; no server or live OpenAI request was made.
+
+Account lifecycle follow-up: `..\venv\Scripts\python.exe -m unittest tests.test_identity_lifecycle tests.test_unit_scope tests.test_unit_api tests.test_ai_report tests.test_reporting_cdr_api tests.test_reporting_cdr`: 46 tests passed. The account recreation test checks grant invalidation with the local deletion callback, and the API test checks the role ceiling for unmasked numbers. Multi-process or externally edited account files were not tested.
+
+Follow-up: 41 unit/API/CDR/theme tests passed with `..\venv\Scripts\python.exe -m unittest tests.test_unit_api tests.test_unit_scope tests.test_reporting_cdr tests.test_reporting_cdr_api tests.test_ai_report tests.test_reporting_theme_integration`. Chromium synthetic smoke exercised the rendered report, AI form and organization grant form; no real provider or server was used. Details and remaining security boundaries are in `docs/UNIT_AI_PROGRESS.fa.md`.
+
+`..\venv\Scripts\python.exe -m unittest tests.test_ai_report tests.test_unit_api tests.test_unit_scope tests.test_reporting_cdr tests.test_reporting_cdr_api`: 34 tests passed. Tests use synthetic data and a fake OpenAI connection; no live provider, server, browser, audio entitlement, external token, multi-process quota, transfer or PBX load was tested.
+
+### فیلترها و روند عملکرد مرکز تلفن — ۱۳ آبان ۱۴۰۵
+
+- `python -m unittest tests.test_cdr_reasons tests.test_reporting_cdr_api tests.test_reporting_cdr tests.test_reporting_cdr_builder tests.test_reporting_cdr_builder_jobs tests.test_reporting_cdr_plans tests.test_reporting_pdf tests.test_unit_api tests.test_cdr_reason_backup`: ۱۵۳ آزمون موفق با Python محیط توسعه.
+- آزمون مرورگر `tests/unit_reports_browser.cjs` با Chromium و دادهٔ ساختگی موفق بود: فیلترهای داخلی شماره‌گیرنده و روز هفته در گزارش، drill-down و خروجی حفظ می‌شوند و انتخاب نمای هفتگی نمودار روند کار می‌کند. این آزمون پذیرش بصری نمونهٔ مصوب یا آزمون دادهٔ واقعی نیست.
+- پاسخ HTTP پیش‌نمایش `192.168.2.2:18897` بررسی شد؛ این صرفاً دسترس‌پذیری شبکه است و نصب نسخهٔ این شاخه را اثبات نمی‌کند.
+
+### فهرست دلایل و چند داخلی — ۱۳ آبان ۱۴۰۵
+
+- `python -m unittest tests.test_cdr_reasons tests.test_reporting_cdr_api tests.test_reporting_cdr tests.test_reporting_cdr_builder tests.test_reporting_cdr_builder_jobs tests.test_reporting_cdr_plans tests.test_reporting_pdf tests.test_unit_api tests.test_cdr_reason_backup`: ۱۶۰ آزمون موفق با دادهٔ ساختگی؛ شامل محدودیت و مجوز چند داخلی، CSRF و مجوز فهرست، حفظ برچسب پس از غیرفعال‌سازی و بازیابی فهرست از پشتیبان.
+- `tests/unit_reports_browser.cjs` در Chromium با fixture ساختگی: افزودن و غیرفعال‌سازی فهرست دلایل، پیشنهاد دلیل و جریان گزارش موفق بود. پذیرش بصری و تست دادهٔ واقعی هنوز انجام نشده است.
+- اتصال SSH به سرور با کلید و فایل هویت شناخته‌شده و خواندن وضعیت سرویس‌ها موفق بود؛ تغییر عملیاتی انجام نشد.

@@ -81,6 +81,7 @@ class CDRPlanAPITests(unittest.TestCase):
 
     def test_cdr_plan_denies_supervisor_number_filter_without_permission_and_partial_scope(self):
         self.assertEqual(self.client.post('/api/history/plans'+self.query,json={**self.body,'cdr_filters':{'src':'100'}},headers=self.headers).status_code,403)
+        self.assertEqual(self.client.post('/api/history/plans'+self.query,json={**self.body,'cdr_filters':{'endpoint':'PJSIP/100'}},headers=self.headers).status_code,403)
         self.assertEqual(self.client.post('/api/history/plans'+self.query,json={**self.body,'queues':['8002']},headers=self.headers).status_code,403)
         supervisor=self.c.client(role='supervisor',menus=('reports','users'),details=True)
         with supervisor.session_transaction() as state:state['csrf_token']='token'
