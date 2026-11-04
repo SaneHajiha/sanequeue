@@ -336,3 +336,8 @@ Follow-up: 41 unit/API/CDR/theme tests passed with `..\venv\Scripts\python.exe -
 - `python -m unittest tests.test_cdr_reasons tests.test_reporting_cdr_api tests.test_reporting_cdr tests.test_reporting_cdr_builder tests.test_reporting_cdr_builder_jobs tests.test_reporting_cdr_plans tests.test_reporting_pdf tests.test_unit_api tests.test_cdr_reason_backup`: ۱۶۰ آزمون موفق با دادهٔ ساختگی؛ شامل محدودیت و مجوز چند داخلی، CSRF و مجوز فهرست، حفظ برچسب پس از غیرفعال‌سازی و بازیابی فهرست از پشتیبان.
 - `tests/unit_reports_browser.cjs` در Chromium با fixture ساختگی: افزودن و غیرفعال‌سازی فهرست دلایل، پیشنهاد دلیل و جریان گزارش موفق بود. پذیرش بصری و تست دادهٔ واقعی هنوز انجام نشده است.
 - اتصال SSH به سرور با کلید و فایل هویت شناخته‌شده و خواندن وضعیت سرویس‌ها موفق بود؛ تغییر عملیاتی انجام نشد.
+
+### آزمون لینوکس و انتخابگر داخلی — ۱۳ آبان ۱۴۰۵
+
+- همان مجموعهٔ ۱۶۰ آزمون در کپی جداگانهٔ commit `8326f10` زیر `/var/tmp/sanequeue-pbx-review-8326f10` روی Python محیط سرور اجرا شد و موفق بود؛ این پذیرش ترانک واقعی یا نصب نسخه نیست.
+- انتخابگر داخلی با fixture مرورگر آزموده شد: بازکردن فهرست، انتخاب و لغو انتخاب، و انتقال فیلتر به گزارش. فهرست فقط داخلی‌های مشاهده‌شده در بازه را نشان می‌دهد.
