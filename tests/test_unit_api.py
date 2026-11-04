@@ -179,6 +179,27 @@ class UnitAPITests(unittest.TestCase):
             self.post(operation='revoke',id=play_grant)
             self.assertEqual(list(chunks),[]);stream.close()
             self.post(operation='grant',unit_id=unit,username='test',capability='recording_play')
+            self.post(operation='grant',unit_id=unit,username='test',capability='api')
+            issued=self.admin.post('/api/organization/tokens',base_url='https://localhost',json={'days':30},headers=self.header)
+            bearer=issued.json['token'];auth={'Authorization':'Bearer '+bearer};anonymous=self.admin.application.test_client()
+            api_cdr='/api/organization/integration/cdr?from=2026-10-24&to=2026-10-25'
+            api_rows=anonymous.get(api_cdr,headers=auth,base_url='https://localhost').json['rows']
+            api_ref=next(row['recording']['ref'] for row in api_rows if row.get('recording'))
+            api_audio='/api/organization/integration/recording/'+api_ref
+            self.assertEqual(anonymous.get(api_audio,headers=auth).status_code,403)
+            self.assertEqual(anonymous.get(api_audio,base_url='https://localhost').status_code,401)
+            from sanequeue.security.unit_scope import ScopeUnavailable
+            with patch('sanequeue.security.unit_scope.UnitScopeStore.audit_api',side_effect=ScopeUnavailable('storage')):
+                blocked=anonymous.get(api_audio,headers=auth,base_url='https://localhost')
+            self.assertEqual(blocked.status_code,503);self.assertNotIn(b'RIFF',blocked.data)
+            streamed=anonymous.get(api_audio,headers=auth,base_url='https://localhost',buffered=False)
+            self.assertEqual(streamed.status_code,200);iterator=iter(streamed.response)
+            self.assertEqual(len(next(iterator)),65536)
+            audit=self.admin.get('/api/organization/access/audit').json['rows']
+            self.assertEqual(audit[0]['dataset'],'recording_play');self.assertNotIn(bearer,str(audit))
+            self.admin.post('/api/organization/tokens/revoke',base_url='https://localhost',json={'id':issued.json['id']},headers=self.header)
+            self.assertEqual(list(iterator),[]);streamed.close()
+            self.assertEqual(anonymous.get(api_audio,headers=auth,base_url='https://localhost').status_code,401)
             result=self.admin.get(url);recording=next(row['recording'] for row in result.json['rows'] if row.get('recording'))
             path='/api/organization/reports/recording/'+recording['ref']
             with self.case.archive.writer() as db:

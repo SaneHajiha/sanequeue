@@ -296,7 +296,7 @@ class UnitScopeStore:
     def audit_api(self,username,token_id,dataset,status):
         """Record bounded access metadata, never credentials, filters or data."""
         _user(username);_id(token_id)
-        if dataset not in ('summary','cdr','trend','export.csv','export.xlsx','export.pdf') or type(status) is not int or not 100<=status<=599:
+        if dataset not in ('summary','cdr','trend','export.csv','export.xlsx','export.pdf','recording_play','recording_download') or type(status) is not int or not 100<=status<=599:
             raise ValueError('invalid_unit_audit')
         with self._db(write=True) as db:
             if db.execute('SELECT COUNT(*) FROM unit_api_audit WHERE pbx=?',(self.pbx,)).fetchone()[0]>=100000:

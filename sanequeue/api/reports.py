@@ -771,6 +771,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if event:
             try:unit_store.audit_api(event['username'],event['token_id'],event['dataset'],response.status_code)
             except (ValueError,ScopeUnavailable,ScopeConflict,OSError,sqlite3.Error):
+                response.close()
                 response=app.make_response((jsonify(error='unit_audit_unavailable'),503))
                 response.headers['Cache-Control']='private, no-store'
         return response
@@ -865,7 +866,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             if not re.fullmatch(r'[0-9]{1,3}',limit):raise ValueError('invalid_unit_page_limit')
             secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
             data=unit_cdr.details(archive,unit_store,owner,start,end,filters,cursor=request.args.get('cursor'),limit=int(limit),
-                                  secret=secret,allow_full=account.get('role') in ('admin','supervisor'))
+                                  secret=secret,allow_full=account.get('role') in ('admin','supervisor'),
+                                  allow_audio=account.get('role') in ('admin','supervisor'))
         else:
             if account.get('role') not in ('admin','supervisor'):abort(403)
             secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
@@ -973,16 +975,8 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if str(current_user.get_id())!=owner or role()!=current_role or 'reports' not in sections():abort(403)
         return jsonify(data)
 
-    @app.get('/api/organization/reports/recording/<token>')
-    @login_required
-    @safe
-    def organization_recording(token):
-        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
-        owner=str(current_user.get_id());current_role=role()
-        if current_role not in ('admin','supervisor') or 'reports' not in sections():abort(403)
+    def authorize_unit_recording(owner,token,capability):
         ref=unit_store.load_recording_ref(owner,token);stamp=ref['stamp'];ident=ref['source_key']
-        capability='recording_download' if request.args.get('download')=='1' else 'recording_play'
-        if set(request.args)-{'download'} or request.args.get('download') not in (None,'1'):raise ValueError('invalid_unit_recording_request')
         detail=unit_store.resolve(owner,'call_details',stamp,stamp+.001)
         media=unit_store.resolve(owner,capability,stamp,stamp+.001)
         if detail['revision']!=ref['revision'] or media['revision']!=ref['revision']:abort(403)
@@ -1008,7 +1002,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                        (item['ends'] is None or end<=item['ends']) for item in scope['assignments'])
         if not covers(detail) or not covers(media):abort(403)
         if (recording_ownership(archive,ident)!=frozenset() or not unit_store.still_current(detail) or
-            unit_store.load_recording_ref(owner,token)!=ref or str(current_user.get_id())!=owner or role()!=current_role or 'reports' not in sections()):abort(403)
+            unit_store.load_recording_ref(owner,token)!=ref):abort(403)
         with archive.reader() as db:
             current=db.execute('''SELECT c.recording,c.ts,c.duration,c.uid,c.linkedid,p.agent,p.direction,p.inventory_observed
               FROM report_cdr c JOIN report_cdr_parties p ON p.pbx=c.pbx AND p.source_key=c.source_key
@@ -1017,7 +1011,47 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                 'SELECT 1 FROM report_cel_transfers WHERE pbx=? AND (uid IN ('+marks+') OR linkedid IN ('+marks+')) LIMIT 1',
                 (pbx,*identities,*identities)).fetchone():abort(403)
         if not unit_store.still_current(detail):abort(403)
-        return serve_recording(row,token,capability=='recording_download',authorize_chunk=lambda:unit_store.still_current(detail),audit_id=ident)
+        return row,ident,detail,stamp
+
+    def unit_recording_capability():
+        if set(request.args)-{'download'} or request.args.get('download') not in (None,'1'):raise ValueError('invalid_unit_recording_request')
+        return 'recording_download' if request.args.get('download')=='1' else 'recording_play'
+
+    @app.get('/api/organization/reports/recording/<token>')
+    @login_required
+    @safe
+    def organization_recording(token):
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        owner=str(current_user.get_id());current_role=role()
+        if current_role not in ('admin','supervisor') or 'reports' not in sections():abort(403)
+        capability=unit_recording_capability()
+        row,ident,detail,_=authorize_unit_recording(owner,token,capability)
+        if str(current_user.get_id())!=owner or role()!=current_role or 'reports' not in sections():abort(403)
+        return serve_recording(row,token,capability=='recording_download',authorize_chunk=lambda:unit_store.still_current(detail) and unit_store.load_recording_ref(owner,token)['revision']==detail['revision'],audit_id=ident)
+
+    @app.get('/api/organization/integration/recording/<ref_token>')
+    @safe
+    def organization_integration_recording(ref_token):
+        if not request.is_secure:abort(403)
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        header=request.headers.get('Authorization','')
+        if not header.startswith('Bearer '):abort(401)
+        bearer=header[7:];identity=unit_store.authenticate_token(bearer,consume=True)
+        if not identity:abort(401)
+        owner=identity['username'];capability=unit_recording_capability()
+        g.unit_integration_audit=dict(username=owner,token_id=identity['id'],dataset=capability)
+        account=account_context(owner)
+        if not isinstance(account,dict) or account.get('role') not in ('admin','supervisor') or 'reports' not in account.get('sections',()):abort(403)
+        row,ident,detail,stamp=authorize_unit_recording(owner,ref_token,capability)
+        api_scope=unit_store.resolve(owner,'api',stamp,stamp+.001)
+        if (api_scope['revision']!=detail['revision'] or not detail['units'] or
+            not set(detail['units']).issubset(api_scope['units'])):abort(403)
+        def still_allowed():
+            return (unit_store.still_current(detail) and unit_store.still_current(api_scope) and
+                    unit_store.load_recording_ref(owner,ref_token)['revision']==detail['revision'] and
+                    unit_store.authenticate_token(bearer)==identity and account_context(owner)==account)
+        if not still_allowed():abort(403)
+        return serve_recording(row,ref_token,capability=='recording_download',authorize_chunk=still_allowed,audit_id=ident,audit_owner=owner)
 
     @app.post('/api/organization/reports/cdr/export.<format>')
     @login_required
@@ -1878,7 +1912,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             abort(404)
         return serve_recording(row,recording_id,download)
 
-    def serve_recording(row,recording_id,download,*,authorize_chunk=None,audit_id=None):
+    def serve_recording(row,recording_id,download,*,authorize_chunk=None,audit_id=None,audit_owner=None):
         reference = row['recording']
         suffix = Path(reference).suffix.lower()
         if not download and suffix not in ('.wav', '.mp3', '.ogg'):
@@ -1903,7 +1937,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             try:
                 if not audit_ready:
                     raise AuditUnavailable('recording_audit_unavailable')
-                audit_store.append(str(current_user.get_id()), audit_id or recording_id,
+                audit_store.append(audit_owner or str(current_user.get_id()), audit_id or recording_id,
                                    'download_request' if download else 'play_request')
             except AuditUnavailable:
                 os.close(fd)
@@ -1933,7 +1967,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if partial:
             response.headers['Content-Range'] = f'bytes {start}-{end}/{size}'
         response.call_on_close(stream.close)
-        app.logger.info('report recording user=%r id=%r action=%s', current_user.get_id(),
+        app.logger.info('report recording user=%r id=%r action=%s', audit_owner or current_user.get_id(),
                         recording_id, 'download' if download else 'play')
         return response
 
