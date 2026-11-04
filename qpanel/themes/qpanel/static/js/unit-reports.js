@@ -3,9 +3,10 @@
  const $=id=>document.getElementById(id),section=$('history-unit-section'),dates=$('history-filters');
  if(!section||!dates)return;
  const fa=document.documentElement.lang==='fa',t=(a,b)=>fa?a:b,locale=fa?'fa-IR':'en-GB';
- const feedback=$('unit-report-feedback'),summary=$('unit-report-summary'),host=$('unit-report-table'),nextButton=$('unit-report-next');
+ const feedback=$('unit-report-feedback'),summary=$('unit-report-summary'),host=$('unit-report-table'),nextButton=$('unit-report-next'),filters=$('unit-report-filters');
  let cursor=null,serial=0,rows=[];
- const params=()=>new URLSearchParams({from:dates.elements.from.value,to:dates.elements.to.value});
+ const datesParams=()=>new URLSearchParams({from:dates.elements.from.value,to:dates.elements.to.value});
+ const params=()=>{const p=datesParams();for(const [key,value] of new FormData(filters))if(value)p.set(key,value);return p;};
  const cell=(tag,text)=>{const x=document.createElement(tag);x.textContent=text??'—';return x;};
  const number=v=>v==null?'—':Number(v).toLocaleString(locale,{maximumFractionDigits:1});
  async function api(url,options){const response=await fetch(url,{credentials:'same-origin',...options});if(!response.ok)throw Error(String(response.status));return response.json();}
@@ -18,7 +19,9 @@
   table.append(body);host.replaceChildren(table);}
  function reset(){serial++;cursor=null;rows=[];summary.replaceChildren();host.replaceChildren();nextButton.hidden=true;feedback.textContent='';$('unit-ai-feedback').textContent='';$('unit-trend-table').replaceChildren();$('unit-trend-feedback').textContent='';window.SaneQueueReportCharts?.clear($('unit-trend-chart'));}
  dates.addEventListener('change',reset);
- async function run(more=false){if(!dates.reportValidity())return;const generation=++serial,p=params();
+ for(const event of ['input','change'])filters.addEventListener(event,reset);
+ filters.addEventListener('submit',event=>{event.preventDefault();run();});
+ async function run(more=false){if(!dates.reportValidity()||!filters.reportValidity())return;const generation=++serial,p=params();
   if(more&&cursor)p.set('cursor',cursor);if(!more){rows=[];summary.replaceChildren();host.replaceChildren();$('unit-trend-table').replaceChildren();window.SaneQueueReportCharts?.clear($('unit-trend-chart'));$('unit-trend-feedback').textContent=t('در حال محاسبهٔ روند…','Loading trend…');}
   feedback.textContent=t('در حال دریافت گزارش…','Loading report…');nextButton.disabled=true;
   const requests=[api('/api/organization/reports/cdr?'+p)];if(!more){requests.push(api('/api/organization/reports/cdr/summary?'+params()));const tp=params();tp.set('bucket',$('unit-trend-bucket').value);tp.set('calendar',fa?'persian':'gregorian');requests.push(api('/api/organization/reports/cdr/trend?'+tp));}
@@ -45,7 +48,7 @@
  const hideToken=()=>{if(section.hidden||document.body.dataset.view!=='reports')$('unit-token-secret').textContent='';};
  new MutationObserver(hideToken).observe(section,{attributes:true,attributeFilter:['hidden']});
  new MutationObserver(hideToken).observe(document.body,{attributes:true,attributeFilter:['data-view']});
- $('unit-report-export').addEventListener('click',async event=>{if(!dates.reportValidity())return;const button=event.currentTarget,generation=serial;let config={};try{config=JSON.parse($('ops-config').textContent);}catch{}
+ $('unit-report-export').addEventListener('click',async event=>{if(!dates.reportValidity()||!filters.reportValidity())return;const button=event.currentTarget,generation=serial;let config={};try{config=JSON.parse($('ops-config').textContent);}catch{}
   if(!config.csrf){feedback.textContent=t('نشست معتبر لازم است.','A valid session is required.');return;}button.disabled=true;
   try{const format=$('unit-report-format').value;if(!['csv','xlsx','pdf'].includes(format))throw Error('export');
    const response=await fetch('/api/organization/reports/cdr/export.'+format+'?'+params(),{method:'POST',credentials:'same-origin',headers:{'X-CSRF-Token':config.csrf}});
@@ -59,7 +62,7 @@
   const f=event.currentTarget,button=f.querySelector('button'),out=$('unit-ai-feedback'),generation=serial;let config={};try{config=JSON.parse($('ops-config').textContent);}catch{}
   if(!config.csrf){out.textContent=t('نشست معتبر لازم است.','A valid session is required.');return;}
   button.disabled=true;out.textContent=t('در حال بررسی پرسش…','Analyzing question…');
-  try{const result=await api('/api/organization/reports/ai?'+params(),{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':config.csrf},body:JSON.stringify({question:f.elements.question.value})});
+  try{const result=await api('/api/organization/reports/ai?'+datesParams(),{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':config.csrf},body:JSON.stringify({question:f.elements.question.value})});
    if(generation!==serial||section.hidden)return;
    if(result.state!=='available'){out.textContent=result.message||t('این پرسش پشتیبانی نمی‌شود.','This question is not supported.');return;}
    const metrics={count:t('تعداد بخش‌های تماس','Call segments'),answered:t('بخش‌های پاسخ‌داده','Answered segments'),unanswered:t('بخش‌های بی‌پاسخ','Unanswered segments'),average_duration:t('میانگین مدت، ثانیه','Average duration, seconds'),average_talk:t('میانگین مکالمهٔ ثبت‌شده، ثانیه','Average known talk, seconds'),average_answered_talk:t('میانگین مکالمهٔ پاسخ‌داده، ثانیه','Average answered talk, seconds'),total_talk:t('مجموع مکالمهٔ ثبت‌شده، ثانیه','Total known talk, seconds'),answer_rate:t('نرخ پاسخِ وضعیت‌های معلوم، درصد','Answer rate of known outcomes, percent')};

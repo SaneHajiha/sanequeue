@@ -347,3 +347,8 @@ Follow-up: 41 unit/API/CDR/theme tests passed with `..\venv\Scripts\python.exe -
 - `python -m unittest tests.test_unit_scope tests.test_unit_api tests.test_identity_lifecycle`: ۲۶ آزمون موفق پس از افزودن حسابرسی تراکنشی. آزمون خرابی دفتر، بازگشت تغییر و محدودبودن مشاهده به مدیر مجاز را بررسی کرد.
 - مجموعهٔ گسترش‌یافتهٔ دسترسی و رگرسیون CDR: ۱۱۸ آزمون موفق پیش از افزودن نمایش نام واحد به خواندن تاریخچه؛ پس از آن مجموعهٔ اختصاصی ۲۶ آزمونی مجدداً موفق شد.
 - آزمون مرورگر `tests/unit_reports_browser.cjs` با fixture ساختگی: نمایش تاریخچهٔ مدیریت و کنترل‌های قبلی موفق بود. این آزمون پذیرش واقعی یا نفوذ مستقل نیست.
+
+### جست‌وجوی شماره در محدودهٔ واحد — ۱۴ آبان ۱۴۰۵
+
+- `python -m unittest tests.test_unit_api tests.test_unit_scope tests.test_identity_lifecycle tests.test_reporting_cdr tests.test_reporting_cdr_api tests.test_reporting_cdr_builder_jobs tests.test_reporting_cdr_plans`: ۱۱۹ آزمون موفق. مجوز شمارهٔ کامل در کل محدوده، سقف نقش، مجوز ناقص و لغو مجوز حین محاسبه بررسی شد.
+- `tests/unit_reports_browser.cjs` با Chromium و دادهٔ ساختگی: فیلتر داخلی در درخواست گزارش واحد و پاک‌سازی وضعیت، همراه آزمون‌های موجود مرورگر موفق بود. تست ارتباط واقعی، صوت سازمانی و استقرار HTTPS هنوز انجام نشده است.

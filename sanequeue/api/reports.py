@@ -847,7 +847,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if not 0<(last-first).days<=366:raise ValueError('invalid_report_range')
         start=datetime.combine(first,datetime.min.time(),ZoneInfo('Asia/Tehran')).timestamp()
         end=datetime.combine(last,datetime.min.time(),ZoneInfo('Asia/Tehran')).timestamp()
-        allowed=unit_cdr._SAFE_FILTERS
+        allowed=unit_cdr._FILTERS
         extra={'from','to'}|({'cursor','limit'} if dataset=='cdr' else {'bucket','calendar'} if dataset=='trend' else set())
         if set(request.args)-allowed-extra:raise ValueError('invalid_unit_report_filter')
         filters={key:request.args[key] for key in allowed if request.args.get(key) not in (None,'')}
@@ -856,9 +856,9 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         required=unit_store.resolve(owner,'summary' if dataset in ('summary','trend') else 'call_details',start,end)
         if api_scope['revision']!=required['revision']:raise ScopeConflict('unit_scope_changed')
         if not required['units'] or not set(required['units']).issubset(api_scope['units']):abort(403)
-        if dataset=='summary':data=unit_cdr.summary(archive,unit_store,owner,start,end,filters)
+        if dataset=='summary':data=unit_cdr.summary(archive,unit_store,owner,start,end,filters,allow_full=account.get('role') in ('admin','supervisor'))
         elif dataset=='trend':
-            data=unit_cdr.trend(archive,unit_store,owner,start,end,filters,bucket=request.args.get('bucket','day'),calendar=request.args.get('calendar','persian'))
+            data=unit_cdr.trend(archive,unit_store,owner,start,end,filters,bucket=request.args.get('bucket','day'),calendar=request.args.get('calendar','persian'),allow_full=account.get('role') in ('admin','supervisor'))
         elif dataset=='cdr':
             limit=request.args.get('limit','50')
             if not re.fullmatch(r'[0-9]{1,3}',limit):raise ValueError('invalid_unit_page_limit')
@@ -930,13 +930,13 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     @safe
     def organization_cdr_summary():
         if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
-        owner=str(current_user.get_id());_,start,end=context()
-        allowed=unit_cdr._SAFE_FILTERS
+        owner=str(current_user.get_id());current_role=role();_,start,end=context()
+        allowed=unit_cdr._FILTERS
         filters={key:request.args[key] for key in allowed if request.args.get(key) not in (None,'')}
         if set(request.args)-allowed-{'from','to'}:raise ValueError('invalid_unit_report_filter')
         if 'weekdays' in filters:filters['weekdays']=filters['weekdays'].split(',')
-        data=unit_cdr.summary(archive,unit_store,owner,start,end,filters)
-        if str(current_user.get_id())!=owner or 'reports' not in sections():abort(403)
+        data=unit_cdr.summary(archive,unit_store,owner,start,end,filters,allow_full=current_role in ('admin','supervisor'))
+        if str(current_user.get_id())!=owner or role()!=current_role or 'reports' not in sections():abort(403)
         return jsonify(data)
 
     @app.get('/api/organization/reports/cdr/trend')
@@ -944,14 +944,14 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     @safe
     def organization_cdr_trend():
         if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
-        owner=str(current_user.get_id());_,start,end=context()
-        allowed=unit_cdr._SAFE_FILTERS
+        owner=str(current_user.get_id());current_role=role();_,start,end=context()
+        allowed=unit_cdr._FILTERS
         if set(request.args)-allowed-{'from','to','bucket','calendar'}:raise ValueError('invalid_unit_report_filter')
         filters={key:request.args[key] for key in allowed if request.args.get(key) not in (None,'')}
         if 'weekdays' in filters:filters['weekdays']=filters['weekdays'].split(',')
         data=unit_cdr.trend(archive,unit_store,owner,start,end,filters,
-                            bucket=request.args.get('bucket','day'),calendar=request.args.get('calendar','persian'))
-        if str(current_user.get_id())!=owner or 'reports' not in sections():abort(403)
+                            bucket=request.args.get('bucket','day'),calendar=request.args.get('calendar','persian'),allow_full=current_role in ('admin','supervisor'))
+        if str(current_user.get_id())!=owner or role()!=current_role or 'reports' not in sections():abort(403)
         return jsonify(data)
 
     @app.get('/api/organization/reports/cdr')
@@ -960,7 +960,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
     def organization_cdr_details():
         if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
         owner=str(current_user.get_id());current_role=role();_,start,end=context()
-        allowed=unit_cdr._SAFE_FILTERS
+        allowed=unit_cdr._FILTERS
         if set(request.args)-allowed-{'from','to','cursor','limit'}:raise ValueError('invalid_unit_report_filter')
         filters={key:request.args[key] for key in allowed if request.args.get(key) not in (None,'')}
         if 'weekdays' in filters:filters['weekdays']=filters['weekdays'].split(',')
@@ -980,7 +980,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
         owner=str(current_user.get_id());current_role=role();_,start,end=context();export_csrf()
         if current_role not in ('admin','supervisor'):abort(403)
-        allowed=unit_cdr._SAFE_FILTERS
+        allowed=unit_cdr._FILTERS
         if set(request.args)-allowed-{'from','to'}:raise ValueError('invalid_unit_report_filter')
         filters={key:request.args[key] for key in allowed if request.args.get(key) not in (None,'')}
         if 'weekdays' in filters:filters['weekdays']=filters['weekdays'].split(',')

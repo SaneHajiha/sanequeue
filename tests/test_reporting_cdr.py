@@ -162,7 +162,7 @@ class CDRTests(unittest.TestCase):
         self.assertEqual(data['totals']['segments_started'],1)
         self.assertNotIn('trunk_traffic',data);self.assertNotIn('endpoints',data)
         self.assertNotIn('09123456789',str(data))
-        with self.assertRaises(ValueError):
+        with self.assertRaises(UnitAccessDenied):
             scoped_summary(self.archive,store,'manager',100,300,{'src':'09123456789'})
         with self.assertRaises(UnitAccessDenied):
             scoped_summary(self.archive,store,'other',100,300)

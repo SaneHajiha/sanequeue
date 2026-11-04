@@ -25,17 +25,27 @@ class UnitAccessDenied(PermissionError):
 _SAFE_FILTERS=frozenset(('direction','disposition','hour_from','hour_to',
     'time_from','time_to','weekdays','duration_min','duration_max',
     'billsec_min','billsec_max'))
+_IDENTIFIER_FILTERS=frozenset(('src','dst','party','origin','endpoint','match','src_length','dst_length'))
+_FILTERS=_SAFE_FILTERS|_IDENTIFIER_FILTERS
 
 
-def summary(archive,store,username,start,end,filters=None):
+def _check_filters(store,username,start,end,filters,scope,allow_full):
+    if not isinstance(filters,dict) or set(filters)-_FILTERS:raise ValueError('invalid_unit_report_filter')
+    if not set(filters).intersection(_IDENTIFIER_FILTERS):return
+    numbers=store.resolve(username,'full_numbers',start,end)
+    if numbers['revision']!=scope['revision']:raise ScopeConflict('unit_scope_changed')
+    if not allow_full or not set(scope['units']).issubset(numbers['units']):
+        raise UnitAccessDenied('unit_number_search_not_granted')
+
+
+def summary(archive,store,username,start,end,filters=None,*,allow_full=False):
     if archive.pbx!=store.pbx:
         raise UnitAccessDenied('unit_pbx_mismatch')
     if filters is None:filters={}
-    if not isinstance(filters,dict) or set(filters)-_SAFE_FILTERS:
-        raise ValueError('invalid_unit_report_filter')
     scope=store.resolve(username,'summary',start,end)
     if not scope['units']:
         raise UnitAccessDenied('unit_summary_not_granted')
+    _check_filters(store,username,start,end,filters,scope,allow_full)
     result=cdr_queries.summary(archive,start,end,filters,unit_scope=scope)
     # These groups may contain identifiers or expose organizational structure
     # beyond the caller's summary permission.
@@ -46,12 +56,12 @@ def summary(archive,store,username,start,end,filters=None):
     return result
 
 
-def trend(archive,store,username,start,end,filters=None,*,bucket='day',calendar='persian'):
+def trend(archive,store,username,start,end,filters=None,*,bucket='day',calendar='persian',allow_full=False):
     if archive.pbx!=store.pbx:raise UnitAccessDenied('unit_pbx_mismatch')
     if filters is None:filters={}
-    if not isinstance(filters,dict) or set(filters)-_SAFE_FILTERS:raise ValueError('invalid_unit_report_filter')
     scope=store.resolve(username,'summary',start,end)
     if not scope['units']:raise UnitAccessDenied('unit_summary_not_granted')
+    _check_filters(store,username,start,end,filters,scope,allow_full)
     result=cdr_trend.report(archive,start,end,filters,bucket=bucket,calendar=calendar,unit_scope=scope)
     if not store.still_current(scope):raise ScopeConflict('unit_scope_changed')
     return result
@@ -65,11 +75,11 @@ def details(archive,store,username,start,end,filters=None,*,cursor=None,limit=50
     """
     if archive.pbx!=store.pbx:raise UnitAccessDenied('unit_pbx_mismatch')
     if filters is None:filters={}
-    if not isinstance(filters,dict) or set(filters)-_SAFE_FILTERS:raise ValueError('invalid_unit_report_filter')
     if type(limit) is not int or not 1<=limit<=100:raise ValueError('invalid_unit_page_limit')
     scope=store.resolve(username,'call_details',start,end)
     numbers=store.resolve(username,'full_numbers',start,end)
     if not scope['units']:raise UnitAccessDenied('unit_details_not_granted')
+    _check_filters(store,username,start,end,filters,scope,allow_full)
     if scope['revision']!=numbers['revision']:raise ScopeConflict('unit_scope_changed')
     query_hash=hashlib.sha256(json.dumps([start,end,filters,limit],sort_keys=True,
         separators=(',',':'),ensure_ascii=True,allow_nan=False).encode()).hexdigest()
@@ -96,11 +106,11 @@ def export_csv(archive,store,username,start,end,filters=None,*,secret,allow_full
     """Export a bounded complete result or fail, never a silent partial file."""
     if archive.pbx!=store.pbx:raise UnitAccessDenied('unit_pbx_mismatch')
     filters={} if filters is None else filters
-    if not isinstance(filters,dict) or set(filters)-_SAFE_FILTERS:raise ValueError('invalid_unit_report_filter')
     scope=store.resolve(username,'call_details',start,end)
     grant=store.resolve(username,'export',start,end)
     numbers=store.resolve(username,'full_numbers',start,end)
     if not scope['units'] or not set(scope['units']).issubset(grant['units']):raise UnitAccessDenied('unit_export_not_granted')
+    _check_filters(store,username,start,end,filters,scope,allow_full)
     if len({scope['revision'],grant['revision'],numbers['revision']})!=1:raise ScopeConflict('unit_scope_changed')
     clause,args,_=cdr_queries._where(archive,start,end,filters,unit_scope=scope,unit_capability='call_details')
     with archive.reader() as db:

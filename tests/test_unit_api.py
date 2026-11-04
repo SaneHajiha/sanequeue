@@ -45,7 +45,33 @@ class UnitAPITests(unittest.TestCase):
         self.assertEqual(result.json['totals']['segments_started'],1)
         self.assertNotIn('09123456789',result.get_data(as_text=True))
         self.assertEqual(self.case.client(menus=('users',)).get(report).status_code,403)
-        self.assertEqual(self.case.client().get(report+'&src=09123456789').status_code,400)
+        self.assertEqual(self.case.client().get(report+'&src=09123456789').status_code,403)
+
+    def test_identifier_filters_require_number_permission_for_entire_scope(self):
+        org=self.post(operation='create',kind='organization',name='Org')
+        dept=self.post(operation='create',kind='department',name='Dept',parent=org)
+        first=self.post(operation='create',kind='unit',name='Site',parent=dept)
+        other=self.post(operation='create',kind='unit',name='Other',parent=dept)
+        self.post(operation='assign',unit_id=first,endpoint='PJSIP/100',start=self.case.stamp-10)
+        for unit in (first,other):
+            for capability in ('summary','call_details'):
+                self.post(operation='grant',unit_id=unit,username='test',capability=capability)
+        self.post(operation='grant',unit_id=first,username='test',capability='full_numbers')
+        base='/api/organization/reports/cdr?from=2026-10-24&to=2026-10-25'
+        self.assertEqual(self.admin.get(base+'&endpoint=PJSIP%2F100').status_code,403)
+        number_grant=self.post(operation='grant',unit_id=other,username='test',capability='full_numbers')
+        self.assertEqual(self.admin.get(base+'&endpoint=PJSIP%2F100').status_code,200)
+        self.assertEqual(self.case.client(role='viewer').get(base+'&endpoint=PJSIP%2F100').status_code,403)
+        summary='/api/organization/reports/cdr/summary?from=2026-10-24&to=2026-10-25'
+        self.assertEqual(self.admin.get(summary+'&party=09123456789').json['totals']['segments_started'],1)
+        self.assertEqual(self.admin.get(summary+'&party=09121111111').json['totals']['segments_started'],0)
+        from sanequeue.reporting.cdr_queries import summary as calculate
+        def revoke_during_search(*args,**kwargs):
+            result=calculate(*args,**kwargs);self.post(operation='revoke',id=number_grant);return result
+        with patch('sanequeue.reporting.unit_cdr.cdr_queries.summary',side_effect=revoke_during_search):
+            denied=self.admin.get(summary+'&party=09123456789')
+        self.assertNotEqual(denied.status_code,200)
+        self.assertNotIn('totals',denied.json)
 
     def test_access_changes_are_audited_atomically_and_hidden_from_other_roles(self):
         org=self.post(operation='create',kind='organization',name='Private')
@@ -223,7 +249,7 @@ class UnitAPITests(unittest.TestCase):
         self.assertEqual(sum(row['inbound'] for row in result.json['rows']),1)
         self.assertEqual(result.json['scope'],'organization_unit')
         self.assertNotIn('09000000000',result.get_data(as_text=True))
-        self.assertEqual(self.case.client().get(url+'&src=09000000000').status_code,400)
+        self.assertEqual(self.case.client().get(url+'&src=09000000000').status_code,403)
         from sanequeue.reporting.cdr_trend import report
         def revoke(*args,**kwargs):
             result=report(*args,**kwargs);self.post(operation='revoke',id=grant);return result
@@ -314,7 +340,9 @@ class UnitAPITests(unittest.TestCase):
         extra=self.post(operation='grant',unit_id=other,username='test',capability='summary')
         self.assertEqual(anonymous.get(url.replace('/cdr?','/summary?'),headers=authorization,base_url='https://localhost').status_code,403)
         self.post(operation='revoke',id=extra)
-        self.assertEqual(anonymous.get(url+'&src=09123456789',headers=authorization,base_url='https://localhost').status_code,400)
+        filtered=anonymous.get(url+'&src=09123456789',headers=authorization,base_url='https://localhost')
+        self.assertEqual(filtered.status_code,200)
+        self.assertEqual(len(filtered.json['rows']),1)
         from sanequeue.reporting.unit_cdr import summary
         def revoke_during_summary(*args,**kwargs):
             data=summary(*args,**kwargs);self.post(operation='revoke',id=api_grant);return data
