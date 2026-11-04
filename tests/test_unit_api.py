@@ -140,6 +140,51 @@ class UnitAPITests(unittest.TestCase):
         self.assertNotIn('09121111111',viewer.get_data(as_text=True))
         self.assertFalse(full.json['audio_available'])
 
+    def test_direct_recording_separates_permissions_and_rejects_transfer(self):
+        org=self.post(operation='create',kind='organization',name='Org')
+        dept=self.post(operation='create',kind='department',name='Dept',parent=org)
+        unit=self.post(operation='create',kind='unit',name='Site',parent=dept)
+        self.post(operation='assign',unit_id=unit,endpoint='PJSIP/100',start=self.case.stamp-10)
+        self.post(operation='grant',unit_id=unit,username='test',capability='call_details')
+        play_grant=self.post(operation='grant',unit_id=unit,username='test',capability='recording_play')
+        self.case.archive.append([Event('cdr','unit-audio',self.case.stamp+20,'CDR',dict(
+            uniqueid='unit-audio-id',linkedid='unit-audio-id',src='09123456789',dst='100',channel='PJSIP/provider-000000aa',
+            dstchannel='PJSIP/100-000000bb',duration=10,billsec=5,disposition='ANSWERED',recordingfile='test.wav'))])
+        while project_batch(self.case.archive,inventory=dict(observed_at=self.case.stamp,endpoints=[
+            dict(technology='PJSIP',endpoint='100',category='extension'),dict(technology='PJSIP',endpoint='provider',category='trunk')]))['processed']:pass
+        audio=self.case.root/'audio';audio.mkdir();(audio/'test.wav').write_bytes(b'RIFF'+b'0'*150000)
+        url='/api/organization/reports/cdr?from=2026-10-24&to=2026-10-25'
+        result=self.admin.get(url);recording=next(row['recording'] for row in result.json['rows'] if row.get('recording'))
+        self.assertTrue(recording['play']);self.assertFalse(recording['download'])
+        path='/api/organization/reports/recording/'+recording['ref']
+        self.assertEqual(self.case.client(role='viewer').get(path).status_code,403)
+        from sanequeue.security.unit_scope import UnitScopeStore,ScopeConflict
+        store=UnitScopeStore(self.case.archive.path.parent/'unit-scope.sqlite3')
+        with self.assertRaises(ScopeConflict):store.load_recording_ref('another-user',recording['ref'])
+        with patch('sanequeue.api.reports.recording_ownership',return_value=False):
+            self.assertEqual(self.admin.get(path).status_code,403)
+        with patch('sanequeue.api.reports.recording_ownership',return_value=frozenset({'8001'})):
+            self.assertEqual(self.admin.get(path).status_code,403)
+        from sanequeue.reporting.recording_scope import ownership
+        with patch('sanequeue.api.reports.recording_ownership',wraps=ownership):
+            self.assertEqual(self.admin.get(path).status_code,200)
+            self.assertEqual(self.admin.get(path+'?download=1').status_code,403)
+            self.post(operation='grant',unit_id=unit,username='test',capability='recording_download')
+            self.assertNotEqual(self.admin.get(path).status_code,200)
+            result=self.admin.get(url);recording=next(row['recording'] for row in result.json['rows'] if row.get('recording'))
+            path='/api/organization/reports/recording/'+recording['ref']
+            self.assertTrue(recording['download']);self.assertEqual(self.admin.get(path+'?download=1').status_code,200)
+            stream=self.admin.get(path,buffered=False);chunks=iter(stream.response)
+            self.assertEqual(len(next(chunks)),65536)
+            self.post(operation='revoke',id=play_grant)
+            self.assertEqual(list(chunks),[]);stream.close()
+            self.post(operation='grant',unit_id=unit,username='test',capability='recording_play')
+            result=self.admin.get(url);recording=next(row['recording'] for row in result.json['rows'] if row.get('recording'))
+            path='/api/organization/reports/recording/'+recording['ref']
+            with self.case.archive.writer() as db:
+                db.execute('INSERT INTO report_cel_transfers VALUES(?,?,?,?,?,?,?)',(self.case.archive.pbx,'transfer','unit-audio-id','unit-audio-id','',self.case.stamp+21,'BLINDTRANSFER'))
+            self.assertEqual(self.admin.get(path).status_code,403)
+
     def test_date_inputs_and_ai_budget_fail_closed(self):
         from sanequeue.security.unit_scope import UnitScopeStore, ScopeConflict
         org=self.post(operation='create',kind='organization',name='Org')

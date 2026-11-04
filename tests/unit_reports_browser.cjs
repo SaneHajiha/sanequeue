@@ -18,7 +18,7 @@ const path=require('node:path');
    }
    if(url.pathname.endsWith('/summary')){if(url.pathname==='/api/history/cdr/summary')performanceQueries.push(url.searchParams);return route.fulfill({json:{totals:{segments_started:1,answered_segments:1,unanswered_segments:0,average_duration_seconds:12,known_billsec_sum:10},can_search_numbers:true,endpoints:[{endpoint:'PJSIP/101',segments_started:1,answered_segments:1,unanswered_segments:0,unknown_disposition_segments:0,known_billsec_sum:10,average_answered_billsec:10}]}});}
    if(url.pathname.endsWith('/trend')){trendBuckets.push(url.searchParams.get('bucket'));return route.fulfill({json:{rows:[{period:'2026-10-24',inbound:1,outbound:0,internal:0,unknown:0}]}});}
-   if(url.pathname.endsWith('/cdr'))return route.fulfill({json:{rows:[{ts:1792820000,src:'<img src=x>',dst:'***',direction:'inbound',disposition:'ANSWERED',duration:12}],next:null}});
+   if(url.pathname.endsWith('/cdr'))return route.fulfill({json:{rows:[{ts:1792820000,src:'<img src=x>',dst:'***',direction:'inbound',disposition:'ANSWERED',duration:12,recording:{ref:'a'.repeat(43),play:true,download:false}}],next:null}});
    if(url.pathname.endsWith('/ai'))return route.fulfill({json:{state:'available',metric:'count',direction:'all',value:1,comparison:{start:1792600000,end:1792772800,value:2,difference:-1}}});
    if(url.pathname==='/api/history/cdr/segment/classification'){if(request.method()==='POST'){classifications.push(request.postDataJSON());return route.fulfill({json:{classification:request.postDataJSON()}});}return route.fulfill({json:{classification:{reason:'پشتیبانی',subreason:'نصب',outcome:'حل شد'}}});}
    if(url.pathname==='/api/history/cdr/classification/catalog'){if(request.method()==='POST'){const item=request.postDataJSON();if(item.active)catalog.push({reason:item.reason,subreason:item.subreason});else catalog.splice(catalog.findIndex(x=>x.reason===item.reason&&x.subreason===item.subreason),1);}return route.fulfill({json:{items:catalog}});}
@@ -39,6 +39,8 @@ const path=require('node:path');
   await page.addScriptTag({path:path.resolve('qpanel/themes/qpanel/static/js/report-charts.js')});
   await page.addScriptTag({path:path.resolve('qpanel/themes/qpanel/static/js/unit-reports.js')});
   await page.click('#unit-report-run');await page.waitForSelector('#unit-report-table tbody tr');
+  assert.equal(await page.locator('#unit-report-table audio').count(),1);
+  assert.equal(await page.locator('#unit-report-table a').count(),0);
   assert.match(await page.locator('#unit-trend-table').textContent(),/۱/);
   assert.ok(await page.locator('#unit-trend-chart svg').count());
   await Promise.all([page.waitForResponse(r=>r.url().includes('/cdr/trend')&&r.url().includes('bucket=month')),page.selectOption('#unit-trend-bucket','month')]);

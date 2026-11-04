@@ -115,6 +115,10 @@ class UnitScopeStore:
                   revision INTEGER NOT NULL,query_hash TEXT NOT NULL,stamp REAL NOT NULL,source_key TEXT NOT NULL,
                   expires REAL NOT NULL,PRIMARY KEY(pbx,token));
                 CREATE INDEX IF NOT EXISTS uc_expiry ON unit_cursors(pbx,expires);
+                CREATE TABLE IF NOT EXISTS unit_recording_refs(pbx TEXT NOT NULL,token TEXT NOT NULL,username TEXT NOT NULL,
+                  revision INTEGER NOT NULL,source_key TEXT NOT NULL,stamp REAL NOT NULL,expires REAL NOT NULL,PRIMARY KEY(pbx,token));
+                CREATE INDEX IF NOT EXISTS urr_expiry ON unit_recording_refs(pbx,expires);
+                CREATE INDEX IF NOT EXISTS urr_owner ON unit_recording_refs(pbx,username,revision,source_key,stamp);
                 CREATE TABLE IF NOT EXISTS unit_ai_usage(pbx TEXT NOT NULL,username TEXT NOT NULL,at REAL NOT NULL);
                 CREATE INDEX IF NOT EXISTS uai_recent ON unit_ai_usage(pbx,at,username);
                 CREATE TABLE IF NOT EXISTS unit_api_tokens(pbx TEXT NOT NULL,id TEXT NOT NULL,username TEXT NOT NULL,
@@ -245,6 +249,7 @@ class UnitScopeStore:
             db.execute('UPDATE unit_grants SET active=0 WHERE pbx=? AND username=? AND active=1',(self.pbx,username))
             db.execute('DELETE FROM unit_members WHERE pbx=? AND username=?',(self.pbx,username))
             db.execute('DELETE FROM unit_cursors WHERE pbx=? AND username=?',(self.pbx,username))
+            db.execute('DELETE FROM unit_recording_refs WHERE pbx=? AND username=?',(self.pbx,username))
             db.execute('UPDATE unit_api_tokens SET active=0 WHERE pbx=? AND username=?',(self.pbx,username))
             self._bump(db)
 
@@ -361,6 +366,36 @@ class UnitScopeStore:
                 (self.pbx,token,username,scope.get('revision'),query_hash,time.time())).fetchone()
         if not row:raise ScopeConflict('unit_cursor_invalid_or_expired')
         return (row['stamp'],row['source_key'])
+
+    def issue_recording_refs(self,username,scope,rows):
+        _user(username)
+        if not isinstance(rows,list) or len(rows)>100:raise ValueError('invalid_unit_recording_refs')
+        now=time.time();issued=[]
+        with self._db(write=True) as db:
+            revision=db.execute('SELECT revision FROM unit_meta WHERE pbx=?',(self.pbx,)).fetchone()
+            if not revision or revision[0]!=scope.get('revision'):raise ScopeConflict('unit_scope_changed')
+            db.execute('DELETE FROM unit_recording_refs WHERE pbx=? AND expires<=?',(self.pbx,now))
+            for key,stamp in rows:
+                if not isinstance(key,str) or not 1<=len(key)<=512:raise ValueError('invalid_unit_recording_ref')
+                stamp=_time(stamp)
+                existing=db.execute('SELECT token FROM unit_recording_refs WHERE pbx=? AND username=? AND revision=? AND source_key=? AND stamp=? AND expires>? LIMIT 1',
+                                    (self.pbx,username,revision[0],key,stamp,now)).fetchone()
+                if existing:issued.append(existing['token']);continue
+                total,owned=db.execute('SELECT COUNT(*),SUM(username=?) FROM unit_recording_refs WHERE pbx=?',(username,self.pbx)).fetchone()
+                if total>=5000 or (owned or 0)>=500:raise ScopeUnavailable('unit_recording_refs_limit')
+                token=secrets.token_urlsafe(32)
+                db.execute('INSERT INTO unit_recording_refs VALUES(?,?,?,?,?,?,?)',(self.pbx,token,username,revision[0],key,stamp,now+900))
+                issued.append(token)
+        return issued
+
+    def load_recording_ref(self,username,token):
+        _user(username)
+        if not isinstance(token,str) or not re.fullmatch(r'[A-Za-z0-9_-]{43}',token):raise ValueError('invalid_unit_recording_ref')
+        with self._db() as db:
+            row=db.execute('''SELECT r.source_key,r.stamp,r.revision FROM unit_recording_refs r JOIN unit_meta m ON m.pbx=r.pbx AND m.revision=r.revision
+              WHERE r.pbx=? AND r.username=? AND r.token=? AND r.expires>?''',(self.pbx,username,token,time.time())).fetchone()
+        if not row:raise ScopeConflict('unit_recording_ref_invalid_or_expired')
+        return dict(row)
 
     def consume_ai_budget(self,username,scope):
         """Shared hourly bounds count attempts, including provider failures."""

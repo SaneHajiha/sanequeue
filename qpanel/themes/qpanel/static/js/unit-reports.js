@@ -11,11 +11,11 @@
  const number=v=>v==null?'—':Number(v).toLocaleString(locale,{maximumFractionDigits:1});
  async function api(url,options){const response=await fetch(url,{credentials:'same-origin',...options});if(!response.ok)throw Error(String(response.status));return response.json();}
  function showTable(){const table=document.createElement('table'),head=document.createElement('thead'),tr=document.createElement('tr');
-  [t('زمان','Time'),t('مبدأ','Source'),t('مقصد','Destination'),t('جهت','Direction'),t('وضعیت','Status'),t('مدت ثانیه','Duration s')].forEach(x=>tr.append(cell('th',x)));head.append(tr);table.append(head);
+  [t('زمان','Time'),t('مبدأ','Source'),t('مقصد','Destination'),t('جهت','Direction'),t('وضعیت','Status'),t('مدت ثانیه','Duration s'),t('ضبط','Recording')].forEach(x=>tr.append(cell('th',x)));head.append(tr);table.append(head);
   const body=document.createElement('tbody');for(const row of rows){const line=document.createElement('tr');
    const direction={inbound:t('ورودی','Inbound'),outbound:t('خروجی','Outbound'),internal:t('داخلی','Internal'),unknown:t('نامعلوم','Unknown')}[row.direction]||t('نامعلوم','Unknown');
    const disposition={ANSWERED:t('پاسخ‌داده','Answered'),BUSY:t('مشغول','Busy'),'NO ANSWER':t('بی‌پاسخ','No answer'),FAILED:t('ناموفق','Failed'),UNKNOWN:t('نامعلوم','Unknown')}[row.disposition]||row.disposition;
-   [new Date(row.ts*1000).toLocaleString(locale,{timeZone:'Asia/Tehran'}),row.src,row.dst,direction,disposition,number(row.duration)].forEach(x=>line.append(cell('td',x)));body.append(line);}
+   [new Date(row.ts*1000).toLocaleString(locale,{timeZone:'Asia/Tehran'}),row.src,row.dst,direction,disposition,number(row.duration)].forEach(x=>line.append(cell('td',x)));const recording=cell('td','');const item=row.recording;if(item&&/^[A-Za-z0-9_-]{43}$/.test(item.ref)){const url='/api/organization/reports/recording/'+item.ref;if(item.play){const audio=document.createElement('audio');audio.controls=true;audio.preload='none';audio.src=url;audio.setAttribute('aria-label',t('پخش ضبط پس از بررسی مالکیت','Play recording after ownership verification'));recording.append(audio);}if(item.download){const link=cell('a',t('دانلود','Download'));link.href=url+'?download=1';recording.append(link);}}else recording.textContent='—';line.append(recording);body.append(line);}
   table.append(body);host.replaceChildren(table);}
  function reset(){serial++;cursor=null;rows=[];summary.replaceChildren();host.replaceChildren();nextButton.hidden=true;feedback.textContent='';$('unit-ai-feedback').textContent='';$('unit-trend-table').replaceChildren();$('unit-trend-feedback').textContent='';window.SaneQueueReportCharts?.clear($('unit-trend-chart'));}
  dates.addEventListener('change',reset);

@@ -352,3 +352,8 @@ Follow-up: 41 unit/API/CDR/theme tests passed with `..\venv\Scripts\python.exe -
 
 - `python -m unittest tests.test_unit_api tests.test_unit_scope tests.test_identity_lifecycle tests.test_reporting_cdr tests.test_reporting_cdr_api tests.test_reporting_cdr_builder_jobs tests.test_reporting_cdr_plans`: ۱۱۹ آزمون موفق. مجوز شمارهٔ کامل در کل محدوده، سقف نقش، مجوز ناقص و لغو مجوز حین محاسبه بررسی شد.
 - `tests/unit_reports_browser.cjs` با Chromium و دادهٔ ساختگی: فیلتر داخلی در درخواست گزارش واحد و پاک‌سازی وضعیت، همراه آزمون‌های موجود مرورگر موفق بود. تست ارتباط واقعی، صوت سازمانی و استقرار HTTPS هنوز انجام نشده است.
+
+### صوت محدود واحد — ۱۴ آبان ۱۴۰۵
+
+- `python -m unittest tests.test_unit_scope tests.test_unit_api tests.test_identity_lifecycle tests.test_reporting_cdr tests.test_reporting_cdr_api tests.test_reporting_queries`: ۸۱ آزمون موفق؛ شامل اثبات واقعی مالکیت تماس مستقیم، مجوز جدا، رد انتقال، ارجاع متعلق به کاربر، ابطال با تغییر دسترسی و توقف انتقال داده پس از لغو. پس از تکمیل شناسهٔ حسابرسی، آزمون اختصاصی صوت و ارجاع دوباره موفق شد.
+- آزمون مرورگر `tests/unit_reports_browser.cjs` با fixture ساختگی، کنترل پخش در جدول و نبود لینک دانلود بدون مجوز را تأیید کرد؛ پذیرش تلفنی واقعی، API صوت و آزمون هم‌زمانی بار باقی‌اند.

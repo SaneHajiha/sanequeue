@@ -67,11 +67,11 @@ def trend(archive,store,username,start,end,filters=None,*,bucket='day',calendar=
     return result
 
 
-def details(archive,store,username,start,end,filters=None,*,cursor=None,limit=50,secret,allow_full=False):
+def details(archive,store,username,start,end,filters=None,*,cursor=None,limit=50,secret,allow_full=False,allow_audio=False):
     """Return masked CDR rows with an opaque, owner-bound pagination token.
 
-    Audio, downloads and external identifiers deliberately remain unavailable
-    until they have independent ownership and permission checks.
+    Recording references are opaque and require a separate, fresh authorization
+    and whole-file ownership proof before any bytes can be served.
     """
     if archive.pbx!=store.pbx:raise UnitAccessDenied('unit_pbx_mismatch')
     if filters is None:filters={}
@@ -81,11 +81,13 @@ def details(archive,store,username,start,end,filters=None,*,cursor=None,limit=50
     if not scope['units']:raise UnitAccessDenied('unit_details_not_granted')
     _check_filters(store,username,start,end,filters,scope,allow_full)
     if scope['revision']!=numbers['revision']:raise ScopeConflict('unit_scope_changed')
+    audio_scopes={cap:store.resolve(username,cap,start,end) for cap in ('recording_play','recording_download')} if allow_audio else {}
+    if any(item['revision']!=scope['revision'] for item in audio_scopes.values()):raise ScopeConflict('unit_scope_changed')
     query_hash=hashlib.sha256(json.dumps([start,end,filters,limit],sort_keys=True,
         separators=(',',':'),ensure_ascii=True,allow_nan=False).encode()).hexdigest()
     before=store.load_cursor(username,scope,query_hash,cursor) if cursor else None
     result=cdr_queries.page(archive,start,end,filters,unit_scope=scope,before=before,limit=limit)
-    rows=[]
+    rows=[];references=[]
     for raw in result['rows']:
         endpoint=raw['_unit_endpoint'];stamp=raw['ts']
         full=allow_full and any(item['endpoint']==endpoint and item['starts']<=stamp and
@@ -94,12 +96,21 @@ def details(archive,store,username,start,end,filters=None,*,cursor=None,limit=50
         for key in ('src','dst'):
             row[key]=display_number(raw[key],mode='full' if full else 'masked',secret=secret,
                                     tenant='default',pbx=archive.pbx,version='1')
+        def permitted(cap):
+            return bool(raw['has_recording']) and any(item['endpoint']==endpoint and item['starts']<=stamp and
+                (item['ends'] is None or stamp<item['ends']) for item in audio_scopes.get(cap,{}).get('assignments',()))
+        play,download=permitted('recording_play'),permitted('recording_download')
+        if play or download:references.append((len(rows),raw['id'],stamp,play,download))
         rows.append(row)
+    if references:
+        tokens=store.issue_recording_refs(username,scope,[(key,stamp) for _,key,stamp,_,_ in references])
+        for (index,_,_,play,download),token in zip(references,tokens):
+            rows[index]['recording']=dict(ref=token,play=play,download=download,requires_verification=True)
     next_cursor=store.save_cursor(username,scope,query_hash,result['next']) if result['next'] else None
     if not store.still_current(scope):raise ScopeConflict('unit_scope_changed')
     return dict(rows=rows,next=next_cursor,start=float(start),end=float(end),
                 unit='cdr_segment',scope='organization_unit',complete_history=False,
-                audio_available=False)
+                audio_available=bool(references))
 
 
 def export_csv(archive,store,username,start,end,filters=None,*,secret,allow_full=False):

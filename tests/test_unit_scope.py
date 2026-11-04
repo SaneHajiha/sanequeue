@@ -50,6 +50,21 @@ class UnitScopeTests(unittest.TestCase):
         self.assertEqual(self.store.resolve('employee','summary',10,100)['assignments'],[])
         with self.assertRaises(ScopeConflict):self.store.revoke(grant)
 
+    def test_recording_reference_is_owner_bound_expires_and_follows_revision(self):
+        self.store.assign_endpoint(self.customer,'PJSIP/101',10,100)
+        grant=self.store.grant('manager',self.customer,'call_details')
+        scope=self.store.resolve('manager','call_details',10,100)
+        with patch('sanequeue.security.unit_scope.time.time',return_value=1000):
+            token=self.store.issue_recording_refs('manager',scope,[('private-id',20)])[0]
+            self.assertEqual(self.store.issue_recording_refs('manager',scope,[('private-id',20)]),[token])
+            self.assertEqual(self.store.load_recording_ref('manager',token)['source_key'],'private-id')
+            with self.assertRaises(ScopeConflict):self.store.load_recording_ref('someone',token)
+        with patch('sanequeue.security.unit_scope.time.time',return_value=1900):
+            with self.assertRaises(ScopeConflict):self.store.load_recording_ref('manager',token)
+        self.store.revoke(grant)
+        with patch('sanequeue.security.unit_scope.time.time',return_value=1001):
+            with self.assertRaises(ScopeConflict):self.store.load_recording_ref('manager',token)
+
     def test_rejects_invalid_parent_times_capabilities_and_endpoints(self):
         with self.assertRaises(ValueError):self.store.create_unit('نام','subunit',self.dept)
         with self.assertRaises(ValueError):self.store.create_unit('نام','organization',self.org)

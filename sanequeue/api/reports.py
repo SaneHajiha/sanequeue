@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import io
 import json
+import math
 import os
 import re
 from pathlib import Path
@@ -968,9 +969,55 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if not re.fullmatch(r'[0-9]{1,3}',limit):raise ValueError('invalid_unit_page_limit')
         secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
         data=unit_cdr.details(archive,unit_store,owner,start,end,filters,cursor=request.args.get('cursor'),limit=int(limit),secret=secret,
-                              allow_full=current_role in ('admin','supervisor'))
+                              allow_full=current_role in ('admin','supervisor'),allow_audio=current_role in ('admin','supervisor'))
         if str(current_user.get_id())!=owner or role()!=current_role or 'reports' not in sections():abort(403)
         return jsonify(data)
+
+    @app.get('/api/organization/reports/recording/<token>')
+    @login_required
+    @safe
+    def organization_recording(token):
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        owner=str(current_user.get_id());current_role=role()
+        if current_role not in ('admin','supervisor') or 'reports' not in sections():abort(403)
+        ref=unit_store.load_recording_ref(owner,token);stamp=ref['stamp'];ident=ref['source_key']
+        capability='recording_download' if request.args.get('download')=='1' else 'recording_play'
+        if set(request.args)-{'download'} or request.args.get('download') not in (None,'1'):raise ValueError('invalid_unit_recording_request')
+        detail=unit_store.resolve(owner,'call_details',stamp,stamp+.001)
+        media=unit_store.resolve(owner,capability,stamp,stamp+.001)
+        if detail['revision']!=ref['revision'] or media['revision']!=ref['revision']:abort(403)
+        # The existing proof only grants this initial path for a single,
+        # settled non-queue leg; any shared file, transfer or unknown direction
+        # remains closed until a complete ownership model is available.
+        proof=recording_ownership(archive,ident)
+        if proof is False or proof!=frozenset():abort(403)
+        with archive.reader() as db:
+            row=db.execute('''SELECT c.recording,c.ts,c.duration,c.uid,c.linkedid,p.agent,p.direction,p.inventory_observed
+              FROM report_cdr c JOIN report_cdr_parties p ON p.pbx=c.pbx AND p.source_key=c.source_key
+              WHERE c.pbx=? AND c.source_key=?''',(pbx,ident)).fetchone()
+            if (not row or row['ts']!=stamp or not row['recording'] or row['inventory_observed'] is None or
+                row['direction'] not in ('inbound','outbound') or not isinstance(row['duration'],(int,float)) or
+                not math.isfinite(row['duration']) or not 0<=row['duration']<=315360000):abort(403)
+            identities=[x for x in (row['uid'],row['linkedid']) if x]
+            if not identities:abort(403)
+            marks=','.join('?' for _ in identities)
+            if db.execute('SELECT 1 FROM report_cel_transfers WHERE pbx=? AND (uid IN ('+marks+') OR linkedid IN ('+marks+')) LIMIT 1',(pbx,*identities,*identities)).fetchone():abort(403)
+        end=stamp+row['duration']
+        def covers(scope):
+            return any(item['endpoint']==row['agent'] and item['starts']<=stamp and
+                       (item['ends'] is None or end<=item['ends']) for item in scope['assignments'])
+        if not covers(detail) or not covers(media):abort(403)
+        if (recording_ownership(archive,ident)!=frozenset() or not unit_store.still_current(detail) or
+            unit_store.load_recording_ref(owner,token)!=ref or str(current_user.get_id())!=owner or role()!=current_role or 'reports' not in sections()):abort(403)
+        with archive.reader() as db:
+            current=db.execute('''SELECT c.recording,c.ts,c.duration,c.uid,c.linkedid,p.agent,p.direction,p.inventory_observed
+              FROM report_cdr c JOIN report_cdr_parties p ON p.pbx=c.pbx AND p.source_key=c.source_key
+              WHERE c.pbx=? AND c.source_key=?''',(pbx,ident)).fetchone()
+            if current is None or tuple(current)!=tuple(row) or db.execute(
+                'SELECT 1 FROM report_cel_transfers WHERE pbx=? AND (uid IN ('+marks+') OR linkedid IN ('+marks+')) LIMIT 1',
+                (pbx,*identities,*identities)).fetchone():abort(403)
+        if not unit_store.still_current(detail):abort(403)
+        return serve_recording(row,token,capability=='recording_download',authorize_chunk=lambda:unit_store.still_current(detail),audit_id=ident)
 
     @app.post('/api/organization/reports/cdr/export.<format>')
     @login_required
@@ -1831,7 +1878,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             abort(404)
         return serve_recording(row,recording_id,download)
 
-    def serve_recording(row,recording_id,download):
+    def serve_recording(row,recording_id,download,*,authorize_chunk=None,audit_id=None):
         reference = row['recording']
         suffix = Path(reference).suffix.lower()
         if not download and suffix not in ('.wav', '.mp3', '.ogg'):
@@ -1856,7 +1903,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             try:
                 if not audit_ready:
                     raise AuditUnavailable('recording_audit_unavailable')
-                audit_store.append(str(current_user.get_id()), recording_id,
+                audit_store.append(str(current_user.get_id()), audit_id or recording_id,
                                    'download_request' if download else 'play_request')
             except AuditUnavailable:
                 os.close(fd)
@@ -1867,6 +1914,10 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
                 stream.seek(start)
                 left = end - start + 1 if size else 0
                 while left:
+                    if authorize_chunk is not None:
+                        try:
+                            if not authorize_chunk():break
+                        except (ScopeUnavailable,ScopeConflict,OSError,sqlite3.Error):break
                     chunk = stream.read(min(65536, left))
                     if not chunk:
                         break
