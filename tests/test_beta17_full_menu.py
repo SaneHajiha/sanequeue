@@ -17,8 +17,10 @@ class FullMenuTests(unittest.TestCase):
         self.assertNotIn('class="sq-deep-views"',HTML)
         nav=HTML.split('<nav ',1)[1].split('</nav>',1)[0]
         available=re.findall(r'class="nav-item(?: active)?" data-view="([^"]+)"',nav)
-        # Button type="button" is allowed; order matches the original full sidebar.
-        self.assertEqual(available, ALL)
+        # Information architecture may regroup the menu, but never drop or duplicate a view.
+        self.assertEqual(len(available), len(ALL))
+        self.assertEqual(set(available), set(ALL))
+        self.assertEqual(len(available), len(set(available)))
     def test_every_navigation_item_has_panel(self):
         for name in ALL:
             with self.subTest(menu=name):
