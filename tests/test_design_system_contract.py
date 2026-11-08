@@ -81,7 +81,7 @@ class DesignSystemContractTest(unittest.TestCase):
 
     def test_no_external_icon_fonts_and_no_untrusted_svg_html(self):
         for key in ALL_VIEWS:
-            self.assertRegex(ICONS, rf"\\b{re.escape(key)}:")
+            self.assertRegex(ICONS, rf"\b{re.escape(key)}:")
         self.assertIn("document.createElementNS(ns, 'svg')", ICONS)
         self.assertIn("icon.replaceChildren(svg)", ICONS)
         self.assertNotIn(".innerHTML", ICONS)
