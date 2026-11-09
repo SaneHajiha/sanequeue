@@ -2,6 +2,11 @@
 set +x
 set -euo pipefail
 umask 077
+case "$#:${1:-}" in
+  0:) automatic=0 ;;
+  1:--auto) automatic=1 ;;
+  *) echo 'Usage: connect-cdr-rc7.sh [--auto]' >&2; exit 2 ;;
+esac
 
 config=/etc/sanequeue/reporting-sql.ini
 envfile=/etc/sanequeue/reporting.env
@@ -41,7 +46,36 @@ PY
   echo 'Could not generate the reporting account credential.' >&2
   exit 1
 }
-if ! socket=$(mysql --protocol=socket --connect-timeout=5 -u root -p --batch --skip-column-names --skip-force <<SQL
+mysql_admin=(mysql --protocol=socket --connect-timeout=5 -u root --batch --skip-column-names --skip-force)
+if (( automatic )); then
+  if ! "${mysql_admin[@]}" --execute='SELECT 1' >/dev/null 2>&1; then
+    options=$(mktemp /run/sanequeue-mariadb.XXXXXXXX)
+    trap 'rm -f -- "$options"' EXIT
+    "$python" -I - "$options" <<'PY'
+from pathlib import Path
+import sys
+
+try:
+    lines = Path("/etc/issabel.conf").read_text(encoding="utf-8").splitlines()
+except (OSError, UnicodeError):
+    lines = []
+password = next((line.split("=", 1)[1] for line in reversed(lines)
+                 if line.startswith("mysqlrootpwd=")), "")
+if not password or any(ord(char) < 32 for char in password):
+    raise SystemExit("Issabel's saved MariaDB administrator login is unavailable.")
+escaped = password.replace("\\", "\\\\").replace('"', '\\"')
+Path(sys.argv[1]).write_text('[client]\npassword="' + escaped + '"\n', encoding="utf-8")
+PY
+    mysql_admin=(mysql "--defaults-extra-file=$options" "${mysql_admin[@]:1}")
+    "${mysql_admin[@]}" --execute='SELECT 1' >/dev/null 2>&1 || {
+      echo "Issabel's saved MariaDB administrator login was rejected." >&2
+      exit 1
+    }
+  fi
+else
+  mysql_admin+=(-p)
+fi
+if ! socket=$("${mysql_admin[@]}" <<SQL
 CREATE USER '$account'@'localhost' IDENTIFIED VIA mysql_native_password USING '$password_hash';
 GRANT SELECT ON asteriskcdrdb.cdr TO '$account'@'localhost';
 GRANT SELECT ON asteriskcdrdb.cel TO '$account'@'localhost';
@@ -50,6 +84,10 @@ SQL
 ); then
   printf 'MariaDB setup stopped. Review the error and the local %s account before retrying.\n' "$account" >&2
   exit 1
+fi
+if [[ -n ${options:-} ]]; then
+  rm -f -- "$options"
+  trap - EXIT
 fi
 [[ $socket == /* && $socket != *$'\n'* && -S $socket ]] || {
   echo 'MariaDB did not return an accessible absolute socket path.' >&2
