@@ -61,3 +61,7 @@ The user explicitly requested implementation of organizational access and an AI 
 # 2026-11-09 lab deployment approval
 
 The user explicitly authorized installation on the existing test server at `192.168.2.2` and continuation of the full redesign. Use the versioned release installer, retain the existing site origin, back up the active release and state, and keep the pre-install PBX idle check. Design work stays in the existing Jinja, CSS and JavaScript stack with the current role and report boundaries.
+
+## RC6 report and access refinement
+
+The user requested more legible charts, number-only extension search, a dropdown for long extension lists, and a single organizational access panel. The extension chart uses a stacked result bar and a labeled total. A number matches only observed SIP/PJSIP endpoints with that exact number. The picker can distinguish both technologies when necessary. The access form reuses the existing scoped permission model and commits organization, membership, assignment and grant changes together. Retain standalone revocation and assignment history under the supplementary controls.

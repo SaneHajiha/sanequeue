@@ -67,3 +67,7 @@ CSV، Excel و PDF سفارشی CDR در کارگر محدودشده ساخته 
 Follow-up added a basic organization administration UI, scoped CDR details with opaque cursors and number masking, an AI report form, and a shared hourly provider budget. Audio, external tokens, exports, historical account identity lifecycle and both-party attribution remain incomplete. See `docs/UNIT_AI_PROGRESS.fa.md`.
 
 The development branch contains administrative JSON endpoints for hierarchical units, memberships, historical extension assignments and independent grants; an authorized organizational CDR summary; and an opt-in OpenAI intent parser for four summary metrics. The parser cannot access SQL or AMI. The external provider is disabled unless configured, and is not tested with live credentials. Organization administration UI, scoped detail/audio/export/API tokens, complete coverage of both parties of internal calls, AI UI and richer analytical questions, operational quotas and deployment remain open. Organizational membership is not itself a grant. Do not expose this as a complete production permission boundary.
+
+## RC6 روی میزبان آزمایشی، ۲۰۲۶/۱۱/۰۹
+
+نمودار عملکرد داخلی‌ها، جست‌وجوی عددی، کشوی انتخاب داخلی و فرم ثبت یکپارچهٔ دسترسی سازمانی روی `192.168.2.2` نصب شدند. نسخهٔ نصب‌شده `852ccfe42e4a268e12eddf5736a4b9c4f82b961c` است. بررسی آرشیو هر دو حوزهٔ گزارش روی میزبان انجام شد. نوشتن دسترسی از مرورگر با حساب و دادهٔ ساختگی آزموده شد. تماس زنده، پخش ضبط واقعی، بار هم‌زمان و تمرین بازگشت پس از نصب موفق در فهرست پذیرش باقی‌اند.
