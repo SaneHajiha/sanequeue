@@ -166,14 +166,26 @@ body .sidebar :is(button,a):focus-visible{outline-color:#8ce7e4!important}
 #user-permission-select,#user-menu-select {
   display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px;
 }
+#account-create-form fieldset:has(#user-menu-select) { display:block; }
+#account-create-form #user-menu-select { margin-block:6px 10px; }
 .access-grant-group,.access-recording-scope,.access-section {
   min-inline-size:0; padding:12px; border:1px solid var(--line); border-radius:10px;
 }
 .access-grant-group h3 { margin:0 0 8px; font-size:.88rem; color:var(--ink); }
-.access-grant-group label { display:flex; align-items:center; gap:8px; margin-block:5px; }
+#account-create-form :is(.access-grant-group,.access-recording-scope) label {
+  display:flex; flex-direction:row; align-items:center; justify-content:flex-start;
+  gap:8px; min-height:34px; margin-block:3px; padding:5px 7px;
+}
+#account-create-form :is(.access-grant-group,.access-recording-scope) input[type=checkbox] {
+  flex:none; width:1rem; height:1rem; min-width:0; min-height:0; margin:0; padding:0;
+}
+#account-create-form .access-recording-scope p { margin-block:8px; }
 .access-recording-scope #user-recording-queues[hidden] { display:none; }
 #unit-access-panel>.access-section { margin-block:10px; }
 .access-section>summary { padding:6px; color:var(--ink); cursor:pointer; font-weight:700; }
+@media(min-width:1000px) {
+  .users-permissions { align-self:start; position:sticky; inset-block-start:84px; }
+}
 @media(max-width:680px) {
   #user-permission-select,#user-menu-select { grid-template-columns:minmax(0,1fr); }
 }
