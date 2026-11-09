@@ -80,9 +80,10 @@ try{
     svg.append(txt(fa?finish:start,y,label,{'text-anchor':fa?'end':'start','font-weight':700}));
     let total=0;
     const values=series.map(s=>s.values[i]);
-    const stats=values.map(value=>value===null?'—':format(value)).join(' / ');
-    svg.append(txt(fa?start:finish,y,stats,{'text-anchor':fa?'start':'end','font-weight':650,'font-size':12}),
-      svgNode('rect',{x:start,y:y+9,width:span,height:14,rx:5,fill:colors.line}));
+    const sum=values.some(value=>value===null)?'—':format(values.reduce((count,value)=>count+value,0));
+    const totalLabel=t('مجموع ','Total ')+sum;
+    svg.append(txt(fa?start:finish,y,totalLabel,{'text-anchor':'end',direction:fa?'rtl':'ltr','font-weight':650,'font-size':12}),
+      svgNode('rect',{x:start,y:y+9,width:span,height:14,rx:5,fill:colors.line,'fill-opacity':.55}));
     series.forEach((s,j)=>{
      const value=s.values[i];
      if(value===null)return;
