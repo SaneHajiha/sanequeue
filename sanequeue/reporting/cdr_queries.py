@@ -10,8 +10,10 @@ from collections import Counter
 import csv
 from datetime import datetime
 import io
+import json
 import math
 import re
+import time
 import unicodedata
 from zoneinfo import ZoneInfo
 
@@ -196,12 +198,44 @@ def page(archive,start,end,filters=None,*,before=None,limit=100,unit_scope=None)
                 queue_scoped=False,audio_granted=False,complete_history=False)
 
 
+def _archive_status(db, pbx):
+    """Describe observed ingestion health without claiming historical coverage."""
+    now = time.time()
+    sources = {}
+    for source, payload in db.execute(
+        "SELECT source,value FROM checkpoints WHERE pbx=? AND source IN ('health:sql','health:cdr')",
+        (pbx,),
+    ):
+        try:
+            status = json.loads(payload)
+            checked = float(status['checked'])
+            progress = status.get('progress') or {}
+            if not 0 <= now - checked <= 90:
+                state = 'stale'
+            elif status.get('ok') is not True:
+                state = 'unavailable'
+            elif progress.get('coverage_gap'):
+                state = 'gap'
+            else:
+                keys = ('cdr_caught_up', 'cdr_overlap_caught_up') if source == 'health:sql' else ('caught_up',)
+                values = [progress.get(key) for key in keys]
+                state = ('catching_up' if any(value is False for value in values) else
+                         'current' if all(value is True for value in values) else 'unknown')
+        except (AttributeError, KeyError, TypeError, ValueError):
+            state = 'unknown'
+        sources['sql' if source == 'health:sql' else 'file'] = state
+    projected = db.execute('SELECT after_id FROM report_projection WHERE pbx=?', (pbx,)).fetchone()
+    latest = db.execute('SELECT MAX(id) FROM events WHERE pbx=?', (pbx,)).fetchone()[0]
+    return dict(sources=sources, projection_pending=bool(latest and (not projected or projected[0] < latest)))
+
+
 def summary(archive,start,end,filters=None,*,unit_scope=None):
     clause,args,clean=_where(archive,start,end,filters,unit_scope=unit_scope,unit_capability='summary')
     cte='''WITH matched AS (SELECT c.duration,c.billsec,'''+_DISPOSITION+' disposition,'+_DIRECTION+''' direction,
       e.internal_caller_ext,e.outbound_cid,e.did,e.trunk,NULLIF(p.agent,'') endpoint '''+_JOIN+' WHERE '+clause+') '
     with archive.reader() as db:
         _functions(db)
+        coverage = {'archive_status': _archive_status(db, archive.pbx)} if unit_scope is None else {}
         totals=dict(db.execute(cte+'SELECT '+_METRICS+' FROM matched',args).fetchone())
         groups={};count=0
         for name,field in (('directions','direction'),('dispositions','disposition'),('trunks','trunk'),
@@ -212,7 +246,7 @@ def summary(archive,start,end,filters=None,*,unit_scope=None):
             if count>MAX_GROUPS:raise QueryDeadline('cdr_group_limit_narrow_filters')
             groups[name]=rows
     return dict(start=float(start),end=float(end),filters=clean,unit='cdr_segment',scope='organization_unit' if unit_scope is not None else 'global_pbx',
-                queue_scoped=False,complete_history=False,totals=totals,**groups,
+                queue_scoped=False,complete_history=False,totals=totals,**groups,**coverage,
                 definitions=dict(count='latest_cdr_segments_not_unique_conversations',
                   origin='known_origin_extension_not_src',outbound_cid='explicit_cdr_source_field_only',
                   unknown='null_metrics_and_known_sample_counts',timezone='Asia/Tehran',week_starts='Saturday'))

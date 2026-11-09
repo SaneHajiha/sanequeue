@@ -64,6 +64,21 @@ class CDRTests(unittest.TestCase):
         self.assertEqual(sum(row['segments_started'] for row in data['endpoints']),
                          data['totals']['segments_started'])
 
+    def test_summary_separates_archive_freshness_from_historical_coverage(self):
+        self.seed(self.event('known'))
+        self.archive.append([self.event('pending', 160)])
+        self.archive.append([], checkpoint_source='health:sql', checkpoint={
+            'ok': True, 'checked': 500, 'progress': {
+                'cdr_caught_up': True, 'cdr_overlap_caught_up': False}})
+        self.archive.append([], checkpoint_source='health:cdr', checkpoint={
+            'ok': True, 'checked': 300, 'progress': {'caught_up': True}})
+        with patch('sanequeue.reporting.cdr_queries.time.time', return_value=510):
+            report = summary(self.archive, 100, 200)
+        self.assertEqual(report['totals']['segments_started'], 1)
+        self.assertFalse(report['complete_history'])
+        self.assertEqual(report['archive_status'], {
+            'sources': {'sql': 'catching_up', 'file': 'stale'}, 'projection_pending': True})
+
     def test_endpoint_performance_dispositions_remain_distinct(self):
         self.seed(self.event('answered'),self.event('busy',151,disposition='BUSY'),
                   self.event('no-answer',152,disposition='NO ANSWER'),

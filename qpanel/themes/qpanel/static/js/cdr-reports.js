@@ -9,6 +9,14 @@
 
  const clock=v=>{if(v==null||!Number.isFinite(Number(v))||Number(v)<0)return '—';const s=Math.floor(Number(v));return [Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(x=>String(x).padStart(2,'0')).join(':');};
  const kpiLabels=[t('کل بخش‌های تماس','All call segments'),t('ورودی','Inbound'),t('خروجی','Outbound'),t('داخلی','Internal'),t('میانگین مکالمهٔ پاسخ‌داده','Average answered talk')];
+ const archiveMessage=status=>{
+  if(!status)return '';
+  const states=Object.values(status.sources||{});
+  if(status.projection_pending||states.includes('catching_up'))return t('به‌روزرسانی آرشیو در جریان است.','Archive processing is in progress.');
+  if(states.includes('gap'))return t('وقفه‌ای در دریافت داده ثبت شده است.','An ingestion gap was detected.');
+  if(!states.length||states.some(state=>state!=='current'))return t('تازگی دادهٔ یک یا چند منبع تأیید نشده است.','One or more sources have unverified freshness.');
+  return t('منابع مشاهده‌شده به‌روزند.','Observed sources are up to date.');
+ };
  const renderKpis=values=>{$('history-cdr-summary').innerHTML=kpiLabels.map((label,i)=>'<article class="history-kpi"><span>'+esc(label)+'</span><strong>'+esc(values[i]??'—')+'</strong><small>'+esc(i===4?t('از مقادیر ثبت‌شده','From known values'):t('بخش ثبت‌شده','Recorded segments'))+'</small></article>').join('');};
  const directions={inbound:t('ورودی','Inbound'),outbound:t('خروجی','Outbound'),internal:t('داخلی','Internal'),unknown:t('نامشخص','Unknown')};
  const outcomes={ANSWERED:t('پاسخ‌داده','Answered'),'NO ANSWER':t('بی‌پاسخ','No answer'),BUSY:t('اشغال','Busy'),FAILED:t('ناموفق','Failed'),CONGESTION:t('ازدحام','Congestion'),CANCEL:t('لغوشده','Cancelled'),CHANUNAVAIL:t('مسیر در دسترس نیست','Channel unavailable'),UNKNOWN:t('نامعلوم','Unknown')};
@@ -31,7 +39,9 @@
  window.SaneQueueReportCharts?.render($('history-trunk-chart'),{title:t('ترافیک ترانک و سرشماره؛ بخش CDR، نه مکالمهٔ یکتا','Trunk and DID traffic: CDR segments, not unique conversations'),subtitle:(window.SaneQueueReportPeriods?.period(p.get('from'),p.get('to'))||''),labels:traffic.map(r=>(r.trunk||t('نامعلوم','Unknown'))+' / '+(r.did||'—')+' · '+(directions[r.direction]||r.direction)),unit:t('بخش تماس','Call segments'),series:[{label:t('تمام بخش‌ها','All segments'),values:traffic.map(r=>r.segments_started)},{label:t('بخش پاسخ‌داده','Answered segments'),values:traffic.map(r=>r.answered_segments)}]});
  $('history-cdr-trunks').innerHTML=table([t('ترانک','Trunk'),t('سرشماره','DID'),t('جهت','Direction'),t('بخش تماس','Segments'),t('پاسخ','Answered'),t('جمع مکالمهٔ معلوم؛ ثانیه','Known billable sum; s')],summary.trunk_traffic.map(row=>[row.trunk||t('نامعلوم','Unknown'),row.did,directions[row.direction]||row.direction,n(row.segments_started),n(row.answered_segments),n(row.known_billsec_sum)]));}
  if(summary)runTrend();
- $('history-cdr-feedback').textContent=t('شمارش بخش‌های CDR؛ مجموع ردیف‌ها الزاماً تعداد مکالمهٔ یکتا نیست. زمان و آمار از کل بازهٔ فیلترشده خوانده می‌شوند.','CDR segments, not necessarily unique conversations. Totals cover the entire filtered period.')+(summary?t(' · جهت نامشخص: ',' · Unknown direction: ')+n((summary.directions||[]).find(row=>row.direction==='unknown')?.segments_started||0):'')+(!page.can_search_numbers?t(' جست‌وجوی شماره به مجوز نمایش کامل نیاز دارد.',' Number search requires full-number permission.'):'');
+ const freshness=$('history-cdr-feedback').dataset;
+ if(summary)freshness.archiveMessage=archiveMessage(summary.archive_status);
+ $('history-cdr-feedback').textContent=t('آمار از بخش‌های ثبت‌شده در بازهٔ انتخابی است. پوشش کامل سابقه تأیید نشده است.','Totals use archived segments within the selected period. Complete historical coverage is unverified.')+(freshness.archiveMessage?' '+freshness.archiveMessage:'')+(summary?t(' · جهت نامشخص: ',' · Unknown direction: ')+n((summary.directions||[]).find(row=>row.direction==='unknown')?.segments_started||0):'')+(!page.can_search_numbers?t(' جست‌وجوی شماره به مجوز نمایش کامل نیاز دارد.',' Number search requires full-number permission.'):'');
  }catch(error){if(generation===serial){window.SaneQueueReportCharts?.clear($('history-trunk-chart'));$('history-cdr-feedback').textContent=error.message==='report_access_denied'?t('این گزارش به دسترسی مدیر کل، کاربران و گزارش نیاز دارد؛ جست‌وجوی شماره مجوز جدا دارد.','Requires global administrator, Users and Reports access; number search requires additional permission.'):t('گزارش دریافت نشد؛ فیلتر را بررسی و بازه را کوتاه‌تر کنید.','Unable to load; check filters and narrow the period.');}}finally{buttons.forEach(b=>b.disabled=false);}}
  $('history-cdr-export-options')?.addEventListener('click',()=>{const section=$('history-cdr-builder')?.closest('details');if(section){section.open=true;section.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});section.querySelector('summary')?.focus();}});
  form.onsubmit=event=>{event.preventDefault();run();};$('history-cdr-more').onclick=()=>run('next');$('history-cdr-previous').onclick=()=>run('previous');
