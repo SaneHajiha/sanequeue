@@ -80,7 +80,13 @@ try{
  }
  draw();watchSize(host);return true;
 }catch{host.replaceChildren(node('p',t('دادهٔ نمودار معتبر نیست؛ گزارش را دوباره بارگذاری کنید.','Chart data is invalid; reload the report.')));return false;}}
-const form=document.getElementById('history-filters');for(const event of ['submit','change','input'])form?.addEventListener(event,clearAll);document.addEventListener('sanequeue:reports-loaded',clearAll);new MutationObserver(prune).observe(document.body,{attributes:true,attributeFilter:['data-view','hidden'],childList:true,subtree:true});
+const form=document.getElementById('history-filters');
+for(const event of ['submit','change','input'])form?.addEventListener(event,clearAll);
+document.addEventListener('sanequeue:reports-loaded',()=>{
+ if(document.body.dataset.reportTarget==='history-cdr-section')prune();
+ else clearAll();
+});
+new MutationObserver(prune).observe(document.body,{attributes:true,attributeFilter:['data-view','hidden'],childList:true,subtree:true});
 // Theme changes are watched only on the two theme roots, never chart descendants.
 const themeObserver=new MutationObserver(()=>{for(const host of [...hosts]){const record=state.get(host);if(!record||!current(host,record)){clear(host);continue;}if(record.theme!==JSON.stringify(theme(host)))record.redraw();}});
 for(const root of [document.documentElement,document.body])themeObserver.observe(root,{attributes:true,attributeFilter:['class','data-theme']});
