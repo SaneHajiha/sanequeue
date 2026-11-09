@@ -58,3 +58,6 @@ The user approved the light RTL PBX call report reference and requested paired P
 # 2026-11-04 — organizational access and optional AI report
 
 The user explicitly requested implementation of organizational access and an AI report. This authorizes development, not deployment on the operational PBX. The prototype enforces historical, inventory-evidenced CDR endpoint ownership, uses independent capability grants, and defaults the external AI provider to disabled. The OpenAI Responses API receives only a redacted question for intent classification; report data and authorization stay server-side. Only a small set of aggregate intents is implemented. This decision does not authorize sending operational customer data or installing the prototype.
+# 2026-11-09 lab deployment approval
+
+The user explicitly authorized installation on the existing test server at `192.168.2.2` and continuation of the full redesign. Use the versioned release installer, retain the existing site origin, back up the active release and state, and keep the pre-install PBX idle check. Design work stays in the existing Jinja, CSS and JavaScript stack with the current role and report boundaries.
