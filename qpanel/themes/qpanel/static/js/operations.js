@@ -84,13 +84,29 @@
  });
  const empty=(message,columns)=>`<tr><td colspan="${columns}" class="empty">${esc(message)}</td></tr>`;
  const metric=(label,value,detail,icon='↗',kind='')=>`<article class="metric ${kind}"><span class="icon" aria-hidden="true">${icon}</span><p>${esc(label)}</p><b>${esc(value)}</b><small>${esc(detail)}</small></article>`;
- function selected(){const filter=$('queue-filter').value,search=$('search').value.trim().toLocaleLowerCase();return Object.entries(queues).map(([name,q])=>{if(kpiPeriod!=='today')return [name,q];const m=observedToday.queues?.[name]||{};const answered=n(m.answered),total=answered+n(m.abandoned);return [name,{...q,Completed:answered,Abandoned:n(m.abandoned),Holdtime:answered?n(m.wait_seconds)/answered:null,TalkTime:answered?n(m.talk_seconds)/answered:null,ServicelevelPerf:total&&n(m.sla_known)===answered?100*n(m.sla_met)/total:null}];}).filter(([name,q])=>(!filter||name===filter)&&(!search||name.toLocaleLowerCase().includes(search)||Object.entries(q.members||{}).some(([key,m])=>(key+' '+(m.Name||'')).toLocaleLowerCase().includes(search))));}
+ const countValue=value=>value!=null&&String(value).trim()!==''&&Number.isFinite(Number(value))&&Number(value)>=0?Number(value):null;
+ function countTotal(entries,field){
+  const values=entries.map(([,queue])=>queue[field]);
+  return values.length&&values.every(value=>value!==null)?values.reduce((sum,value)=>sum+value,0):null;
+ }
+ const serviceWeight=q=>kpiPeriod==='today'?n(q.Completed)+n(q.Abandoned):n(q.Completed);
+ const hasServiceLevel=q=>serviceWeight(q)>0&&countValue(q.ServicelevelPerf)!==null;
+ function selected(){
+  const filter=$('queue-filter').value,search=$('search').value.trim().toLocaleLowerCase();
+  return Object.entries(queues).filter(([name,q])=>(!filter||name===filter)&&(!search||name.toLocaleLowerCase().includes(search)||Object.entries(q.members||{}).some(([key,m])=>(key+' '+(m.Name||'')).toLocaleLowerCase().includes(search)))).map(([name,q])=>{
+   if(kpiPeriod!=='today')return [name,{...q,Completed:countValue(q.Completed),Abandoned:countValue(q.Abandoned)}];
+   const m=observedToday.queues?.[name]||{};
+   const answered=observedToday.available?n(m.answered):null,abandoned=observedToday.available?n(m.abandoned):null;
+   const total=answered+abandoned;
+   return [name,{...q,Completed:answered,Abandoned:abandoned,Holdtime:answered?n(m.wait_seconds)/answered:null,TalkTime:answered?n(m.talk_seconds)/answered:null,ServicelevelPerf:total&&n(m.sla_known)===answered?100*n(m.sla_met)/total:null}];
+  });
+ }
 
  function updateKpiPeriod(){
   const note=$('kpi-period-note');if(!note)return;
   if(kpiPeriod==='today'){
-   $('kpi-period-short').textContent=t('امروز · آغاز ثبت: ','Today · recording since: ')+(observedToday.since?new Date(observedToday.since*1000).toLocaleTimeString(fa?'fa-IR':'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tehran'}):'—');
-   note.textContent=t('از نیمه‌شب تهران تا اکنون؛ فقط تماس‌هایی که شروع و پایانشان ثبت شده. آغاز پوشش: ','Tehran midnight to now; only recorded call observations. Coverage began: ')+(observedToday.since?new Date(observedToday.since*1000).toLocaleString(fa?'fa-IR':'en-GB'):t('هنوز شروع نشده','not started'))+t(' · میانگین حسابی تماس پاسخ‌داده؛ سطح خدمت = پاسخ در آستانه / کل پاسخ و رهاشده.',' · Arithmetic answered-call averages; SL = answers within target / answered plus abandoned.');
+   $('kpi-period-short').textContent=observedToday.available?t('امروز · دادهٔ ثبت‌شده','Today · recorded observations'):t('امروز · داده در دسترس نیست','Today · data unavailable');
+   note.textContent=t('بازه از نیمه‌شب تهران شروع می‌شود و ممکن است در ثبت داده وقفه باشد. سطح خدمت = پاسخ در آستانه ÷ مجموع پاسخ‌داده و رهاشده. «—» یعنی مقدار در دسترس نیست.','The period starts at Tehran midnight and may contain recording gaps. Service level = answers within target ÷ answered plus abandoned. “—” means the value is unavailable.');
   }else{
    $('kpi-period-short').textContent=t('از آخرین بازنشانی صف','Since last queue reset');
    note.textContent=t('منبع: شمارنده مرکز تلفن؛ زمان شروع/آخرین ریست از AMI مشخص نیست. روزانه خودکار ریست نمی‌شود. میانگین‌های PBX وزنی‌اند و ممکن است تا ۱۲۰ ثانیه تأخیر داشته باشند. بازخوانی صفحه چیزی را ریست نمی‌کند.','Source: PBX counters; AMI does not provide the last reset/start time. No automatic daily reset. PBX averages are weighted and may lag up to 120 seconds. Refresh does not reset counters.');
@@ -135,7 +151,7 @@
 
  function updateDetailViews(entries, agents, calls, alerts){
   const sum=(arr,key)=>arr.reduce((a,x)=>a+n(x[1][key]),0);
-  const waiting=sum(entries,'Calls'), resolved=sum(entries,'Completed'), abandoned=sum(entries,'Abandoned');
+  const waiting=sum(entries,'Calls');
   const counts={ready:0,busy:0,paused:0,offline:0};agents.forEach(a=>counts[a.state]++);
   const queuesWithWaiting=entries.filter(([,q])=>n(q.Calls)>0).length;
   const noReady=entries.filter(([,q])=>(Object.keys(q.members||{}).length>0||n(q.Calls)>0)&&Object.values(q.members||{}).filter(m=>status(m)==='ready').length===0).length;
@@ -193,15 +209,15 @@
    picker.dataset.renderKey=pickerKey;
   }
   picker.querySelectorAll('[data-wb-queue]').forEach(input=>{input.checked=enabled.includes(input.dataset.wbQueue);});
-  let waiting=0,ready=0,talking=0,ringing=0,paused=0,responded=0,abandoned=0;
+  let waiting=0,ready=0,talking=0,ringing=0,paused=0;
   $('wallboard-queues').innerHTML=chosen.map(([name,q])=>{
    const members=Object.entries(q.members||{}),calls=Object.values(q.entries||{}).sort((a,b)=>n(b.Wait)-n(a.Wait));
    const c={ready:0,talking:0,ringing:0,paused:0,held:0,busy:0,offline:0};
    for(const [,m] of members)c[memberDetail(m).key]=(c[memberDetail(m).key]||0)+1;
-   waiting+=n(q.Calls);ready+=c.ready;talking+=c.talking;ringing+=c.ringing;paused+=c.paused;responded+=n(q.Completed);abandoned+=n(q.Abandoned);
+   waiting+=n(q.Calls);ready+=c.ready;talking+=c.talking;ringing+=c.ringing;paused+=c.paused;
    const longest=calls.length?Math.max(...calls.map(x=>n(x.Wait))):0;
    const queueName=policyState?.queues?.[name]?.label||name;
-   const sl=n(q.Completed)>0&&String(q.ServicelevelPerf??'').trim()!==''?fmt(q.ServicelevelPerf)+'%':'—';
+   const sl=hasServiceLevel(q)?fmt(q.ServicelevelPerf)+'%':'—';
    const agents=members.map(([key,m])=>`<div class="wb-agent"><span class="wb-agent-title">${esc(m.Name||key)}<small dir="ltr">${esc(key)}</small></span>${stateChip(m)}</div>`).join('')||`<p class="wb-empty">${t('بدون کارشناس','No agents')}</p>`;
    const pageSize=12,page=Math.floor(Date.now()/15000)%Math.max(1,Math.ceil(calls.length/pageSize)),start=page*pageSize;
    const callerRows=(calls.slice(start,start+pageSize).map(x=>`<div class="wb-caller"><b>${wallboardPrivate?`<bdi dir="ltr">${esc(x.CallerIDNum||x.CallerIDName||'—')}</bdi>`:t('نفر','Position')+' '+fmt(x.Position)}</b><span class="wb-wait">${duration(x.Wait)}</span><small>${n(x.Wait)>=n($('threshold').value)?t('انتظار طولانی','Long wait'):t('در انتظار','Waiting')}</small></div>`).join('')||`<p class="wb-empty">${t('تماس منتظر وجود ندارد','No callers waiting')}</p>`)+(calls.length>pageSize?`<p class="wb-page-note">${fmt(start+1)}–${fmt(Math.min(start+pageSize,calls.length))} / ${fmt(calls.length)} · ${t('چرخش خودکار ۱۵ ثانیه','Rotates every 15 seconds')}</p>`:'');
@@ -214,8 +230,8 @@
     [t('در حال مکالمه','Talking'),fmt(talking)],
     [t('در حال زنگ‌خوردن','Ringing'),fmt(ringing)],
     [t('توقف موقت','Paused'),fmt(paused)],
-    [t('پاسخ‌داده','Answered'),fmt(responded)],
-    [t('رهاشده','Abandoned'),fmt(abandoned)]
+    [t('پاسخ‌داده','Answered'),fmt(countTotal(chosen,'Completed'))],
+    [t('رهاشده','Abandoned'),fmt(countTotal(chosen,'Abandoned'))]
    ].map(([name,value])=>`<div><strong>${value}</strong><span>${name}</span></div>`).join('');
   $('wb-updated').textContent=lastSuccess?new Date(lastSuccess).toLocaleTimeString(fa?'fa-IR':'en-GB'):'—';
   $('wb-connection').textContent=currentDataSource==='ami-live'?t('داده زنده','Live AMI'):currentDataSource==='stale'?t('داده قدیمی؛ اتصال قطع','STALE / OFFLINE'):t('نمای آزمایشی','DEMO');
@@ -270,11 +286,14 @@
   if(document.querySelector('dialog[open]'))return;
   const focused=document.activeElement;
   const focusKey=focused?.tagName==='BUTTON'&&focused.closest('.view')&&Object.keys(focused.dataset).length?{pane:focused.closest('.view').id,data:{...focused.dataset}}:null;
-  const data=selected(), threshold=n($('threshold').value);let answered=0,abandoned=0,waiting=0,ready=0,total=0,busy=0,holdSum=0,holdWeight=0,slSum=0,slWeight=0,cards=[],agents=[],calls=[],alerts=[];
+  const data=selected(), threshold=n($('threshold').value);let waiting=0,ready=0,total=0,busy=0,holdSum=0,holdWeight=0,slSum=0,slWeight=0,cards=[],agents=[],calls=[],alerts=[];
+  let missingServiceLevel=false;
   for(const [name,q] of data){
-   answered+=n(q.Completed);abandoned+=n(q.Abandoned);waiting+=n(q.Calls);
-   if(q.Holdtime!==undefined&&String(q.Holdtime).trim()!==''&&Number.isFinite(Number(q.Holdtime))&&n(q.Completed)>0){holdSum+=n(q.Holdtime)*n(q.Completed);holdWeight+=n(q.Completed);}
-   if(q.ServicelevelPerf!==undefined&&q.ServicelevelPerf!==null&&String(q.ServicelevelPerf).trim()!==''&&Number.isFinite(Number(q.ServicelevelPerf))&&n(q.Completed)>0){const weight=kpiPeriod==='today'?n(q.Completed)+n(q.Abandoned):n(q.Completed);slSum+=n(q.ServicelevelPerf)*weight;slWeight+=weight;}
+   waiting+=n(q.Calls);
+   if(countValue(q.Holdtime)!==null&&q.Completed>0){holdSum+=n(q.Holdtime)*q.Completed;holdWeight+=q.Completed;}
+   const weight=serviceWeight(q);
+   if(hasServiceLevel(q)){slSum+=n(q.ServicelevelPerf)*weight;slWeight+=weight;}
+   else if(weight>0||q.Completed===null||kpiPeriod==='today'&&q.Abandoned===null)missingServiceLevel=true;
    const counts={ready:0,busy:0,paused:0,offline:0};
    for(const [key,m] of Object.entries(q.members||{})){const state=status(m);counts[state]++;agents.push({name,key,m,state});if(state==='paused'&&n(m.LastPause)>0&&(serverNow()/1000-n(m.LastPause))>n($('pause-threshold').value)*60)alerts.push({title:t('استراحت طولانی','Long pause'),text:(m.Name||key)+' · '+name});}
    ready+=counts.ready;busy+=counts.busy;const count=Object.keys(q.members||{}).length;total+=count;
@@ -287,19 +306,19 @@
    const percentValue=pct===null?'—':fmt(pct)+'%';
    const queueColor=queueIndex(name);
    const capacityBar=count?Object.entries(counts).map(([state,v])=>`<span class="${state}" style="width:${100*v/count}%;height:100%" title="${esc(labels[state])}: ${v}"></span>`).join(''):'<span class="empty-capacity"></span>';
-   const qAlert=livePolicyAlerts.some(alert=>alert.queue===name)||(n(q.Calls)>0&&!counts.ready),slKnown=q.ServicelevelPerf!==null&&String(q.ServicelevelPerf??'').trim()!==''&&n(q.Completed)>0;
+   const qAlert=livePolicyAlerts.some(alert=>alert.queue===name)||(n(q.Calls)>0&&!counts.ready),slKnown=hasServiceLevel(q);
    const queueLabel=policyState?.queues?.[name]?.label||t('صف تماس','Call queue');
    const queueHealth=currentDataSource!=='ami-live'?t('داده زنده نیست','Not live'):qAlert?t('نیازمند توجه','Attention'):!counts.ready?t('بدون کارشناس آماده','No ready agents'):t('آماده پاسخ‌گویی','Ready to serve');
    cards.push(`<article class="queue-overview-card ${qAlert?'queue-alert':''}" style="--queue-accent:${queueAccent(name)}"><header><button type="button" class="queue-overview-name" data-focus="${esc(name)}">${queueBadge(name)}<strong>${esc(queueLabel)}</strong></button><span class="queue-health-label ${qAlert?'attention':!counts.ready||currentDataSource!=='ami-live'?'caution':''}"><i></i>${esc(queueHealth)}</span></header><div class="queue-overview-numbers"><div><small>${t('منتظر در صف','Waiting now')}</small><strong>${fmt(q.Calls)}</strong></div><div><small>${t('بیشترین انتظار','Longest wait')}</small><strong class="ltr ${longest>=threshold?'overdue':''}">${duration(longest)}</strong></div><div class="queue-service-ring" style="--service-pct:${slKnown?Math.max(0,Math.min(100,n(q.ServicelevelPerf))):0}%" aria-label="${esc(t('سطح خدمت','Service level'))}: ${slKnown?fmt(q.ServicelevelPerf)+'%':'—'}"><b>${slKnown?fmt(q.ServicelevelPerf)+'%':'—'}</b><small>${t('سطح خدمت','Service level')}</small></div></div><div class="queue-overview-staff"><span>${t('ظرفیت پاسخ‌گویی','Staffing')}</span><b><bdi dir="ltr">${fmt(counts.ready)} / ${fmt(count)}</bdi> ${t('آماده','ready')}</b></div><div class="queue-overview-capacity" role="img" aria-label="${esc(Object.entries(counts).map(([st,v])=>labels[st]+': '+v).join(', '))}">${capacityBar}</div><div class="queue-overview-states">${Object.entries(counts).map(([state,value])=>`<span><i class="dot ${state}"></i>${esc({ready:t('آماده','Ready'),busy:t('مشغول','Busy'),paused:t('توقف','Paused'),offline:t('آفلاین','Offline')}[state])}<b>${fmt(value)}</b></span>`).join('')}</div><div class="queue-overview-kpis"><div><small>${t('پاسخ','Answered')}</small><b>${fmt(q.Completed)}</b></div><div><small>${t('رهاشده','Abandoned')}</small><b>${fmt(q.Abandoned)}</b></div><div><small>${t('میانگین انتظار','Mean wait')}</small><b dir="ltr">${queueMean(q,'Holdtime')}</b></div><div><small>${t('میانگین مکالمه','Mean talk')}</small><b dir="ltr">${queueMean(q,'TalkTime')}</b></div></div><footer><span class="queue-overview-spark-label" title="${esc(t('روند منتظرها؛ نمونه‌های همین مرورگر','Waiting trend; samples from this browser'))}">${queueSpark(name)}<small>${t('روند منتظرها · همین صفحه','Waiting trend · this page')}</small></span><button type="button" class="queue-summary-open" data-queue-summary="${esc(name)}">${t('جزئیات صف','Queue details')} ↗</button></footer></article>`);
 
   }
   const avgHold=holdWeight?duration(holdSum/holdWeight):'—';
-  const serviceLevel=slWeight?fmt(slSum/slWeight)+'%':'—';
+  const serviceLevel=slWeight&&!missingServiceLevel?fmt(slSum/slWeight)+'%':'—';
   $('metrics').innerHTML=
     metric(t('اعضای درگیر تماس','Busy members'),fmt(busy),t('مکالمه، زنگ یا مشغول','Talking, ringing or busy'),'◉','active')+
     metric(t('تماس‌های منتظر','Waiting calls'),fmt(waiting),t('هم‌اکنون در صف','Currently in queue'),'◷','warning')+
     metric(t('کارشناسان آماده','Ready agents'),fmt(ready)+' / '+fmt(total),t('اعضای آماده / کل عضویت‌ها','Ready / all memberships'),'♙','ready')+
-    metric(t('تماس‌های رهاشده','Abandoned calls'),fmt(abandoned),kpiPeriod==='today'?t('امروز؛ از آغاز پوشش ثبت','Today; observed coverage'):t('از آخرین بازنشانی صف','Since queue reset'),'↯','danger')+
+    metric(t('تماس‌های رهاشده','Abandoned calls'),fmt(countTotal(data,'Abandoned')),kpiPeriod==='today'?t('امروز؛ دادهٔ ثبت‌شده','Today; recorded observations'):t('از آخرین بازنشانی صف','Since queue reset'),'↯','danger')+
     metric(t('میانگین انتظار ثبت‌شده','Queue average hold'),avgHold,kpiPeriod==='today'?t('میانگین حسابی؛ تماس‌های امروز','Arithmetic mean; today’s calls'):t('میانگین ارسالی مرکز تلفن','PBX weighted mean'),'◴','wait')+
     metric(t('سطح خدمت (SL)','Service level'),serviceLevel,kpiPeriod==='today'?t('پاسخ در آستانه / کل ورودی ثبت‌شده','Answers in target / observed inbound'):t('بر اساس شمارنده مرکز تلفن','From PBX queue counters'),'◎','sla');
 
@@ -905,7 +924,7 @@ $('test-controls-disable').onclick=async()=>{
    [t('تماس‌های منتظر','Waiting calls'),fmt(q.Calls)],
    [t('پاسخ‌داده‌شده','Answered'),fmt(q.Completed)],
    [t('رهاشده','Abandoned'),fmt(q.Abandoned)],
-   [t('سطح خدمت','Service level'),n(q.Completed)>0&&String(q.ServicelevelPerf??'').trim()!==''?fmt(q.ServicelevelPerf)+'%':'—'],
+   [t('سطح خدمت','Service level'),hasServiceLevel(q)?fmt(q.ServicelevelPerf)+'%':'—'],
    [t('میانگین انتظار','Average hold'),queueMean(q,'Holdtime')],
    [t('میانگین مکالمه','Average talk'),queueMean(q,'TalkTime')],
    [t('آماده / کل اعضا','Ready / memberships'),fmt(count.ready)+' / '+fmt(members.length)],

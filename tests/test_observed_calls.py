@@ -2,7 +2,34 @@
 import asyncio,tempfile,unittest
 from datetime import datetime
 from pathlib import Path
+
+from flask import Flask
+import pytest
+
+from sanequeue.api import activity
 from sanequeue.realtime.calls import CallRecorder,CallStore
+
+
+@pytest.mark.parametrize(('offset','available'), [(None,False),(-1,False),(0,True),(60,True)])
+def test_today_metrics_require_observation_in_tehran_day(tmp_path,monkeypatch,offset,available):
+    midnight=datetime.fromisoformat('2026-10-25T00:00:00+03:30')
+
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls,zone=None):
+            return datetime.fromisoformat('2026-10-25T01:00:00+03:30').astimezone(zone)
+
+    monkeypatch.setattr(activity,'datetime',FrozenDatetime)
+    app=Flask(__name__)
+    activity.install(app,tmp_path/'activity.sqlite3',None,None,None,None)
+    if offset is not None:
+        CallStore(tmp_path/'calls.sqlite3').write([],midnight.timestamp()+offset)
+
+    result=app.config['SANEQUEUE_DAILY_METRICS'](['8001'])
+    assert result['day']=='2026-10-25'
+    assert result['available'] is available
+    assert result['queues']=={}
+
 
 class CallsTests(unittest.TestCase):
     def setUp(self):
