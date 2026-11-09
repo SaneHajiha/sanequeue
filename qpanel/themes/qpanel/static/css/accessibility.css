@@ -54,6 +54,11 @@ body .hero-kicker {display:none}
 body .page-heading {margin-bottom:18px}
 body:is([data-view=users],[data-view=policies],[data-view=settings],[data-view=shifts],[data-view=directory],[data-view=audit],[data-view=features],[data-view=control],[data-view=pbx]) :is(.toolbar,.monitor-options) {display:none}
 body .agent-tile-bottom :is(span,b),body .control-safety-summary :is(span,strong,small),body #overview-agent-list strong {font-size:12px!important}
+body.dark #history-filter-actions>.primary,
+body.dark #extension-report-shortcut>.primary {
+  background:#1d53bf;
+  color:#fff;
+}
 body main .agent-action-grid .agent-operation,body main .agent-primary-action {font-size:12px!important;min-height:40px!important}
 body .agent-primary-action {background:#15589a!important}
 body:not(.dark) .agent-tile-bottom button {color:var(--accent)}
