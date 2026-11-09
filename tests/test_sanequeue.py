@@ -99,22 +99,49 @@ class AccessTest(unittest.TestCase):
             session['_fresh'] = True
             session['csrf_token'] = 'test-csrf'
 
+    def form_token(self):
+        with self.client.session_transaction() as session:
+            return session['csrf_token']
+
     def test_login_form_rejects_incorrect_password(self):
         response = self.client.get('/login')
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'name="username"', response.data)
         self.assertIn(b'name="pw"', response.data)
-        response = self.client.post('/login', data={'username': 'supervisor', 'pw': 'wrong'})
+        token = self.form_token()
+        self.assertIn(f'name="csrf_token" value="{token}"'.encode(), response.data)
+        response = self.client.post('/login', data={'username': 'supervisor', 'pw': 'wrong', 'csrf_token': token})
         self.assertEqual(response.status_code, 401)
         self.assertIn(b'Incorrect username or password', response.data)
 
     def test_login_accepts_hashed_password_and_redirects_to_dashboard(self):
         from werkzeug.security import generate_password_hash
         self.module.cfg.config.set('users', 'supervisor', generate_password_hash('local-test-secret'))
-        response = self.client.post('/login', data={'username': 'supervisor', 'pw': 'local-test-secret'})
+        self.client.get('/login')
+        response = self.client.post('/login', data={'username': 'supervisor', 'pw': 'local-test-secret', 'csrf_token': self.form_token()})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.location, '/')
         self.assertEqual(self.client.get('/').status_code, 200)
+
+    def test_login_without_matching_form_token_preserves_current_account(self):
+        self.login('viewer')
+        for token in ('', 'نامعتبر'):
+            with self.subTest(token=token):
+                response = self.client.post('/login', data={'username': 'supervisor', 'pw': 'password', 'csrf_token': token})
+                self.assertEqual(response.status_code, 403)
+                with self.client.session_transaction() as session:
+                    self.assertEqual(session['_user_id'], 'viewer')
+
+    def test_logout_only_accepts_protected_post(self):
+        self.login('viewer')
+        self.assertEqual(self.client.get('/logout').status_code, 405)
+        self.assertEqual(self.client.post('/logout').status_code, 403)
+        with self.client.session_transaction() as session:
+            self.assertEqual(session['_user_id'], 'viewer')
+        response = self.client.post('/logout', data={'csrf_token': self.form_token()})
+        self.assertEqual((response.status_code, response.location), (302, '/login'))
+        with self.client.session_transaction() as session:
+            self.assertNotIn('_user_id', session)
 
     def test_unsupported_language_is_rejected(self):
         self.login('viewer')

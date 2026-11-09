@@ -7,7 +7,9 @@
     <div id="login-page">
       <div class="container">
           <form class="form-login" method="POST" action="{{ url_for('.login') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <h2 class="form-login-heading">{{ _('Sign in') }}</h2>
+            {% if login_expired %}<p role="alert">{{ _('The sign-in form expired. Please try again.') }}</p>{% endif %}
             <div class="login-wrap">
                 <input name="username" id="username" type="text" class="form-control" placeholder="{{ _('User id') }}" autofocus>
                 <br>

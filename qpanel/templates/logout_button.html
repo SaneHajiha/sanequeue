@@ -1,4 +1,4 @@
                     {% if has_users() %}
-                    <li><a class="logout" href="{{ url_for('.logout') }}">{{_('Logout') }}</a></li>
+                    <li><form method="post" action="{{ url_for('.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-link" type="submit">{{ _('Logout') }}</button></form></li>
                     {% endif %}
 
