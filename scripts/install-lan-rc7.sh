@@ -4,15 +4,73 @@ set -euo pipefail
 umask 077
 
 mode=${1:-install}
+assume_yes=0
 case "$#:$mode" in
-  0:install|1:--preflight) ;;
-  *) printf 'Usage: bash %s [--preflight]\n' "${0##*/}" >&2; exit 2 ;;
+  0:install|1:--preflight|1:--reports-status) ;;
+  1:--yes) mode=install; assume_yes=1 ;;
+  *) printf 'Usage: bash %s [--yes | --preflight | --reports-status]\n' "${0##*/}" >&2; exit 2 ;;
 esac
 if [[ $(id -u) -ne 0 ]]; then
   exec sudo --preserve-env=SSH_CONNECTION bash "$0" "$@"
 fi
 fail() { printf '%s\n' "$1" >&2; exit 1; }
 export PYTHON=/usr/bin/python3.11
+
+reports_status() {
+  printf 'Reporting worker: %s\n' "$(systemctl is-active sanequeue-reporting.service || true)"
+  if [[ -f /etc/sanequeue/reporting-sql.ini ]]; then
+    if grep -Eq '^REPORTING_SQL_ARGS=.*--mysql-config([[:space:]]|=)' /etc/sanequeue/reporting.env 2>/dev/null; then
+      echo 'PBX SQL (CDR/CEL): configured'
+    else
+      echo 'PBX SQL (CDR/CEL): configuration exists but the worker is not configured to use it'
+    fi
+  else
+    echo 'PBX SQL (CDR/CEL): not configured. Historical PBX reports require a local read-only SQL source.'
+  fi
+  [[ -x $PYTHON && -f /var/lib/sanequeue/history.sqlite3 ]] || {
+    echo 'Reporting archive is not available.' >&2
+    return 1
+  }
+  "$PYTHON" -I -B - <<'PY'
+from datetime import datetime, timezone
+import json
+import sqlite3
+import time
+
+try:
+    with sqlite3.connect("file:/var/lib/sanequeue/history.sqlite3?mode=ro", uri=True, timeout=2) as db:
+        for source in ("queue_log", "activity", "sql"):
+            row = db.execute(
+                "SELECT value FROM checkpoints WHERE pbx=? AND source=?",
+                ("primary", "health:" + source),
+            ).fetchone()
+            if not row:
+                print(f"{source}: no import checkpoint")
+                continue
+            status = json.loads(row[0])
+            age = max(0, int(time.time() - status["checked"]))
+            if status["ok"]:
+                progress = status.get("progress", {})
+                pending = [key for key, value in progress.items() if key.endswith("caught_up") and value is False]
+                detail = "backfill in progress (" + ", ".join(pending) + ")" if pending else "last check passed"
+            else:
+                detail = "import error (" + status["reason"] + ")"
+            print(f"{source}: {detail}, checked {age}s ago")
+        newest = db.execute(
+            "SELECT ts FROM report_cdr WHERE pbx=? ORDER BY ts DESC LIMIT 1",
+            ("primary",),
+        ).fetchone()
+        print("Latest archived CDR (UTC):", datetime.fromtimestamp(newest[0], timezone.utc).isoformat() if newest else "none")
+except (sqlite3.Error, ValueError, KeyError, TypeError, OverflowError):
+    raise SystemExit("Could not read the reporting archive status.")
+PY
+}
+
+if [[ $mode == --reports-status ]]; then
+  reports_status
+  exit
+fi
+
 [[ $(uname -m) == x86_64 ]] || fail 'SaneQueue RC7 requires x86_64.'
 . /etc/os-release
 [[ ${ID:-} == rocky && ${VERSION_ID:-} =~ ^8(\.|$) ]] || fail 'SaneQueue RC7 requires Rocky Linux 8.'
@@ -43,7 +101,7 @@ if [[ $mode == install ]]; then
   require_idle
 fi
 missing_prerequisites
-if [[ $mode == install || ${#packages[@]} -gt 0 ]]; then
+if [[ ${#packages[@]} -gt 0 ]]; then
   # A stopped or uninterruptible package manager may hold locks indefinitely.
   blocked=$(ps -C dnf,dnf-3,yum,rpm -o pid=,stat=,comm= | awk '$2 ~ /^[DTt]/' || true)
   if [[ -n $blocked ]]; then
@@ -56,10 +114,16 @@ if [[ ${#packages[@]} -gt 0 ]]; then
   if [[ $mode == --preflight || ! -t 0 ]]; then
     fail 'Run this installer in an interactive terminal to review and install the missing packages.'
   fi
-  echo 'Checking Rocky BaseOS and AppStream. Review the transaction and confirm at the DNF prompt to install.'
+  if [[ $assume_yes == 1 ]]; then
+    echo 'Installing missing prerequisites from Rocky BaseOS and AppStream.'
+    dnf_confirmation=(--assumeyes)
+  else
+    echo 'Checking Rocky BaseOS and AppStream. Review the transaction and confirm at the DNF prompt to install.'
+    dnf_confirmation=(--setopt=assumeyes=False --setopt=defaultyes=False)
+  fi
   if ! dnf --repo=baseos --repo=appstream \
       --setopt=exit_on_lock=True --setopt=timeout=20 --setopt=retries=1 \
-      --setopt=assumeyes=False --setopt=defaultyes=False \
+      "${dnf_confirmation[@]}" \
       --exclude='asterisk*' --exclude='issabel*' install "${packages[@]}"; then
     fail 'Prerequisites were not installed. Review the DNF output above for a declined transaction, lock or repository error.'
   fi
@@ -187,3 +251,5 @@ export SANEQUEUE_PUBLIC_ORIGIN="$origin"
 export SANEQUEUE_ACTIVATE_TELEPHONY=0
 require_idle
 bash "$installer"
+printf '\n'
+reports_status || echo 'Reporting status is unavailable. Retry this launcher with --reports-status.' >&2
