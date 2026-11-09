@@ -56,11 +56,12 @@ if [[ ${#packages[@]} -gt 0 ]]; then
   if [[ $mode == --preflight || ! -t 0 ]]; then
     fail 'Run this installer in an interactive terminal to review and install the missing packages.'
   fi
-  read -r -p 'Use the configured Rocky repositories to install these prerequisites? [y/N] ' answer || exit 1
-  [[ $answer =~ ^[Yy]([Ee][Ss])?$ ]] || fail 'Prerequisite installation was declined.'
-  if ! dnf --setopt=exit_on_lock=True --setopt=timeout=20 --setopt=retries=1 \
+  echo 'Checking Rocky BaseOS and AppStream. Review the transaction and confirm at the DNF prompt to install.'
+  if ! dnf --repo=baseos --repo=appstream \
+      --setopt=exit_on_lock=True --setopt=timeout=20 --setopt=retries=1 \
+      --setopt=assumeyes=False --setopt=defaultyes=False \
       --exclude='asterisk*' --exclude='issabel*' install "${packages[@]}"; then
-    fail 'DNF did not complete. Review its lock or repository error above, then retry this installer.'
+    fail 'Prerequisites were not installed. Review the DNF output above for a declined transaction, lock or repository error.'
   fi
   missing_prerequisites
   [[ ${#packages[@]} -eq 0 ]] || fail 'The required Python/Redis commands are still unavailable.'
