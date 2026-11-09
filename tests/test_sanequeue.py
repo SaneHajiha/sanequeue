@@ -242,6 +242,30 @@ class AccessTest(unittest.TestCase):
             self.assertEqual(response.status_code,202)
             self.assertTrue(response.get_json()['ok'])
 
+    def test_rejected_resume_keeps_pending_staffing_reservation(self):
+        from Asterisk.Manager import ActionFailed
+
+        self.login('supervisor')
+        policy = self.store.export()
+        policy['queues']['sales']['staffing'].update(
+            enabled=True, roster_size=2, max_absent_count=1,
+            max_absent_percent=50, min_on_duty=1)
+        self.store.replace(policy)
+        self.fake['sales']['members']['SIP/101'] = {'Status': '1', 'Paused': '0'}
+
+        def pause(agent, paused):
+            return self.client.post('/api/members/pause',
+                                    data=dict(queue='sales', agent=agent, paused=paused, reason='break'),
+                                    headers={'X-CSRF-Token': 'test-csrf'})
+
+        with patch.object(self.module.backend, '_connect') as connect:
+            manager = connect.return_value.connection
+            manager._translate_response.side_effect = [{'Response': 'Success'}, ActionFailed('rejected')]
+            self.assertEqual(pause('SIP/100', 'true').status_code, 202)
+            self.assertEqual(pause('SIP/100', 'false').status_code, 502)
+            self.assertEqual(pause('SIP/101', 'true').status_code, 409)
+            self.assertEqual(manager._write_action.call_count, 2)
+
     def test_managed_pause_keeps_authorized_ami_queue_despite_legacy_alias(self):
         self.login('supervisor')
         self.app.config['SANEQUEUE_PRIVATE_STATE'] = lambda: {}

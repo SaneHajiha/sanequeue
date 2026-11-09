@@ -364,7 +364,9 @@ def install(app, cfg, backend, get_data, render):
                 if store:store.release_leave(queue,agent)
                 return jsonify(error='minimum_ready'), 409
             result = ami_action('QueuePause', {'Queue': pbx_queue(queue), 'Interface': agent, 'Paused': paused, 'Reason': reason})
-            if store and ((paused == 'true' and definitely_rejected(result)) or paused == 'false'):
+            # A resume acknowledgement does not resolve the earlier pause.
+            # Reservations retire on a later snapshot or their bounded expiry.
+            if store and paused == 'true' and definitely_rejected(result):
                 store.release_leave(queue, agent)
             return result
 
