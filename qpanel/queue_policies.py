@@ -18,6 +18,14 @@ USER_ID = re.compile(r'^[A-Za-z0-9_.@-]{1,70}$')
 REASON_ID = re.compile(r'^[a-z][a-z0-9_-]{0,31}$')
 ALLOWED_GRANTS = frozenset({'view', 'pause', 'membership', 'monitor', 'hangup', 'priority', 'caller_details','transfer','park','pickup','dial'})
 ALLOWED_GRANTS = ALLOWED_GRANTS | {'report_export','recording_play','recording_download','survey_reports'}
+RECORDING_ACTIONS = frozenset({'recording_play', 'recording_download'})
+
+
+def grant_allows(grant, queue, action):
+    if not grant or queue not in grant.get('queues', ()) or action not in grant.get('actions', ()):
+        return False
+    scope = grant.get('recording_queues')
+    return action not in RECORDING_ACTIONS or scope is None or queue in scope
 DEFAULT_REASONS = [
     {'id':'break', 'label':'استراحت'},
     {'id':'lunch', 'label':'ناهار'},
@@ -92,7 +100,13 @@ def validate_config(raw):
             raise ValueError('invalid_supervisor_scope')
         if any(q not in cleaned['queues'] for q in qids) or any(a not in ALLOWED_GRANTS for a in actions):
             raise ValueError('invalid_supervisor_scope')
+        scope=grant.get('recording_queues')
+        if scope is not None and (not isinstance(scope,list) or len(scope)>100 or
+                                  any(not isinstance(queue,str) or queue not in qids for queue in scope)):
+            raise ValueError('invalid_recording_queue_scope')
         cleaned['supervisors'][username]={'queues':list(dict.fromkeys(qids)),'actions':list(dict.fromkeys(actions))}
+        if scope is not None:
+            cleaned['supervisors'][username]['recording_queues']=list(dict.fromkeys(scope))
     return cleaned
 
 class QueuePolicyStore:
@@ -150,7 +164,7 @@ class QueuePolicyStore:
         if role not in ('supervisor','agent','viewer'): return False
         with self.lock:
             grant=self.state['supervisors'].get(username)
-            return bool(grant and queue in grant['queues'] and action in grant['actions'])
+            return grant_allows(grant,queue,action)
 
     def visible(self,username,role,queues):
         return {q:v for q,v in queues.items() if self.access(username,role,q)}

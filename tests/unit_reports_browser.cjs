@@ -39,6 +39,7 @@ const path=require('node:path');
   await page.evaluate(()=>{document.body.dataset.view='reports';document.getElementById('reports-view').hidden=false;document.getElementById('history-unit-section').hidden=false;
    const f=document.getElementById('history-filters');f.elements.from.value='2026-10-24';f.elements.to.value='2026-10-25';});
   await page.addScriptTag({path:path.resolve('qpanel/themes/qpanel/static/js/report-charts.js')});
+  await page.addScriptTag({path:path.resolve('qpanel/themes/qpanel/static/js/report-duration.js')});
   await page.addScriptTag({path:path.resolve('qpanel/themes/qpanel/static/js/unit-reports.js')});
   await page.click('#unit-report-run');await page.waitForSelector('#unit-report-table tbody tr');
   await page.locator('#unit-queue-run').click();await page.waitForFunction(()=>document.getElementById('unit-queue-table').textContent.includes('8001'));

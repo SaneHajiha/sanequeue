@@ -58,6 +58,12 @@ def save_account_with_grants(path, store, visible_queues, obj):
             new_policies['supervisors'].pop(username, None)
         else:
             new_policies['supervisors'][username] = {'queues': qids, 'actions': actions}
+            previous_scope=previous_policies['supervisors'].get(username,{}).get('recording_queues')
+            recording_scope=obj.get('recording_queues')
+            if 'recording_queues' not in obj and previous_scope is not None:
+                recording_scope=[queue for queue in previous_scope if queue in qids]
+            if recording_scope is not None:
+                new_policies['supervisors'][username]['recording_queues']=recording_scope
         validate_config(new_policies)  # Validate before any disk write.
         try:
             set_account(path, username, role, phone, password, **({'menus':menus} if 'menus' in obj else {}))

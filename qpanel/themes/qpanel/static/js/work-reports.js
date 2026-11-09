@@ -3,7 +3,7 @@
  const $=id=>document.getElementById(id),root=$('work-sessions');if(!root)return;
  const cfg=JSON.parse($('ops-config').textContent),fa=document.documentElement.lang==='fa',t=(a,b)=>fa?a:b,locale=fa?'fa-IR':'en-GB';
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- const stamp=v=>v==null?'—':new Date(v*1000).toLocaleString(locale,{timeZone:'Asia/Tehran'}),n=v=>v==null?'—':Number(v).toLocaleString(locale,{maximumFractionDigits:1}),sec=v=>v==null?'—':n(v)+t(' ثانیه',' s');
+ const stamp=v=>v==null?'—':new Date(v*1000).toLocaleString(locale,{timeZone:'Asia/Tehran'}),n=v=>v==null?'—':Number(v).toLocaleString(locale,{maximumFractionDigits:1}),sec=window.SaneQueueReportDuration;
  const purpose=v=>v==='happy_call'?t('هپی‌کال','Happy call'):t('نظرسنجی','Survey');
  let sessions=[],sessionNext=null,rows=[],callNext=null,selected=null,serial=0,canManage=false;
  const base='/api/history/work-sessions';

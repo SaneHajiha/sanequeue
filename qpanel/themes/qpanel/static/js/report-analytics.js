@@ -4,7 +4,7 @@
  const fa=document.documentElement.lang==='fa',t=(a,b)=>fa?a:b,locale=fa?'fa-IR':'en-GB';
  const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const number=value=>value==null?'—':Number(value).toLocaleString(locale,{maximumFractionDigits:1});
- const seconds=value=>value==null?'—':number(value)+t(' ثانیه',' s');
+ const seconds=window.SaneQueueReportDuration;
  const percent=value=>value==null?'—':number(value)+'%';
  const headers=(labels)=>'<thead><tr>'+labels.map(s=>'<th scope="col">'+esc(s)+'</th>').join('')+'</tr></thead>';
  function table(labels,rows){return '<table>'+headers(labels)+'<tbody>'+rows.map(row=>'<tr>'+row.map(s=>'<td>'+esc(s)+'</td>').join('')+'</tr>').join('')+(rows.length?'':'<tr><td colspan="'+labels.length+'">'+t('داده‌ای موجود نیست.','No evidence available.')+'</td></tr>')+'</tbody></table>';}

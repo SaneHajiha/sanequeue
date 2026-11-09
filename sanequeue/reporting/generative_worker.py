@@ -26,7 +26,7 @@ from .text_generation import (private_json,configuration,canonical,transcript,va
 def local_authorizer(accounts,policies):
     """Fresh account, role, menus and all frozen queue grants; no grant cache."""
     from qpanel.local_accounts import validate_identity
-    from qpanel.queue_policies import validate_config
+    from qpanel.queue_policies import grant_allows,validate_config
     from sanequeue.security.permissions import sections_for,validate_sections,ROLE_ACTIONS
     def check(spec):
         try:
@@ -41,7 +41,7 @@ def local_authorizer(accounts,policies):
             raw=_local_json(policies)
             if not isinstance(raw,dict) or type(raw.get('version')) is not int or raw['version']!=1 or not {'queues','supervisors'}.issubset(raw):return False
             policy=validate_config(raw);grant=policy['supervisors'].get(spec['owner'],{})
-            return bool(spec['queues']) and all(cap in ROLE_ACTIONS[role] and (role=='admin' or queue in grant.get('queues',[]) and cap in grant.get('actions',[]))
+            return bool(spec['queues']) and all(cap in ROLE_ACTIONS[role] and (role=='admin' or grant_allows(grant,queue,cap))
                 for queue in spec['queues'] for cap in ('view','recording_play','caller_details'))
         except Exception:return False
     return check

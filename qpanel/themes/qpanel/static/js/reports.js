@@ -5,7 +5,7 @@
  const form=$('history-filters'),fields=form.elements;
  const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const n=value=>value===null||value===undefined?'—':Number(value).toLocaleString(locale,{maximumFractionDigits:1});
- const duration=value=>value===null||value===undefined?'—':`${Math.floor(value/60).toLocaleString(locale)}:${Math.floor(value%60).toLocaleString(locale,{minimumIntegerDigits:2,useGrouping:false})}`;
+ const duration=window.SaneQueueReportDuration;
  const stamp=value=>value?new Date(value*1000).toLocaleString(locale,{timeZone:'Asia/Tehran'}):'—';
  const outcomes={answered:t('پاسخ‌داده','Answered'),abandoned:t('رهاشده','Abandoned'),transferred:t('منتقل‌شده','Transferred'),waiting:t('انتظار / پایان ثبت نشده','Waiting / no end recorded'),connected:t('پاسخ / پایان ثبت نشده','Connected / no end recorded'),unknown:t('نامشخص','Unknown'),exitwithtimeout:t('پایان مهلت','Timed out'),exitempty:t('خروج؛ صف خالی','Empty queue exit'),exitwithkey:t('خروج با کلید','Key exit'),reentered_without_end:t('ورود مجدد؛ پایان نامشخص','Reentered without end')};
  const kinds={ENTERQUEUE:t('ورود به صف','Queue entry'),CONNECT:t('پاسخ کارشناس','Agent connected'),COMPLETECALLER:t('پایان بخش صف توسط تماس‌گیرنده','Queue segment ended by caller'),COMPLETEAGENT:t('پایان بخش صف توسط کارشناس','Queue segment ended by agent'),ABANDON:t('رهاکردن صف','Queue abandoned'),ATTENDEDTRANSFER:t('انتقال با مشورت','Attended transfer'),BLINDTRANSFER:t('انتقال مستقیم','Blind transfer'),TRANSFER:t('انتقال','Transfer')};
@@ -37,6 +37,15 @@
  function errorText(error){const messages={report_archive_not_initialized:t('آرشیو گزارش هنوز راه‌اندازی نشده است.','The reporting archive has not been initialized.'),report_archive_unavailable:t('آرشیو گزارش در دسترس نیست؛ وضعیت پردازشگر را بررسی کنید.','Reporting archive unavailable; check the worker status.'),invalid_report_request:t('بازهٔ تاریخ معتبر و حداکثر ۳۶۶ روز را انتخاب کنید.','Select a valid date range of at most 366 days.'),report_query_deadline:t('گزارش بیش از مهلت مجاز طول کشید؛ بازه را کوتاه‌تر کنید.','Query deadline reached; narrow the date range.'),export_too_large_narrow_filters:t('خروجی فوری حداکثر ۲۰۰ ردیف دارد؛ فیلتر را محدود کنید.','Immediate export is limited to 200 rows; narrow the filters.'),login_required:t('نشست پایان یافته؛ دوباره وارد شوید.','Session expired; sign in again.')};return messages[error.message]||t('دریافت گزارش ناموفق بود.','Unable to load the report.');}
  function params(){const result=new URLSearchParams({from:fields.from.value,to:fields.to.value,pause_direction:fields.pause_direction.value});if(fields.queue.value&&!$('history-filter-queue')?.hidden)result.set('queue',fields.queue.value);if(fields.outcome.value&&!$('history-filter-outcome')?.hidden)result.set('outcome',fields.outcome.value);return result;}
  function renderSummary(data){
+  const chart=$('history-queue-overview-chart');
+  if(chart)window.SaneQueueReportCharts?.render(chart,{
+   type:'column',title:t('پاسخ و رهاشدگی به تفکیک صف','Answered and abandoned by queue'),
+   unit:t('مراجعهٔ صف','Queue visits'),labels:data.queues.map(row=>row.queue),
+   series:[
+    {label:t('پاسخ‌داده','Answered'),values:data.queues.map(row=>row.answered)},
+    {label:t('رهاشده','Abandoned'),values:data.queues.map(row=>row.abandoned)}
+   ]
+  });
   const totals=data.queues.reduce((v,q)=>({visits:v.visits+q.visits,answered:v.answered+q.answered,abandoned:v.abandoned+q.abandoned,incomplete:v.incomplete+q.incomplete}),{visits:0,answered:0,abandoned:0,incomplete:0});
   const cards=[[t('مراجعه به صف','Queue visits'),totals.visits,t('بر اساس زمان ورود','By queue-entry time'),'#3b82f6'],[t('پاسخ‌داده','Answered visits'),totals.answered,t('مراجعهٔ دارای شواهد پاسخ','Visits with answer evidence'),'#10b981'],[t('رهاشده','Abandoned'),totals.abandoned,t('خروج پیش از پاسخ','Caller left before answer'),'#ef4444'],[t('پوشش ناقص','Incomplete evidence'),totals.incomplete,t('شروع یا پایان گمشده','Missing entry or end evidence'),'#f59e0b']];
   $('history-kpis').innerHTML=cards.map(([label,value,note,color],index)=>`<article class="history-kpi" style="--report-color:${color}"><span>${esc(label)}${window.SaneQueueHelp?.button(['visits','answered','abandoned','incomplete'][index])||''}</span><strong>${esc(n(value))}</strong><small>${esc(note)}</small></article>`).join('');

@@ -721,23 +721,41 @@ $('test-controls-disable').onclick=async()=>{
   const box=$('user-menu-select');if(!box)return;
   const allowed=cfg.role_sections?.[$('account-role').value]||[];
   const chosen=new Set(selected??allowed);
-  box.innerHTML=allowed.map(key=>`<label><input type="checkbox" value="${esc(key)}" ${chosen.has(key)?'checked':''}> ${esc(names[key]||key)}</label>`).join('');
+  const groups=new Map();
+  for(const key of allowed){
+   const link=[...document.querySelectorAll('.module-navigation button[data-view]')].find(button=>button.dataset.view===key);
+   const title=link?.closest('.nav-module')?.querySelector('summary')?.textContent.trim()||t('سایر بخش‌ها','Other sections');
+   if(!groups.has(title))groups.set(title,[]);
+   groups.get(title).push(`<label><input type="checkbox" value="${esc(key)}" ${chosen.has(key)?'checked':''}> ${esc(names[key]||key)}</label>`);
+  }
+  box.innerHTML=[...groups].map(([title,options])=>`<div class="access-grant-group"><h3>${esc(title)}</h3>${options.join('')}</div>`).join('');
  }
  function clampRolePermissions(){
   const allowed=cfg.role_actions?.[$('account-role').value]||[];
   $('user-permission-select').querySelectorAll('input').forEach(input=>{input.disabled=!allowed.includes(input.value);if(input.disabled)input.checked=false;});
  }
  const pickedQueues=()=>[...document.querySelectorAll('#user-queues input[type=checkbox]:checked')].map(n=>n.value);
+ const pickedRecordingQueues=()=>[...document.querySelectorAll('#user-recording-queues input:checked')].map(input=>input.value);
+ function renderRecordingQueues(selection=pickedRecordingQueues()){
+  const holder=$('user-recording-queues');
+  if(!holder)return;
+  holder.hidden=!$('recording-limit-queues').checked;
+  holder.innerHTML=pickedQueues().map(id=>`<label class="sq-choice"><input type="checkbox" value="${esc(id)}" ${selection.includes(id)?'checked':''}><bdi dir="ltr">${esc(id)}</bdi></label>`).join('')
+   ||`<p class="report-note">${t('ابتدا صف‌های مجاز کاربر را انتخاب کنید.','Choose the user’s permitted queues first.')}</p>`;
+ }
  function renderQueueChoices(selection){
   const holder=$('user-queues');if(!holder)return;
   const chosen=new Set(selection||pickedQueues());
   holder.innerHTML=policyAvailable.map(id=>`<label class="sq-choice"><input type="checkbox" value="${esc(id)}" ${chosen.has(id)?'checked':''}><span>صف <bdi dir="ltr">${esc(id)}</bdi>${queues[id]?.Name&&queues[id].Name!==id?` · ${esc(queues[id].Name)}`:''}</span></label>`).join('')||`<span class="muted">${t('هیچ صف مجازی از AMI دریافت نشد. اتصال را بررسی کن.','No authorized queues loaded from AMI.')}</span>`;
+  renderRecordingQueues();
  }
  const normalizePhone=s=>String(s||'').trim();
  const phoneFromMember=s=>{const found=String(s||'').match(/^(PJSIP|SIP)\/([A-Za-z0-9_.-]+)$/i);return found?found[1].toUpperCase()+'/'+found[2]:'';};
  function knownPhones(){const found=new Set();for(const q of Object.values(queues||{}))for(const m of Object.values(q.members||{}))for(const candidate of [m.StateInterface,m.Location,m.Interface,m.Name]){const p=phoneFromMember(candidate);if(p)found.add(p);}return [...found].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));}
  function renderPhoneOptions(phones,selected){const select=$('account-phone');if(!select)return;const chosen=normalizePhone(selected??select.value);const list=[...new Set((phones||[]).map(normalizePhone).filter(x=>/^(PJSIP|SIP)\/[A-Za-z0-9_.-]+$/.test(x)))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
   select.innerHTML=`<option value="">${t('بدون داخلی (فقط مدیر/مشاهده‌گر)','No extension (admin/viewer only)')}</option>`+list.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  const unitEndpoints=$('unit-recording-endpoints');
+  if(unitEndpoints)unitEndpoints.replaceChildren(...list.map(value=>new Option(value,value)));
   if(chosen&&!list.includes(chosen)){select.add(new Option(chosen+' '+t('(قبلاً ثبت‌شده)','(previously assigned)'),chosen));}
   select.value=chosen||'';
  }
@@ -760,20 +778,22 @@ $('test-controls-disable').onclick=async()=>{
   list.innerHTML=entries.map(([id,u])=>{const g=grants[id]||{};return `<div class="user-row-v14"><div class="user-identity"><span class="user-avatar">${esc(id[0]?.toUpperCase()||'?')}</span><div><strong>${esc(u.display_name||id)}</strong><small>${esc(id)} · ${esc(u.role||'viewer')} · <bdi dir="ltr">${esc(u.phone||t('بدون داخلی','No phone'))}</bdi></small></div></div><div><small>${t('صف‌های مجاز','Queues')}</small><strong>${u.role==='admin'?t('تمام صف‌ها','All queues'):esc((g.queues||[]).join('، ')||'—')}</strong></div><div><small>${t('عملیات','Permissions')}</small><span class="user-grant-tags">${u.role==='admin'?t('دسترسی مدیر','Administrator'):esc((g.actions||[]).join(' · ')||'—')}</span></div><div class="user-row-actions"><button type="button" data-edit-user="${esc(id)}">${t('ویرایش','Edit')}</button><button type="button" data-delete-user="${esc(id)}" ${id===cfg.logged_in_user?'disabled':''}>${t('حذف','Delete')}</button></div></div>`;}).join('')||`<p class="empty">${t('حسابی ثبت نشده','No accounts')}</p>`;
   const count=$('user-account-count');if(count)count.textContent=fmt(entries.length);
  }
- function clearUserEditor(){ $('account-create-form').reset();$('account-user').readOnly=false;$('account-feedback').textContent='';renderQueueChoices([]);renderPhoneOptions([...phoneInventory,...knownPhones()],'');$('user-permission-select').querySelectorAll('input').forEach(x=>x.checked=x.value==='view');paintUserMenus();clampRolePermissions(); }
+ function clearUserEditor(){ $('account-create-form').reset();renderRecordingQueues([]);$('account-user').readOnly=false;$('account-feedback').textContent='';renderQueueChoices([]);renderPhoneOptions([...phoneInventory,...knownPhones()],'');$('user-permission-select').querySelectorAll('input').forEach(x=>x.checked=x.value==='view');paintUserMenus();clampRolePermissions(); }
  async function loadUsers(){if(!$('users-view'))return;
   try{if(!policyState)await loadPolicyEditor();const result=await fetchJSON('/api/accounts');accountsCache=result.accounts||{};renderAccountList();renderQueueChoices();await refreshUserCatalog();}catch(error){$('account-feedback').textContent=t('دریافت کاربران انجام نشد: ','Could not load users: ')+error.message;}}
  if($('users-view')){
  paintUserMenus();clampRolePermissions();
+ $('recording-limit-queues')?.addEventListener('change',()=>renderRecordingQueues());
+ $('user-queues')?.addEventListener('change',()=>renderRecordingQueues());
  $('account-role').onchange=()=>{paintUserMenus();clampRolePermissions();};if($('user-menu-defaults'))$('user-menu-defaults').onclick=()=>paintUserMenus();
  $('user-clear').onclick=clearUserEditor;
  $('refresh-user-catalog').onclick=()=>refreshUserCatalog();
- $('account-list').onclick=async e=>{const edit=e.target.closest('[data-edit-user]'),del=e.target.closest('[data-delete-user]');if(edit){const id=edit.dataset.editUser,u=accountsCache[id];if(!u)return;$('account-user').value=id;$('account-user').readOnly=true;$('account-role').value=u.role||'viewer';$('account-phone').value=u.phone||'';$('account-password').value='';const g=policyState?.supervisors?.[id]||{};renderQueueChoices(g.queues||[]);renderPhoneOptions([...phoneInventory,...knownPhones(),u.phone||''],u.phone||'');$('user-permission-select').querySelectorAll('input').forEach(x=>x.checked=(g.actions||['view']).includes(x.value));paintUserMenus(u.menus);clampRolePermissions();$('account-feedback').textContent=t('در حال ویرایش حساب ','Editing account ')+id;window.scrollTo({top:0,behavior:'smooth'});return;}
+ $('account-list').onclick=async e=>{const edit=e.target.closest('[data-edit-user]'),del=e.target.closest('[data-delete-user]');if(edit){const id=edit.dataset.editUser,u=accountsCache[id];if(!u)return;$('account-user').value=id;$('account-user').readOnly=true;$('account-role').value=u.role||'viewer';$('account-phone').value=u.phone||'';$('account-password').value='';const g=policyState?.supervisors?.[id]||{};renderQueueChoices(g.queues||[]);$('recording-limit-queues').checked=Array.isArray(g.recording_queues);renderRecordingQueues(g.recording_queues||[]);renderPhoneOptions([...phoneInventory,...knownPhones(),u.phone||''],u.phone||'');$('user-permission-select').querySelectorAll('input').forEach(x=>x.checked=(g.actions||['view']).includes(x.value));paintUserMenus(u.menus);clampRolePermissions();$('account-feedback').textContent=t('در حال ویرایش حساب ','Editing account ')+id;window.scrollTo({top:0,behavior:'smooth'});return;}
    if(del){const id=del.dataset.deleteUser;if(!confirm(t('حساب '+id+' حذف شود؟','Delete '+id+'?')))return;try{const result=await fetchJSON('/api/accounts',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':cfg.csrf},body:JSON.stringify({action:'delete',username:id})});accountsCache=result.accounts||{};if(policyState?.supervisors?.[id]){delete policyState.supervisors[id];await savePolicyState();}clearUserEditor();renderAccountList();}catch(error){$('account-feedback').textContent=t('حذف ناموفق: ','Delete failed: ')+error.message;}}};
  $('account-create-form').onsubmit=async e=>{e.preventDefault();const save=$('account-create-form').querySelector('[type=submit]');save.disabled=true;
   const id=$('account-user').value.trim(),qids=pickedQueues(),actions=[...$('user-permission-select').querySelectorAll('input:checked')].map(x=>x.value);
   try{if(!id)throw Error('username_required');if(!policyState)await loadPolicyEditor();if(qids.some(q=>!policyAvailable.includes(q)))throw Error(t('شماره صف باید در فهرست صف‌های موجود باشد.','Queue must exist in AMI scope.'));if(qids.length&&!actions.length)throw Error(t('حداقل یک مجوز انتخاب کن.','Choose at least one grant.'));
-   const result=await fetchJSON('/api/accounts/with-grants',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':cfg.csrf},body:JSON.stringify({username:id,role:$('account-role').value,phone:$('account-phone').value,password:$('account-password').value,queues:qids,actions:actions,menus:[...document.querySelectorAll('#user-menu-select input:checked')].map(x=>x.value)})});
+   const result=await fetchJSON('/api/accounts/with-grants',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':cfg.csrf},body:JSON.stringify({username:id,role:$('account-role').value,phone:$('account-phone').value,password:$('account-password').value,queues:qids,actions:actions,recording_queues:$('recording-limit-queues').checked?pickedRecordingQueues():null,menus:[...document.querySelectorAll('#user-menu-select input:checked')].map(x=>x.value)})});
    accountsCache=result.accounts||{};
    policyState=result.policies||policyState;
    $('account-feedback').textContent=t('حساب، داخلی و دسترسی‌ها یکجا ذخیره شدند.','Account, extension and permissions saved together.');
@@ -945,7 +965,8 @@ $('test-controls-disable').onclick=async()=>{
   try{const user=$('pg-user').value.trim(),queues=$('pg-queues').value.split(',').map(x=>x.trim()).filter(Boolean),actions=[...$('pg-actions').selectedOptions].map(x=>x.value);
    if(!user||!queues.length||!actions.length)throw Error('missing_grant_fields');
    for(const q of policyAvailable)policyState.queues[q]??=defaultPolicy();
-   policyState.supervisors[user]={queues,actions};await savePolicyState();renderSupervisorGrants();$('policy-feedback').textContent=t('دسترسی صف و عملیات برای کاربر ثبت شد.','Queue/action grants saved.');renderAccountList();
+   const scope=policyState.supervisors[user]?.recording_queues;
+   policyState.supervisors[user]={queues,actions,...(scope?{recording_queues:scope.filter(queue=>queues.includes(queue))}:{})};await savePolicyState();renderSupervisorGrants();$('policy-feedback').textContent=t('دسترسی صف و عملیات برای کاربر ثبت شد.','Queue/action grants saved.');renderAccountList();
   }catch(error){$('policy-feedback').textContent=t('خطا: ','Error: ')+error.message;}
  };
  $('policy-supervisor-remove').onclick=async()=>{

@@ -27,7 +27,11 @@ function setup(file,withCharts=false){
   MutationObserver:class{constructor(callback){observers.push(callback);}observe(){}},CustomEvent:class{constructor(type){this.type=type;}},
   fetch(url,options={}){return new Promise((resolve,reject)=>pending.push({url,options,signal:options.signal,resolve:data=>resolve({ok:true,redirected:false,headers:{get:()=> 'application/json'},json:async()=>data}),reject}));},
   console,setTimeout,URL,crypto:require('node:crypto').webcrypto};
- vm.runInNewContext(fs.readFileSync(path.join(root,'qpanel/themes/qpanel/static/js',file),'utf8'),context,{filename:file});
+ for(const script of ['report-duration.js',file])
+  vm.runInNewContext(fs.readFileSync(path.join(root,'qpanel/themes/qpanel/static/js',script),'utf8'),context,{filename:script});
+ assert.equal(context.window.SaneQueueReportDuration(9932),'2:45:32');
+ assert.equal(context.window.SaneQueueReportDuration(0),'0:00:00');
+ assert.equal(context.window.SaneQueueReportDuration(null),'—');
  return {element,fields,document,pending,observers,events,charts};
 }
 function data(url){

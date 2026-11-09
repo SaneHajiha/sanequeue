@@ -36,6 +36,29 @@ class Beta8PolicyTests(unittest.TestCase):
         self.assertTrue(self.store.access('any','admin','8002','hangup'))
         self.assertFalse(self.store.access('unauthorized','viewer','8001','view'))
 
+    def test_recordings_can_be_narrower_than_queue_visibility(self):
+        payload = sample_policy()
+        payload['queues']['8002'] = payload['queues']['8001']
+        grant = payload['supervisors']['supervisorA']
+        grant.update(queues=['8001', '8002'], actions=['view', 'recording_play', 'recording_download'])
+        self.store.replace(payload)
+        self.assertTrue(self.store.access('supervisorA', 'supervisor', '8002', 'recording_play'))
+
+        grant['recording_queues'] = ['8001']
+        self.store.replace(payload)
+        reopened = QueuePolicyStore(self.store.path)
+        self.assertTrue(reopened.access('supervisorA', 'supervisor', '8002', 'view'))
+        self.assertTrue(reopened.access('supervisorA', 'supervisor', '8001', 'recording_play'))
+        self.assertFalse(reopened.access('supervisorA', 'supervisor', '8002', 'recording_play'))
+        self.assertFalse(reopened.access('supervisorA', 'supervisor', '8002', 'recording_download'))
+
+        grant['recording_queues'] = []
+        self.store.replace(payload)
+        self.assertFalse(self.store.access('supervisorA', 'supervisor', '8001', 'recording_play'))
+        grant['recording_queues'] = ['8003']
+        with self.assertRaisesRegex(ValueError, 'invalid_recording_queue_scope'):
+            self.store.replace(payload)
+
     def test_tenth_member_and_fifty_percent_allows_fifth_exit_not_sixth(self):
         for active in (10,9,8,7,6):
             q={'members':active_members(active)}

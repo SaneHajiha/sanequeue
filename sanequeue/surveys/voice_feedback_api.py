@@ -17,7 +17,7 @@ from .voice_feedback import VoiceFeedback,Conflict,Unavailable,MAX_BYTES,STATES
 
 def authorization(accounts_path,policies_path,owner):
     from qpanel.local_accounts import validate_identity
-    from qpanel.queue_policies import validate_config
+    from qpanel.queue_policies import grant_allows,validate_config
     from sanequeue.security.permissions import sections_for,validate_sections,ROLE_ACTIONS
     try:
         accounts=read_json(accounts_path);raw=read_json(policies_path)
@@ -35,7 +35,7 @@ def authorization(accounts_path,policies_path,owner):
             actions=('view','survey_reports')+((cap,) if cap else ())
             if any(a not in ROLE_ACTIONS[row['role']] for a in actions):return False
             grant=policy['supervisors'].get(name,{})
-            return row['role']=='admin' or queue in grant.get('queues',[]) and all(a in grant.get('actions',[]) for a in actions)
+            return row['role']=='admin' or all(grant_allows(grant,queue,a) for a in actions)
         if account(owner) is None:return None
         allowed=tuple(q for q in policy['queues'] if can(owner,q))
         return dict(queues=allowed,can=lambda q,cap=None:can(owner,q,cap),assignees=lambda q:[name for name in accounts if can(name,q)])

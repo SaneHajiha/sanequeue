@@ -188,6 +188,32 @@ body[data-report-target="history-cdr-section"] .module-navigation .nav-item[data
 body[data-report-target="history-cdr-section"] #reports-view #history-filters{margin-bottom:-8px}
 body[data-report-target="history-cdr-section"] #reports-view .history-cdr-charts .panel-heading,body[data-report-target="history-cdr-section"] #reports-view #history-cdr-section>.history-cdr-result>.panel-heading{padding:0;background:transparent;border:0}
 body[data-report-target="history-cdr-section"] #history-cdr-trend-feedback:empty{display:none}
+
+/* A report table has a single column grid in both writing directions. */
+#reports-view .table-wrap { min-inline-size:0; max-inline-size:100%; overflow-x:auto; }
+#reports-view .table-wrap table { width:100%; border-collapse:collapse; }
+#reports-view .table-wrap :is(th,td) {
+  text-align:start; vertical-align:middle; padding-block:10px; padding-inline:12px;
+  font-variant-numeric:tabular-nums; overflow-wrap:anywhere;
+}
+#reports-view .table-wrap th { line-height:1.5; }
+#reports-view .table-wrap td :is(bdi,time) { white-space:nowrap; }
+#reports-view .table-wrap table:has(thead th:nth-child(6)) { min-inline-size:44rem; }
+#reports-view .history-cdr-advanced>summary { cursor:pointer; padding:9px 12px; }
+#reports-view .history-cdr-advanced:not([open])>:not(summary) { display:none; }
+#history-detail[open] {
+  display:flex; flex-direction:column; overflow:hidden;
+  max-height:calc(100dvh - 24px); padding:0;
+}
+#history-detail>.summary-dialog-head {
+  flex:none; margin:0; padding:12px 16px; border-block-end:1px solid var(--line);
+  background:var(--card);
+}
+#history-detail-close { min-inline-size:44px; min-block-size:44px; }
+#history-detail-content { min-height:0; overflow:auto; overscroll-behavior:contain; padding:16px; }
+.report-chart-jump { align-self:center; color:var(--ink); padding:8px 12px; }
+#pbx-report-charts { scroll-margin-block-start:72px; }
+#history-queue-overview-chart { min-inline-size:0; margin:12px; }
 body[data-report-target="history-cdr-section"] .pbx-metric-explanation{font-size:11px;color:var(--muted)}
 body[data-report-target="history-cdr-section"] .pbx-metric-explanation summary{cursor:pointer;padding:3px 0;color:var(--accent)}
 body[data-report-target="history-cdr-section"] .pbx-metric-explanation p{line-height:1.6;margin:4px 0}
