@@ -61,6 +61,9 @@ for section in ('users', 'roles', 'supervisor_extensions', 'sanequeue'):
 ACCOUNTS_PATH = STATE / 'local_accounts.json'
 if SERVER_MODE and not read_accounts(ACCOUNTS_PATH):
     raise RuntimeError('Initialize accounts first: python scripts/init_accounts.py --state '+str(STATE))
+if SERVER_MODE or os.getenv('SANEQUEUE_COLLECTOR_CONFIG'):
+    from sanequeue.security.sessions import SessionRegistry
+    module.app.config['SANEQUEUE_AUTH_SESSIONS']=SessionRegistry(STATE/'sessions.sqlite3')
 first_password = None if SERVER_MODE else bootstrap(ACCOUNTS_PATH)
 if first_password:
     print('\n'+'='*62,flush=True)
@@ -204,8 +207,6 @@ if os.environ.get('SANEQUEUE_COLLECTOR_CONFIG'):
     module.app.config['SANEQUEUE_TRANSFER_CONTEXT']=os.environ.get('SANEQUEUE_TRANSFER_CONTEXT','from-internal')
     module.app.config['SANEQUEUE_PARKING_LOT']=os.environ.get('SANEQUEUE_PARKING_LOT','default')
     module.app.config['SANEQUEUE_ADVANCED_ACTIONS']=tuple(v.strip() for v in os.environ.get('SANEQUEUE_ADVANCED_ACTIONS','').split(',') if v.strip())
-    from sanequeue.security.sessions import SessionRegistry
-    module.app.config['SANEQUEUE_AUTH_SESSIONS']=SessionRegistry(STATE/'sessions.sqlite3')
     @module.app.errorhandler(QueueBusy)
     def queue_busy(error):
         return jsonify(error='queue_action_in_progress'),409

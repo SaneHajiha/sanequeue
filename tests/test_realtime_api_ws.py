@@ -67,13 +67,15 @@ class WebSocketTests(unittest.TestCase):
         self.scope=['a']
         @self.flask.get('/api/operations')
         def data():
-            if session.get('user')!='viewer' or not self.enabled:return jsonify(error='login_required'),401
+            if session.get('_user_id') not in ('viewer','second') or not self.enabled:return jsonify(error='login_required'),401
             state=fixture()
             return jsonify(queues=public_queue_snapshot({q:v for q,v in legacy_queues(state).items() if q in self.scope}),
                            call_journeys=journey_projection(state,self.scope),data_source='ami-live')
         with self.flask.test_client() as client:
-            with client.session_transaction() as s:s['user']='viewer'
+            with client.session_transaction() as s:s['_user_id']='viewer'
             self.cookie=client.get_cookie('session').value
+            with client.session_transaction() as s:s['_user_id']='second'
+            self.second_cookie=client.get_cookie('session').value
         self.asgi=create_app(self.flask,['http://testserver'],interval=.01,max_connections=2)
 
     def headers(self,**changes):
@@ -99,6 +101,18 @@ class WebSocketTests(unittest.TestCase):
                 with self.subTest(code=code),self.assertRaises(WebSocketDisconnect) as error:
                     with client.websocket_connect('/ws/operations',headers=headers):pass
                 self.assertEqual(error.exception.code,code)
+
+    def test_user_connection_limit_leaves_capacity_for_another_operator(self):
+        asgi=create_app(self.flask,['http://testserver'],interval=.05,max_connections=4,max_per_user=1)
+        with TestClient(asgi) as client:
+            with client.websocket_connect('/ws/operations',headers=self.headers()) as first:
+                self.assertEqual(first.receive_json()['type'],'snapshot')
+                with self.assertRaises(WebSocketDisconnect) as denied:
+                    with client.websocket_connect('/ws/operations',headers=self.headers()):pass
+                self.assertEqual(denied.exception.code,1013)
+                with client.websocket_connect('/ws/operations',headers=self.headers(cookie='session='+self.second_cookie)) as second:
+                    self.assertEqual(second.receive_json()['type'],'snapshot')
+        self.assertFalse(asgi.state.websocket_connections)
 
     def test_scope_revocation_and_client_action_frames(self):
         with TestClient(self.asgi) as client:
