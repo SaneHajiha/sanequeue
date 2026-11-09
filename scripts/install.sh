@@ -42,9 +42,9 @@ fi
 [[ -n "$PYTHON" ]] || { echo 'Install a verified Python 3.10–3.12 runtime with venv first.' >&2; exit 1; }
 "$PYTHON" -c 'import ensurepip, socket, sqlite3, ssl, sys, venv; assert (3,10)<=sys.version_info[:2]<=(3,12), "Use Python 3.10-3.12"'
 command -v redis-server >/dev/null || { echo 'Install redis-server from an approved OS package repository first.' >&2; exit 1; }
-VERSION=$("$PYTHON" -B -c "import sys;sys.path.insert(0,sys.argv[1]);import qpanel;print(qpanel.__version__)" "$SOURCE")
-[[ "$VERSION" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'Invalid package version.'; exit 1; }
-[[ $(<"$SOURCE/VERSION") == "$VERSION" ]] || { echo 'Inconsistent release version.' >&2; exit 1; }
+RELEASE_VERSION=$("$PYTHON" -B -c "import sys;sys.path.insert(0,sys.argv[1]);import qpanel;print(qpanel.__version__)" "$SOURCE")
+[[ "$RELEASE_VERSION" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'Invalid package version.'; exit 1; }
+[[ $(<"$SOURCE/VERSION") == "$RELEASE_VERSION" ]] || { echo 'Inconsistent release version.' >&2; exit 1; }
 if [[ $MODE == preflight ]]; then
   . /etc/os-release
   [[ ${ID:-} == rocky && ${VERSION_ID:-} =~ ^8(\.|$) ]] ||
@@ -55,7 +55,7 @@ if [[ $MODE == preflight ]]; then
     { echo 'Release target requires running Asterisk 20.' >&2; exit 1; }
   [[ -r /etc/asterisk/manager.conf ]] || { echo 'Missing readable manager.conf.' >&2; exit 1; }
   "$PYTHON" -c 'import socket; socket.create_connection(("127.0.0.1", 5038), 3).close()'
-  printf 'Preflight passed: SaneQueue %s, Rocky %s, Issabel 5, Asterisk 20, local Redis binary and AMI listener.\n' "$VERSION" "$VERSION_ID"
+  printf 'Preflight passed: SaneQueue %s, Rocky %s, Issabel 5, Asterisk 20, local Redis binary and AMI listener.\n' "$RELEASE_VERSION" "$VERSION_ID"
   exit 0
 fi
 command -v flock >/dev/null || { echo 'flock is required for a serialized install.' >&2; exit 1; }
@@ -63,7 +63,7 @@ exec 9>/run/lock/sanequeue-install.lock
 flock -n 9 || { echo 'Another SaneQueue installer is running.' >&2; exit 1; }
 # Release files and its virtualenv must be readable by the service user.
 umask 022
-RELEASE="/opt/sanequeue-releases/${VERSION}-$(date +%Y%m%d%H%M%S)"
+RELEASE="/opt/sanequeue-releases/${RELEASE_VERSION}-$(date +%Y%m%d%H%M%S)"
 install -d -m 755 /opt/sanequeue-releases
 mkdir -m 755 "$RELEASE"
 tar -C "$SOURCE" --exclude=.git --exclude=.venv --exclude=__pycache__ --exclude=var --exclude=logs --exclude=output --exclude=outputs --exclude=tmp --exclude=work --exclude=.agents --exclude=node_modules --exclude=tools/ui-workbench --exclude=config.ini --exclude='*.sqlite*' --exclude='local_*.json' --exclude='ssh_*' --exclude='*.key' --exclude='*.pem' --exclude=session.key --exclude='.env' --exclude='.env.*' -cf - . | tar -C "$RELEASE" -xf -
