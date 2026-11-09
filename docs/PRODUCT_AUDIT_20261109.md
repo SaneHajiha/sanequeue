@@ -29,11 +29,11 @@ Verification here means the indicated local test or screen was exercised. Real-c
 | Call journey and transfer/hangup diagnostics | Implemented for observed event stages, incomplete for SIP/RTP causality. | `sanequeue/realtime/journeys.py`, `sanequeue/reporting/correlate.py`, `test_beta23_journey_directory.py` |
 | One-way audio direction, missing trunk/IVR stages, complete occupancy and AHT | Unsupported when directional media, dialplan, duty, hold or wrap-up evidence is absent. | `sanequeue/realtime/calls.py`, [reporting research](REPORTING_RESEARCH.en.md) |
 
-## Prioritized work
+## Prioritized baseline findings
 
 | Priority | Reproduction and impact | Cause and implementation gate |
 | --- | --- | --- |
-| P1 | Demo dashboard displays zero abandoned calls while “recording since” shows unknown. Wallboard shows totals under a mismatched period label. A supervisor may miss a recording outage. | Daily projection replaces absent observations with zero. Update daily coverage bounds and propagate unknown values to all period views. Check an abandon-only SLA and a mix with missing SLA thresholds. |
+| P1 | Demo dashboard displays zero abandoned calls while “recording since” shows unknown. The wallboard initially renders a PBX counter caption before JavaScript selects the period. A supervisor may miss a recording outage. | Daily projection replaces absent observations with zero. Update daily coverage bounds and propagate unknown values to all period views. Check an abandon-only SLA and a mix with missing SLA thresholds. |
 | P1 | Audit the browser-to-PBX, privileged adapter, credentials, file and reporting boundaries before expanding permissions or deploying. | Codex Security scan tracks source coverage independently. Resolve supported findings with bounded fixture reproductions. |
 | P1 | Two reporting domains are incomplete in master. | Compare the published reporting line and `feature/pbx-reports-units` work before integrating. Preserve bounded ingestion, source coverage, scoping and export checks. |
 | P2 | `VERSION`, Python and the release manifest say beta.26. Node metadata says beta.12. Both installers guides title beta.23 and download beta.24. | Align package metadata and current published install links. Gate future release packages against version drift. |
@@ -47,3 +47,11 @@ Verification here means the indicated local test or screen was exercised. Real-c
 - Fresh baseline command: `python -m pytest tests --ignore=tests/historical -p no:cacheprovider -q`. Result: 355 passed, 5 skipped, 104 subtests passed on Windows with Python 3.11.4. Historical test files are intentionally archived. Linux Redis jobs and real PBX acceptance require separate evidence.
 - Fresh in-app browser observations: offline synthetic admin dashboard in Persian dark and English light, at narrow panel and English desktop widths. One desktop capture rendered partially blank through the native panel API, so it was replaced with the browser tab screenshot. The English interface still showed Persian synthetic labels in queue and agent names, which represent source values. The false zero is independently visible alongside the absent coverage timestamp.
 - Release references: [published beta.26](https://github.com/SaneHajiha/sanequeue/releases/tag/v2.1.0-beta.26), [master source baseline](https://github.com/SaneHajiha/sanequeue/commit/e977516398db5b04309ddae11dffb3dbec4f09d9).
+
+## Implementation and next steps
+
+- Completed and exercised locally: observed-data KPI semantics, reporting date boundaries and scope, queue identity in managed controls, directory grants for contact dialing, bounded audit fields, profile extension assignment, protected login/logout forms, filter-scoped waiting trend, and compact mobile navigation. See [test evidence](PRODUCT_VERIFICATION_20261109.md).
+- Installer backup failure and directory-descriptor changes are implemented, with a Linux test added for descriptor-relative permissions. Linux and Rocky 8 installer, upgrade and rollback acceptance remain open.
+- Local `feature/pbx-reports-units` at `c7bbc5b` is a descendant of `e977516` with 161 additional commits and two modified workflow documents. Review it and the reporting branch against the current GitHub refs before integrating. Reuse reporting/UI work when compatible. Do not replace either working tree or infer that its deployed preview matches the local revision.
+- Security continuation: workbench scan `c3d39baa-ab95-4e1d-8dff-1cfd9a80a141`, original master snapshot. Complete dependency/source coverage, check network/session constraints and action concurrency, and resolve the open items in the verification record before accepting a release.
+- Next implementation tranche: verified branch reconciliation → dual-report source and permission contract → role/browser flows → staged migration and release acceptance. See [design and metric specification](PRODUCT_DESIGN_20261109.md).
