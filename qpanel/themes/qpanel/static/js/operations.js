@@ -138,16 +138,29 @@
   }
   updateCharts({waiting,ready,busy,paused,offline});
  }
+ const sampleClock=new Intl.DateTimeFormat(fa?'fa-IR':'en-GB',{
+  timeZone:'Asia/Tehran',hour:'2-digit',minute:'2-digit',second:'2-digit'
+ });
+ function renderSampleTable(){
+  const body=$('trend-sample-rows');
+  if(!body)return;
+  body.innerHTML=samples.slice(-12).reverse().map(sample=>
+   `<tr><td>${esc(sampleClock.format(sample.ts))}</td><td>${fmt(sample.waiting)}</td></tr>`
+  ).join('')||empty(t('نمونه‌ای برای این فیلتر ثبت نشده است.','No samples recorded for this filter.'),2);
+ }
+ const sampleDetails=$('trend-sample-details');
+ sampleDetails?.addEventListener('toggle',()=>{if(sampleDetails.open)renderSampleTable();});
  function drawTrend(container,key,color){
   if(!container)return;
   if(!samples.length){container.textContent=t('برای این انتخاب نمونه‌ای در دسترس نیست.','No samples for this selection.');return;}
   const values=samples.map(d=>Math.max(0,n(d[key]))),max=Math.max(1,Math.ceil(Math.max(0,...values)));
   const w=Math.max(300,Math.min(900,container.clientWidth||500)),h=230,left=48,right=w-20,top=18,bottom=h-36;
-  const x=i=>values.length===1?(left+right)/2:left+i/(Math.max(1,values.length-1))*(right-left),y=value=>bottom-value/max*(bottom-top);
+  const start=samples[0].ts,span=samples.at(-1).ts-start;
+  const x=i=>span>0?left+(samples[i].ts-start)/span*(right-left):(left+right)/2,y=value=>bottom-value/max*(bottom-top);
   const points=values.map((value,i)=>`${x(i).toFixed(1)},${y(value).toFixed(1)}`),last=values.at(-1)??0;
   const ticks=[...new Set([0,Math.ceil(max/2),max])];
   const grid=ticks.map(value=>`<line x1="${left}" x2="${right}" y1="${y(value)}" y2="${y(value)}" stroke="var(--line)" stroke-dasharray="4 5"/><text x="${left-10}" y="${y(value)+5}" text-anchor="end" fill="var(--muted)" font-size="14">${fmt(value)}</text>`).join('');
-  const time=sample=>sample?new Date(sample.ts).toLocaleTimeString(fa?'fa-IR':'en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—';
+  const time=sample=>sampleClock.format(sample.ts);
   const label=key==='waiting'?t('تماس منتظر','Waiting callers'):t('عضو آماده','Ready memberships');
   const dot=points.length?`<circle cx="${x(values.length-1)}" cy="${y(last)}" r="5" fill="${color}"/>`:'';
   container.innerHTML=`<div class="chart-reading"><strong>${fmt(last)}</strong><span>${label} · ${t('آخرین نمونه','Latest sample')}</span></div><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}: ${fmt(last)}; ${values.length} ${t('نمونه','samples')}">${grid}<polyline fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="${points.join(' ')}"/>${dot}<text x="${left}" y="${h-8}" text-anchor="start" fill="var(--muted)" font-size="13">${esc(time(samples[0]))}</text><text x="${right}" y="${h-8}" text-anchor="end" fill="var(--muted)" font-size="13">${esc(time(samples.at(-1)))}</text></svg>`;
@@ -156,7 +169,8 @@
   drawTrend($('trend-wait'),'waiting','var(--chart-wait)');const comparison=selected(),maxQueue=Math.max(1,...comparison.map(([,q])=>Math.max(n(q.Calls),Object.keys(q.members||{}).length)));
   $('trend-ready').innerHTML=`<div class="queue-capacity-comparison">${comparison.map(([name,q])=>{const ready=Object.values(q.members||{}).filter(m=>status(m)==='ready').length;return `<div class="queue-capacity-row" style="--queue-accent:${queueAccent(name)}">${queueBadge(name)}<div><span>${t('آماده','Ready')} <b>${fmt(ready)}</b></span><meter min="0" max="${maxQueue}" value="${ready}">${ready}</meter><span>${t('منتظر','Waiting')} <b>${fmt(q.Calls)}</b></span><meter class="waiting-meter" min="0" max="${maxQueue}" value="${n(q.Calls)}">${n(q.Calls)}</meter></div></div>`;}).join('')||`<p class="empty">${t('صفی برای مقایسه نیست.','No queues to compare.')}</p>`}</div>`;
   $('trend-points').textContent=fmt(samples.length)+' '+t('نمونه','samples');
-  $('trend-time-label').textContent=samples.length?new Date(samples[0].ts).toLocaleTimeString(fa?'fa-IR':'en-GB',{hour:'2-digit',minute:'2-digit'}):'—';
+  $('trend-time-label').textContent=samples.length?sampleClock.format(samples[0].ts):'—';
+  if(sampleDetails?.open)renderSampleTable();
   const total=counts.ready+counts.busy+counts.paused+counts.offline;const donut=$('capacity-donut');
   const names=[['ready','var(--chart-ready)'],['busy','var(--chart-busy)'],['paused','var(--chart-paused)'],['offline','var(--chart-offline)']];let angle=0;
   donut.style.background=total?`conic-gradient(${names.map(([name,color])=>{const end=angle+counts[name]/total*360;const part=`${color} ${angle}deg ${end}deg`;angle=end;return part;}).join(',')})`:'conic-gradient(#1d3a55 0deg 360deg)';

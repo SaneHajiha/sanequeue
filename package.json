@@ -1,6 +1,6 @@
 {
   "name": "sanequeue",
-  "version": "2.1.0-rc.2",
+  "version": "2.1.0-rc.3",
   "private": true,
   "description": "SaneQueue contact-center monitoring development build",
   "license": "MIT",
