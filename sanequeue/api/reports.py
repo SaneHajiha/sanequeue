@@ -964,6 +964,20 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
         if str(current_user.get_id())!=owner or role()!=current_role or 'reports' not in sections():abort(403)
         return jsonify(data)
 
+    @app.post('/api/organization/reports/queues/visits.csv')
+    @login_required
+    @safe
+    def organization_queue_visits_csv():
+        if not unit_ready:raise ScopeUnavailable('unit_scope_unavailable')
+        owner=str(current_user.get_id());current_role=role();_,start,end=context();export_csrf()
+        if current_role not in ('admin','supervisor'):abort(403)
+        if set(request.args)-{'from','to'}:raise ValueError('invalid_unit_report_filter')
+        secret=hashlib.sha256(('sanequeue.reporting.numbers:'+str(app.secret_key)).encode()).digest()
+        data=unit_queue.export_visits_csv(archive,unit_store,owner,start,end,secret=secret,allow_full=True)
+        if str(current_user.get_id())!=owner or role()!=current_role or 'reports' not in sections():abort(403)
+        app.logger.info('unit queue export user=%r',owner)
+        return Response(data,mimetype='text/csv',headers={'Content-Disposition':'attachment; filename="unit-queue-visits.csv"','Cache-Control':'no-store'})
+
     @app.get('/api/organization/reports/cdr/summary')
     @login_required
     @safe

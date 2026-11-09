@@ -2,6 +2,10 @@
 import math
 import hashlib
 import json
+import csv
+import io
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from sanequeue.security.unit_scope import ScopeConflict
 from .unit_cdr import UnitAccessDenied
 from .privacy import display_number
@@ -55,15 +59,50 @@ def visits(archive,store,username,start,end,*,cursor=None,limit=50,secret,allow_
     with archive.reader() as db:
         raw=db.execute('SELECT id,queue,entered,ended,caller,outcome,wait_seconds,talk_seconds,coverage FROM report_visits WHERE '+clause+
                        ' ORDER BY entered DESC,id DESC LIMIT ?',(*args,limit+1)).fetchall()
-    more=len(raw)>limit;raw=raw[:limit];rows=[]
-    for item in raw:
-        full=allow_full and any(x['queue']==item['queue'] and x['starts']<=item['entered'] and
-             (x['ends'] is None or item['ended']<=x['ends']) for x in numbers['queue_assignments'])
-        rows.append(dict(queue=item['queue'],entered=item['entered'],ended=item['ended'],outcome=item['outcome'],
-                         wait_seconds=item['wait_seconds'],talk_seconds=item['talk_seconds'],coverage=item['coverage'],
-                         caller=display_number(item['caller'],mode='full' if full else 'masked',secret=secret,
-                                               tenant='default',pbx=archive.pbx,version='1')))
+    more=len(raw)>limit;raw=raw[:limit]
+    rows=[_visit_row(item,numbers,archive.pbx,secret,allow_full) for item in raw]
     next_cursor=store.save_cursor(username,scope,query_hash,(raw[-1]['entered'],raw[-1]['id'])) if more and raw else None
     if not store.still_current(scope):raise ScopeConflict('unit_scope_changed')
     return dict(start=start,end=end,rows=rows,next=next_cursor,unit='queue_visit',scope='organization_unit',
                 eligibility='closed_visits_contained_in_assignment',audio_available=False,complete_history=False)
+
+
+def _visit_row(item,numbers,pbx,secret,allow_full):
+    full=allow_full and any(x['queue']==item['queue'] and x['starts']<=item['entered'] and
+         (x['ends'] is None or item['ended']<=x['ends']) for x in numbers['queue_assignments'])
+    row={key:item[key] for key in ('queue','entered','ended','outcome','wait_seconds','talk_seconds','coverage')}
+    row['caller']=display_number(item['caller'],mode='full' if full else 'masked',secret=secret,
+                                 tenant='default',pbx=pbx,version='1')
+    return row
+
+
+def export_visits_csv(archive,store,username,start,end,*,secret,allow_full=False):
+    """Export the closed visits authorized by both details and export grants."""
+    start,end,scope,clause,args=_scope(archive,store,username,start,end,'call_details')
+    export=store.resolve_queues(username,'export',start,end)
+    numbers=store.resolve_queues(username,'full_numbers',start,end)
+    if len({scope['revision'],export['revision'],numbers['revision']})!=1:
+        raise ScopeConflict('unit_scope_changed')
+    if not set(scope['units']).issubset(export['units']):
+        raise UnitAccessDenied('unit_export_not_granted')
+    with archive.reader() as db:
+        raw=db.execute('SELECT queue,entered,ended,caller,outcome,wait_seconds,talk_seconds,coverage '
+                       'FROM report_visits WHERE '+clause+' ORDER BY entered DESC,id DESC LIMIT 5001',args).fetchall()
+    if len(raw)>5000:
+        raise ValueError('unit_export_limit')
+    stream=io.StringIO(newline='')
+    writer=csv.writer(stream)
+    writer.writerow(['queue','entered_at','ended_at','caller','outcome','wait_seconds','talk_seconds','coverage'])
+    zone=ZoneInfo('Asia/Tehran')
+    for item in raw:
+        row=_visit_row(item,numbers,archive.pbx,secret,allow_full)
+        def safe(value):
+            text=str(value or '')
+            return "'"+text if text.lstrip().startswith(('=','+','-','@')) else text
+        writer.writerow([safe(row['queue']),datetime.fromtimestamp(row['entered'],zone).isoformat(),
+                         datetime.fromtimestamp(row['ended'],zone).isoformat(),
+                         "'"+row['caller'] if row['caller'] else '',safe(row['outcome']),
+                         row['wait_seconds'],row['talk_seconds'],safe(row['coverage'])])
+    if not store.still_current(scope):
+        raise ScopeConflict('unit_scope_changed')
+    return stream.getvalue().encode('utf-8-sig')
