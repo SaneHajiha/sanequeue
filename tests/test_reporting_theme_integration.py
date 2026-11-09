@@ -26,14 +26,16 @@ class ReportingThemeTests(unittest.TestCase):
                 for name in ('history-customer-segments-section','history-builder-section','history-transcript-section','history-ring-attempts-section','history-agent-rankings-section','history-answered-section','history-unanswered-section'):
                     self.assertIn('id="'+name+'"',html)
 
-    def test_pbx_report_keeps_temporal_controls_and_collapsed_export(self):
+    def test_pbx_report_keeps_temporal_controls_and_collapsed_advanced_search(self):
         root=Path(__file__).resolve().parents[1]
         app=Flask('pbx-theme-contract',root_path=str(root/'qpanel'));setup_themes(app)
         with app.test_request_context('/'):
             html=render_theme_template('qpanel','reports.html',t=lambda fa,en:fa,
                 user_role='admin',can_view_section=lambda key:True,
                 ops_config={'allowed_sections':['reports','users'],'report_extensions':[]})
-        self.assertIn('<details class="history-cdr-advanced" open>',html)
+        cdr_filters=html.split('id="history-cdr-filters"',1)[1].split('</form>',1)[0]
+        self.assertIn('<details class="history-cdr-advanced">',cdr_filters)
+        self.assertLess(cdr_filters.index('name="endpoint"'),cdr_filters.index('class="history-cdr-advanced"'))
         self.assertIn('id="history-cdr-export-options"',html)
         self.assertIn('<details class="history-cdr-secondary">',html)
         self.assertEqual(html.count('data-trend-bucket='),4)
