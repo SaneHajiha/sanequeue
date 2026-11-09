@@ -21,7 +21,10 @@ class StreamingXlsxTests(unittest.TestCase):
             ns={'s':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
             self.assertEqual(sheet.find('s:sheetViews/s:sheetView',ns).attrib['rightToLeft'],'1')
             self.assertEqual(len(sheet.findall('s:sheetData/s:row',ns)),5)
-            self.assertEqual(sheet.find('s:autoFilter',ns).attrib['ref'],'A4:L5')
+            headers=sheet.findall("s:sheetData/s:row[@r='4']/s:c",ns)
+            self.assertEqual(len(headers),14)
+            self.assertEqual(headers[-1].attrib['r'],'N4')
+            self.assertEqual(sheet.find('s:autoFilter',ns).attrib['ref'],'A4:N5')
             self.assertEqual(sheet.findall('.//s:f',ns),[])
             text=[node.text for node in sheet.findall('.//s:t',ns)]
             self.assertIn('09123456789',text);self.assertIn('=HYPERLINK("x")',text)
