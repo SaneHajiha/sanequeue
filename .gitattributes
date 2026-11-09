@@ -1,0 +1,3 @@
+*.sh text eol=lf
+/scripts/sanequeuectl text eol=lf
+/deploy/** text=auto eol=lf
