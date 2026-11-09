@@ -14,6 +14,7 @@ import webbrowser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+VERSION = (ROOT/'VERSION').read_text(encoding='utf-8').strip()
 PORT = int(os.environ.get('SANEQUEUE_DEMO_PORT', '18895'))
 HOST = '127.0.0.1'
 BASE = f'http://{HOST}:{PORT}'
@@ -41,7 +42,7 @@ def readiness(stop,log):
         try:
             with urllib.request.urlopen(url,timeout=1.5) as resp:
                 info=json.loads(resp.read(8192))
-                if resp.status==200 and info.get('application')=='SaneQueue' and info.get('version')=='2.1.0-beta.17':
+                if resp.status==200 and info.get('application')=='SaneQueue' and info.get('version')==VERSION:
                     line('[OK] Flask web server is responding and version is verified.',log)
                     line('[OPEN] '+BASE+'/operations',log)
                     try:

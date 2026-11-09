@@ -1,5 +1,5 @@
 """Queue-scoped activity API, with a separate self-service path for all roles."""
-from datetime import datetime,timedelta
+from datetime import datetime,time as day_time,timedelta
 from zoneinfo import ZoneInfo
 import sqlite3
 import os,re,threading,time
@@ -20,7 +20,9 @@ def install(app,path,visible_queues,role,own_interfaces,policy,own_since=lambda:
 
     metrics_cache={};metrics_lock=threading.RLock()
     def today_metrics(queues):
-        day=datetime.now(ZoneInfo('Asia/Tehran')).date().isoformat();key=(day,tuple(sorted(queues)))
+        zone=ZoneInfo('Asia/Tehran')
+        date=datetime.now(zone).date()
+        day=date.isoformat();key=(day,tuple(sorted(queues)))
         with metrics_lock:
             cached=metrics_cache.get(key)
             if cached and time.monotonic()-cached[0]<10:return cached[1]
@@ -30,7 +32,10 @@ def install(app,path,visible_queues,role,own_interfaces,policy,own_since=lambda:
             for row in result.get('summaries',[]):
                 item=values.setdefault(row['queue'],dict(answered=0,abandoned=0,talk_seconds=0,wait_seconds=0,sla_known=0,sla_met=0))
                 for field in item:item[field]+=row[field] or 0
-            result=dict(available=bool(result['since']),day=day,since=result['since'],observed_until=result['observed_until'],queues=values)
+            start=datetime.combine(date,day_time(),zone).timestamp()
+            observed_until=result['observed_until']
+            available=observed_until is not None and observed_until>=start
+            result=dict(available=available,day=day,since=result['since'],observed_until=observed_until,queues=values)
             if len(metrics_cache)>=32:metrics_cache.clear()
             metrics_cache[key]=(time.monotonic(),result);return result
     app.config['SANEQUEUE_DAILY_METRICS']=today_metrics

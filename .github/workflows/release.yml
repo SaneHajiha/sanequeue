@@ -41,6 +41,7 @@ jobs:
           version=manifest['version']; notes=manifest['notes']
           assert isinstance(version,str) and re.fullmatch(r'\d+\.\d+\.\d+-(alpha|beta|rc)\.\d+',version)
           assert version==pathlib.Path('VERSION').read_text().strip()==qpanel.__version__
+          assert version==json.loads(pathlib.Path('package.json').read_text())['version']
           assert isinstance(notes,str) and re.fullmatch(r'docs/[A-Za-z0-9_./-]+\.md',notes)
           assert '..' not in pathlib.PurePosixPath(notes).parts and pathlib.Path(notes).is_file()
           with open(os.environ['GITHUB_OUTPUT'],'a') as stream:

@@ -18,9 +18,12 @@
     </a></li>
     {% endif %}
     {% if has_users() %}
-    <li><a class="nav-link" href="{{ url_for('.logout') }}">
+    <li><form method="post" action="{{ url_for('.logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="nav-link btn btn-link">
       <i class="material-icons" aria-hidden="true">exit_to_app</i><span>{{ _('Logout') }}</span>
-    </a></li>
+      </button>
+    </form></li>
     {% endif %}
     <li class="qpanel-language">
       <label for="language"><i class="material-icons" aria-hidden="true">language</i><span class="sr-only">{{ _('Language') }}</span></label>

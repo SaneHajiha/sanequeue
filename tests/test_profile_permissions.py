@@ -46,16 +46,30 @@ class ProfileTests(unittest.TestCase):
 
     def test_self_profile_does_not_leak_other_accounts_or_hash(self):
         value=self.client.get('/api/profile').json
-        self.assertEqual(value['available_phones'],['PJSIP/100','PJSIP/200'])
+        self.assertEqual(value['phone'],'PJSIP/100')
+        self.assertEqual(value['available_phones'],[])
+        self.assertFalse(value['can_change_phone'])
         self.assertNotIn('password',json.dumps(value))
         self.assertNotIn('other',json.dumps(value))
         self.assertEqual(self.client.post('/api/profile',data={'display_name':'Alice'}).status_code,403)
 
-    def test_password_and_extension_require_existing_password_and_revoke_sessions(self):
+    def test_only_administrators_can_change_assigned_extension(self):
+        denied=self.client.post('/api/profile',data={'phone':'PJSIP/200','current_password':PASSWORD},headers=self.headers)
+        self.assertEqual(denied.status_code,403)
+        self.assertEqual(denied.json['error'],'extension_assignment_requires_admin')
+        self.assertEqual(read_accounts(self.accounts)['alice']['phone'],'PJSIP/100')
+        with self.client.session_transaction() as session:session['_user_id']='other'
+        self.assertEqual(self.client.get('/api/profile').json['available_phones'],['PJSIP/200','PJSIP/300'])
         self.assertEqual(self.client.post('/api/profile',data={'phone':'PJSIP/200'},headers=self.headers).status_code,403)
         self.assertEqual(self.client.post('/api/profile',data={'phone':'SIP/99999999','current_password':PASSWORD},headers=self.headers).status_code,409)
+        self.assertEqual(self.client.post('/api/profile',data={'phone':'PJSIP/200','current_password':PASSWORD},headers=self.headers).status_code,200)
+        self.assertEqual(read_accounts(self.accounts)['other']['phone'],'PJSIP/200')
+
+    def test_password_change_requires_existing_password_and_revokes_sessions(self):
         token=self.registry.issue('alice','old');other=self.registry.issue('other','old')
-        result=self.client.post('/api/profile',data={'phone':'PJSIP/200','current_password':PASSWORD,'new_password':'Synthetic-new-password-123','role':'admin','menus':'["settings"]'},headers=self.headers)
+        payload={'new_password':'Synthetic-new-password-123','role':'admin','menus':'["settings"]'}
+        self.assertEqual(self.client.post('/api/profile',data=payload,headers=self.headers).status_code,403)
+        result=self.client.post('/api/profile',data={**payload,'current_password':PASSWORD},headers=self.headers)
         self.assertEqual(result.status_code,200);self.assertTrue(result.json['login_required'])
         self.assertFalse(self.registry.active(token,'alice','old'));self.assertTrue(self.registry.active(other,'other','old'))
         account=read_accounts(self.accounts)['alice']
@@ -84,7 +98,7 @@ class ProfileTests(unittest.TestCase):
     def test_clear_phone_does_not_require_available_inventory(self):
         self.inventory.unlink()
         response=self.client.post('/api/profile',data={'phone':'','current_password':PASSWORD},headers=self.headers)
-        self.assertEqual(response.status_code,400)
+        self.assertEqual(response.status_code,403)
         with self.client.session_transaction() as session:session['_user_id']='other'
         response=self.client.post('/api/profile',data={'phone':'','current_password':PASSWORD},headers=self.headers)
         self.assertEqual(response.status_code,200)

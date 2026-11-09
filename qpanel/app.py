@@ -12,6 +12,7 @@ from werkzeug.exceptions import abort
 from werkzeug.security import check_password_hash
 import logging
 import hashlib
+import hmac
 from collections import OrderedDict
 import threading
 import time
@@ -177,6 +178,12 @@ def request_loader(request):
 from sanequeue.security.login import LoginLimiter
 _login_limiter = LoginLimiter()
 
+def valid_form_csrf():
+    expected = session.get('csrf_token')
+    return bool(expected and hmac.compare_digest(
+        expected.encode('utf-8'), request.form.get('csrf_token', '').encode('utf-8')))
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if not cfg.has_users():
@@ -184,6 +191,8 @@ def login():
 
     if request.method == 'GET':
         return render_template('login.html')
+    if not valid_form_csrf():
+        return render_template('login.html', login_expired=True), 403
 
     address = request.remote_addr or 'unknown'
     username = request.form.get('username','')
@@ -239,7 +248,7 @@ def login_external():
     except:
         pass
 
-    return redirect(url_for('logout'))
+    return redirect(url_for('login'))
 
 
 def setup_logging():
@@ -437,8 +446,11 @@ def check_new_version():
     )
 
 
-@app.route('/logout')
+@app.route('/logout', methods=['POST'])
+@flask_login.login_required
 def logout():
+    if not valid_form_csrf():
+        abort(403)
     registry=app.config.get('SANEQUEUE_AUTH_SESSIONS')
     if registry:registry.revoke(session.get('sq_auth_session'))
     flask_login.logout_user()

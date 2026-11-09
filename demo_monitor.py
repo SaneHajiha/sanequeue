@@ -100,7 +100,7 @@ def maintenance_controls():
         re.fullmatch(r'/api/history/ai-jobs/[0-9a-f]{32}',request.path) is not None or
         re.fullmatch(r'/api/history/export-jobs/[0-9a-f]{32}/cancel',request.path) is not None or
         re.fullmatch(r'/api/history/work-sessions/[0-9a-f]{32}/close',request.path) is not None)
-    if os.getenv('SANEQUEUE_REPORTING_PREVIEW') == '1' and request.method not in ('GET','HEAD','OPTIONS') and request.path != '/login' and not (report_job_request or builder_preview_request(request.path) or diagnostics_preview_request(request.path) or cdr_unique_export_request(request.path)):
+    if os.getenv('SANEQUEUE_REPORTING_PREVIEW') == '1' and request.method not in ('GET','HEAD','OPTIONS') and request.path not in ('/login','/logout') and not (report_job_request or builder_preview_request(request.path) or diagnostics_preview_request(request.path) or cdr_unique_export_request(request.path)):
         return jsonify(error='reporting_preview_read_only'),403
     if module_disabled() and (request.path in ('/api/control','/api/members/pause') or request.path.startswith('/api/ami/')):
         return jsonify(error='module_disabled'),503

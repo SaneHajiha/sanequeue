@@ -39,15 +39,19 @@ def run(args,**kwargs):
     return subprocess.run(args,check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=kwargs.pop('timeout',30),**kwargs)
 
 
-def private_permissions(path,uid,gid,mode):
+def set_private_permissions(descriptor,uid,gid,mode):
+    metadata=os.fstat(descriptor)
+    if not (stat.S_ISREG(metadata.st_mode) or stat.S_ISDIR(metadata.st_mode)):
+        raise ValueError('invalid_private_state_file')
+    os.fchown(descriptor,uid,gid)
+    os.fchmod(descriptor,mode)
+
+
+def private_permissions(path,uid,gid,mode,*,dir_fd=None):
     """Use one no-follow descriptor; Linux lchmod support is not required."""
-    descriptor=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    descriptor=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=dir_fd)
     try:
-        metadata=os.fstat(descriptor)
-        if not (stat.S_ISREG(metadata.st_mode) or stat.S_ISDIR(metadata.st_mode)):
-            raise ValueError('invalid_private_state_file')
-        os.fchown(descriptor,uid,gid)
-        os.fchmod(descriptor,mode)
+        set_private_permissions(descriptor,uid,gid,mode)
     finally:
         os.close(descriptor)
 
@@ -62,14 +66,18 @@ def origin_default():
 
 
 def prepare_state_permissions(root,uid,gid):
+    """Apply state permissions using open directory descriptors."""
     root=Path(root)
-    for directory,dirs,files in os.walk(root):
-        current=Path(directory)
-        if current.is_symlink() or any((current/name).is_symlink() for name in dirs+files):
+    def raise_error(error):
+        raise error
+
+    for current,dirs,files,directory in os.fwalk(root,onerror=raise_error,follow_symlinks=False):
+        if any(stat.S_ISLNK(os.stat(name,dir_fd=directory,follow_symlinks=False).st_mode) for name in dirs+files):
             raise ValueError('symlink_in_private_state_refused')
         # Export/media stores deliberately require owner-only subdirectories.
-        private_permissions(current,uid,gid,0o750 if current==root else 0o700)
-        for name in files:private_permissions(current/name,uid,gid,0o600)
+        set_private_permissions(directory,uid,gid,0o750 if Path(current)==root else 0o700)
+        for name in files:
+            private_permissions(name,uid,gid,0o600,dir_fd=directory)
 
 
 def validate_origin(value):
@@ -147,9 +155,12 @@ def main():
     old_physical=None
     created_control_link=False
     changed=[]
+    stop_attempted=[]
+    backup_complete=False
     try:
         for unit in ('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer','sanequeue-pbx-apply.timer','sanequeue-pbx-apply.service')+REPORTING_UNITS:
             if active[unit] or (Path('/etc/systemd/system')/unit).exists():
+                stop_attempted.append(unit)
                 run(['systemctl','stop',unit])
         if etc.exists():shutil.copytree(etc,backup/'etc')
         if state.exists():shutil.copytree(state,backup/'state',symlinks=True)
@@ -158,6 +169,7 @@ def main():
         for unit in units:
             path=Path('/etc/systemd/system')/unit
             if path.exists():shutil.copy2(path,backup/unit)
+        backup_complete=True
         if subprocess.run(['id','sanequeue'],stdout=subprocess.PIPE,stderr=subprocess.PIPE).returncode:
             run(['useradd','--system','--home-dir',str(state),'--shell','/sbin/nologin','sanequeue'])
         owner=pwd.getpwnam('sanequeue');group=grp.getgrnam('sanequeue')
@@ -289,6 +301,15 @@ MediaJobs(s).initialize()
         print('Queues and internal phones are discovered automatically. No default administrator password exists.')
         print('Private rollback backup: '+str(backup))
     except Exception:
+        if not backup_complete:
+            for unit in stop_attempted:
+                if active[unit]:
+                    try:
+                        run(['systemctl','start',unit])
+                    except (OSError,subprocess.SubprocessError):
+                        print(f'Could not restart {unit} after backup failure.',file=sys.stderr)
+            print('Installation stopped before changing configuration. Backup is incomplete: '+str(backup),file=sys.stderr)
+            raise
         if created_control_link:
             control_link.unlink(missing_ok=True)
         for unit in units:

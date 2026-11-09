@@ -2,18 +2,27 @@ Current release and module controls: [beta.27 pilot](PILOT_BETA27.en.md). Pin RE
 
 # Automatic installation · beta.27 pilot
 
-[فارسی](INSTALL.fa.md) · [User guide](USER_GUIDE.en.md) · [Validation](AUDIT_BETA23.md)
+[فارسی](INSTALL.fa.md) · [User guide](USER_GUIDE.en.md) · [Validation](AUDIT_BETA26.md)
 
 ## Install on the PBX
 
 Use a systemd Linux PBX with Asterisk available locally, AMI listening on 127.0.0.1:5038, outbound HTTPS and a working distribution package repository. Review the script before running it as root:
 
 ```bash
-curl -fL https://raw.githubusercontent.com/SaneHajiha/sanequeue/feature/reporting-phase2/scripts/install.sh -o /tmp/sanequeue-install.sh
-sudo bash /tmp/sanequeue-install.sh
+(
+set -eu
+: "${SQ_ARCHIVE:?Set the path to the approved local release archive}"
+: "${SQ_SHA256:?Set the reviewed SHA-256 digest for this archive}"
+sq_stage=$(mktemp -d)
+cp -- "$SQ_ARCHIVE" "$sq_stage/SaneQueue.tar.gz"
+printf '%s  %s\n' "$SQ_SHA256" "$sq_stage/SaneQueue.tar.gz" | sha256sum --check
+mkdir "$sq_stage/source"
+tar -xzf "$sq_stage/SaneQueue.tar.gz" --strip-components=1 -C "$sq_stage/source"
+sudo bash "$sq_stage/source/scripts/install.sh"
+)
 ```
 
-Alternatively clone this release and run `sudo bash scripts/install.sh`. The bootstrap downloads the tagged source when run outside a checkout. It reuses Python 3.10–3.12 or downloads isolated Python 3.11 using official Astral uv; the PBX system Python is never replaced. Redis is installed through the distribution package manager if missing. Internet access and supported OS repositories are required; EOL repositories may need administrator repair first.
+Continue only when the checksum command reports `SaneQueue.tar.gz: OK`. The installer reuses Python 3.10–3.12 or downloads isolated Python 3.11 using official Astral uv. Redis is installed through the distribution package manager if missing. Internet access and supported OS repositories are required.
 
 On first install, choose an administrator username, a 12–200 character password (entered twice without echo), an optional detected supervisor phone, and the exact panel origin. There is no default password. Upgrades retain existing accounts and passwords. Do not put passwords in shell arguments or public issue reports.
 
@@ -44,7 +53,7 @@ systemctl list-timers sanequeue-inventory.timer
 journalctl -u sanequeue -u sanequeue-collector --since '10 minutes ago'
 ```
 
-Open the printed panel URL; verify login, both queue membership and waiting numbers against the PBX, phone catalogue, role restrictions and one test call. A 202 AMI response is only acceptance; wait for observed confirmation. Use your own registered phone for the supervisor account. Profile password/phone changes require the old password and invalidate existing sessions.
+Open the printed panel URL and verify login, queue membership, waiting counts, the extension catalogue and role restrictions against the PBX. Use an isolated test call for phone controls. A 202 response indicates acceptance. Check the subsequent observed result. Administrators assign extensions under Users & access. Profile password changes require the current password and invalidate existing sessions.
 
 Rerun the tagged installer for upgrades. It takes a private backup under `/var/backups/sanequeue/<timestamp>-installer` before changing configuration/state and restores the previous source/configuration/services on failure. Keep that backup private. State copies are made with web/collector stopped. A successful upgrade does not require restoring old call statistics or deleting current data.
 

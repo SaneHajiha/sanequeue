@@ -258,7 +258,7 @@ Independent extension waiting, callback and caller-number formatting; restricted
 
 ## Profile and password
 
-Use My profile & status to manage first/last name, assigned phone and picture, change your queue status, and view daily activity. Personal history is clipped to the current phone assignment. Click-to-call rings your own phone first and requires a queue Dial grant. Password or phone changes require the current password and revoke existing account sessions. PNG/JPEG/WebP/AVIF images up to 512 KB and 4 megapixels are decoded, resized and stripped of metadata.
+Use My profile & status to edit your name and picture, change your queue status, and view daily activity. Ask your administrator to change your assigned extension. Personal history starts at the current phone assignment. Click-to-call rings your own phone first and requires the queue Dial grant. Password changes require your current password and revoke existing sessions. The app resizes and strips metadata from PNG, JPEG, WebP or AVIF images up to 512 KB and 4 megapixels.
 
 ![Profile](images/profile-en-beta22.png)
 
