@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import unittest
@@ -152,6 +153,40 @@ class AccessTest(unittest.TestCase):
         self.assertEqual(self.client.get('/stats').status_code, 410)
         self.assertEqual(self.client.post('/hangup', data={'username': 'supervisor', 'pw': 'wrong', 'channel': 'SIP/100'}).status_code, 410)
 
+    def test_queue_report_uses_tehran_midnight_and_scopes_source_metadata(self):
+        from datetime import datetime
+        from pathlib import Path
+
+        midnight = int(datetime.fromisoformat('2026-10-25T00:00:00+03:30').timestamp())
+        next_midnight = midnight + 86400
+        queue_log = Path(self.temp.name) / 'queue_log'
+        queue_log.write_text(
+            f'{midnight - 1}|old|sales|NONE|ENTERQUEUE\n'
+            f'{midnight}|current|sales|NONE|ENTERQUEUE\n'
+            f'{midnight}|hidden|private|NONE|ENTERQUEUE\n'
+            f'{next_midnight}|next|sales|NONE|ENTERQUEUE\n',
+            encoding='utf-8',
+        )
+        self.module.cfg.config.set('sanequeue', 'queue_log_path', str(queue_log))
+        self.module.cfg.config.set('sanequeue', 'report_database', str(Path(self.temp.name) / 'reports.sqlite3'))
+        self.login('supervisor')
+        response = self.client.get('/api/reports?from=2026-10-25&to=2026-10-25')
+        self.assertEqual(response.status_code, 200)
+        result = response.get_json()
+        self.assertEqual(result['timezone'], 'Asia/Tehran')
+        self.assertEqual(result['start'], '2026-10-25T00:00:00+03:30')
+        self.assertEqual(result['totals']['entered'], 1)
+        self.assertEqual(result['hourly'], [1] + [0] * 23)
+        self.assertEqual(result['ingestion'], {'caught_up': True})
+        self.assertEqual(self.client.get('/api/reports?queue=private').status_code, 403)
+
+    def test_queue_report_denies_requests_without_queue_scope_before_ingest(self):
+        self.login('viewer')
+        self.fake.clear()
+        with patch('qpanel.operations.QueueReports.ingest') as ingest:
+            self.assertEqual(self.client.get('/api/reports').status_code, 403)
+            ingest.assert_not_called()
+
     def test_viewer_cannot_control(self):
         self.login('viewer')
         self.assertEqual(self.client.post('/api/members/pause', data={'queue': 'sales', 'agent': 'SIP/100', 'paused': 'true'}, headers={'X-CSRF-Token': 'test-csrf'}).status_code, 403)
@@ -206,6 +241,50 @@ class AccessTest(unittest.TestCase):
             response=self.client.post('/api/members/pause',data={'queue':'sales','agent':'SIP/100','paused':'false'},headers={'X-CSRF-Token':'test-csrf'})
             self.assertEqual(response.status_code,202)
             self.assertTrue(response.get_json()['ok'])
+
+    def test_managed_pause_keeps_authorized_ami_queue_despite_legacy_alias(self):
+        self.login('supervisor')
+        self.app.config['SANEQUEUE_PRIVATE_STATE'] = lambda: {}
+        self.module.cfg.config.add_section('rename')
+        self.module.cfg.config.set('rename', 'private', 'sales')
+        with patch.object(self.module.backend, '_connect') as connect:
+            manager = connect.return_value.connection
+            manager._translate_response.return_value = {'Response': 'Success'}
+            result = self.client.post('/api/members/pause',
+                                      data={'queue': 'sales', 'agent': 'SIP/100', 'paused': 'false'},
+                                      headers={'X-CSRF-Token': 'test-csrf'})
+        self.assertEqual(result.status_code, 202)
+        command, fields = manager._write_action.call_args.args
+        self.assertEqual((command, fields['Queue']), ('QueuePause', 'sales'))
+
+    def test_directory_contacts_require_directory_section_on_both_dial_paths(self):
+        self.login('supervisor')
+        policies = self.store.export()
+        policies['supervisors']['supervisor']['actions'].append('dial')
+        self.store.replace(policies)
+        self.app.config['SANEQUEUE_MENU_PROVIDER'] = lambda *_: {'control'}
+        self.app.config['SANEQUEUE_ADVANCED_ACTIONS'] = ('dial',)
+        self.app.config['SANEQUEUE_PRIVATE_STATE'] = lambda: {}
+        with patch('sanequeue.actions.plans.plan') as plan:
+            for path in ('/api/control', '/api/profile/dial'):
+                with self.subTest(path=path):
+                    result = self.client.post(path, data={'action': 'dial', 'contact_id': '1', 'queue': 'sales'},
+                                              headers={'X-CSRF-Token': 'test-csrf'})
+                    self.assertEqual(result.status_code, 403)
+            plan.assert_not_called()
+
+    def test_control_audit_rejects_anonymous_writes_and_bounds_fields(self):
+        from pathlib import Path
+
+        audit = Path(self.temp.name) / 'audit.jsonl'
+        self.module.cfg.config.set('sanequeue', 'audit_path', str(audit))
+        form = {'action': 'X' * 1000, 'queue': 'Q' * 1000, 'agent': 'A' * 1000}
+        self.assertEqual(self.client.post('/api/control', data=form).status_code, 403)
+        self.assertFalse(audit.exists())
+        self.login('supervisor')
+        self.assertEqual(self.client.post('/api/control', data=form).status_code, 400)
+        record = json.loads(audit.read_text(encoding='utf-8'))
+        self.assertEqual((len(record['action']), len(record['queue']), len(record['agent'])), (80, 160, 160))
 
     def test_supervision_modes_use_assigned_phone_and_explicit_caller_id(self):
         self.login('supervisor')

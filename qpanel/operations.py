@@ -11,6 +11,7 @@ import threading
 import json
 from contextlib import nullcontext
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from flask import jsonify, request, session, abort, Response, url_for, g
 from flask_login import current_user, login_required
 from qpanel.reporting import QueueReports, number
@@ -50,6 +51,12 @@ def install(app, cfg, backend, get_data, render):
     def can_access_queue(queue, permission='view'):
         store = policy_store()
         return bool(store and store.access(current_user.get_id() or '', role(), queue, permission))
+
+    def pbx_queue(queue):
+        # The persistent projection uses AMI's queue keys directly.
+        if callable(app.config.get('SANEQUEUE_PRIVATE_STATE')):
+            return queue
+        return cfg.realname_queue(queue)
 
     def csrf():
         if 'csrf_token' not in session:
@@ -146,9 +153,13 @@ def install(app, cfg, backend, get_data, render):
 
     @app.after_request
     def audit_controls(response):
-        if request.method == 'POST' and request.endpoint in control_endpoints:
-            app.logger.info('audit user=%r action=%r queue=%r status=%s', current_user.get_id(), request.endpoint, request.form.get('queue'), response.status_code)
-            record = dict(timestamp=int(time.time()), user=current_user.get_id(), action=request.form.get('action', request.endpoint), queue=request.form.get('queue'), agent=request.form.get('agent'), status=response.status_code)
+        if request.method == 'POST' and request.endpoint in control_endpoints and current_user.is_authenticated:
+            form = {} if response.status_code == 413 else request.form
+            record = dict(timestamp=int(time.time()), user=current_user.get_id(),
+                          action=form.get('action', request.endpoint)[:80],
+                          queue=form.get('queue', '')[:160], agent=form.get('agent', '')[:160],
+                          status=response.status_code)
+            app.logger.info('audit user=%r action=%r queue=%r status=%s', record['user'], request.endpoint, record['queue'], response.status_code)
             path = option('audit_path', os.path.join(app.root_path, '..', 'var', 'audit.jsonl'))
             try:
                 with audit_lock:
@@ -341,7 +352,7 @@ def install(app, cfg, backend, get_data, render):
             if paused == 'true' and not staffing_allows(visible, agent):
                 if store:store.release_leave(queue,agent)
                 return jsonify(error='minimum_ready'), 409
-            result = ami_action('QueuePause', {'Queue': cfg.realname_queue(queue), 'Interface': agent, 'Paused': paused, 'Reason': reason})
+            result = ami_action('QueuePause', {'Queue': pbx_queue(queue), 'Interface': agent, 'Paused': paused, 'Reason': reason})
             if store and ((paused == 'true' and definitely_rejected(result)) or paused == 'false'):
                 store.release_leave(queue, agent)
             return result
@@ -393,6 +404,8 @@ def install(app, cfg, backend, get_data, render):
         if backend.is_freeswitch():
             abort(400)
         action = request.form.get('action', '')
+        if action == 'dial' and request.form.get('contact_id') and 'directory' not in sections():
+            abort(403)
         queue = request.form.get('queue', '')
         agent = request.form.get('agent', '')
         channel = request.form.get('channel', '')
@@ -426,7 +439,7 @@ def install(app, cfg, backend, get_data, render):
                 except StateUnavailable:return jsonify(error='collector_unavailable'),503
                 except ValueError as exc:return jsonify(error=str(exc)),409
                 return ami_action(name,fields)
-            base = {'Queue': cfg.realname_queue(queue)}
+            base = {'Queue': pbx_queue(queue)}
             if action in ('priority', 'first', 'hangup'):
                 entries = list(data.get('entries', {}).values())
                 if not channel or not any(str(e.get('Channel')) == channel for e in entries):
@@ -638,12 +651,16 @@ def install(app, cfg, backend, get_data, render):
         if backend.is_freeswitch():
             return jsonify(error='asterisk_only'), 400
         try:
-            today = datetime.now().strftime('%Y-%m-%d')
-            start = datetime.strptime(request.args.get('from', today), '%Y-%m-%d')
-            end = datetime.strptime(request.args.get('to', today), '%Y-%m-%d') + timedelta(days=1)
+            zone = ZoneInfo(option('report_timezone', 'Asia/Tehran'))
+        except (ValueError, ZoneInfoNotFoundError):
+            return jsonify(error='invalid_report_timezone'), 503
+        try:
+            today = datetime.now(zone).date().isoformat()
+            start = datetime.strptime(request.args.get('from', today), '%Y-%m-%d').replace(tzinfo=zone)
+            end = datetime.strptime(request.args.get('to', today), '%Y-%m-%d').replace(tzinfo=zone) + timedelta(days=1)
             if end <= start or (end - start).days > 93:
                 raise ValueError()
-        except ValueError:
+        except (ValueError, OverflowError):
             return jsonify(error='invalid_date_range'), 400
         # Even when reports are explicitly enabled, never disclose queues
         # outside the authenticated user's policy scope.
@@ -656,18 +673,22 @@ def install(app, cfg, backend, get_data, render):
         if selected and selected not in data:
             abort(403)
         names = [selected] if selected else list(data)
-        allowed = {cfg.realname_queue(name): name for name in names}
+        if not names:
+            abort(403)
+        allowed = {pbx_queue(name): name for name in names}
         database = option('report_database', os.path.join(app.root_path, '..', 'var', 'reports.sqlite3'))
         reports = QueueReports(database)
         try:
             ingestion = reports.ingest(option('queue_log_path', '/var/log/asterisk/queue_log'))
-            result = reports.report(start.timestamp(), end.timestamp(), allowed, number(option('sla_seconds', 20)))
+            result = reports.report(start.timestamp(), end.timestamp(), allowed, number(option('sla_seconds', 20)), zone=zone)
         except (OSError, __import__('sqlite3').Error):
             app.logger.exception('Queue reports unavailable')
             return jsonify(error='report_source_unavailable'), 503
         for row in result['rows']:
             row['queue'] = allowed[row['queue']]
-        result.update(ingestion=ingestion, timezone=time.tzname[0], start=start.isoformat(), end=end.isoformat())
+        if role() != 'admin':
+            ingestion = {'caught_up': ingestion['caught_up']}
+        result.update(ingestion=ingestion, timezone=zone.key, start=start.isoformat(), end=end.isoformat())
         if request.args.get('format') == 'csv':
             output = io.StringIO()
             writer = csv.writer(output)

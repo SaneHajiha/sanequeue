@@ -60,7 +60,7 @@ class QueueReports:
             conn.execute('INSERT OR REPLACE INTO cursor VALUES (?,?,?)', (path, inode, position))
             return {'caught_up': position >= stat.st_size, 'bytes_remaining': max(0, stat.st_size - position)}
 
-    def report(self, start, end, queues, sla=20):
+    def report(self, start, end, queues, sla=20, *, zone=None):
         groups, hours = {}, [0] * 24
         with self.connect() as conn:
             rows = conn.execute('SELECT ts, queue, agent, event, wait, talk FROM events WHERE ts>=? AND ts<? ORDER BY ts', (start, end))
@@ -71,7 +71,7 @@ class QueueReports:
                 row = groups.setdefault(key, dict(queue=queue, agent=key[1], entered=0, answered=0, abandoned=0, completed=0, missed=0, within_sla=0, wait_seconds=0, talk_seconds=0))
                 if event == 'ENTERQUEUE':
                     row['entered'] += 1
-                    hours[datetime.fromtimestamp(ts).hour] += 1
+                    hours[datetime.fromtimestamp(ts, zone).hour] += 1
                 elif event == 'CONNECT':
                     row['answered'] += 1
                     row['wait_seconds'] += wait
