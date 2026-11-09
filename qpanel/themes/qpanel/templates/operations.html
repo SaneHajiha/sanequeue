@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="{{ theme_static('css/report-charts.css') }}?v=20261028-2">
 <link rel="stylesheet" href="{{ theme_static('css/date-picker.css') }}?v=20261028-1">
 <link rel="stylesheet" href="{{ theme_static('css/report-date-range.css') }}?v=20261103-1">
+<link rel="stylesheet" href="{{ theme_static('css/sanequeue-design-system.css') }}?v={{ current_version() }}">
 </head>
 <body data-view="live">
 <a class="skip" href="#main">{{ t('رفتن به محتوا','Skip to content') }}</a>
@@ -471,6 +472,7 @@
 <script src="{{ theme_static('js/context-help.js') }}?v=20261026-1" defer></script>
 <script src="{{ theme_static('js/module-catalog.js') }}?v=20261028-1" defer></script>
 <script src="{{ theme_static('js/operations.js') }}?v={{ current_version() }}&help=1-queue4" defer></script>
+<script src="{{ theme_static('js/sanequeue-ui-icons.js') }}?v={{ current_version() }}" defer></script>
 <dialog id="activity-dialog" class="activity-dialog" aria-labelledby="activity-title"><div class="summary-dialog-head"><h2 id="activity-title">{{ t('کارکرد روزانهٔ عضویت صف','Daily queue membership activity') }}</h2><button id="activity-close" type="button" aria-label="{{ t('بستن','Close') }}">×</button></div><p class="report-note">{{ t('هر عضویت صف مستقل است؛ زمان صف‌های هم‌زمان با هم جمع نمی‌شود. فقط بازه‌هایی که شنودگر متصل بوده ثبت می‌شوند. نگهداری تا ۹۰ روز و حداکثر ۵۰۰هزار تغییر وضعیت.','Each queue membership is independent; concurrent queues are not combined as work hours. Only collector-observed intervals are recorded. Retention is up to 90 days and 500,000 transitions.') }}</p><div class="report-filters"><label>{{ t('تاریخ (شمسی)','Date (Gregorian)') }}<select id="activity-day"></select></label><label>{{ t('صف','Queue') }}<select id="activity-queue"><option value="">—</option></select></label><button id="activity-refresh" type="button">↻ {{ t('بازخوانی','Refresh') }}</button></div><p id="activity-feedback" class="report-note" role="status"></p><div id="activity-results" class="activity-results"></div></dialog>
 <script src="{{ theme_static('js/activity.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/planning.js') }}?v={{ current_version() }}" defer></script>

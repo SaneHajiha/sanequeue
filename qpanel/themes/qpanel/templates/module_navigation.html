@@ -1,9 +1,9 @@
 {# Navigation only: authorization remains enforced by every backend endpoint. #}
 {% macro item(view,fa,en,count='') %}
-{% if can_view_section(view) %}<button type="button" class="nav-item{% if view=='live' %} active{% endif %}" data-view="{{view}}"{% if view=='live' %} aria-current="page"{% endif %}>{{t(fa,en)}}{% if count %}<b id="{{count}}">—</b>{% endif %}</button>{% endif %}
+{% if can_view_section(view) %}<button type="button" class="nav-item{% if view=='live' %} active{% endif %}" data-view="{{view}}"{% if view=='live' %} aria-current="page"{% endif %}><span data-nav-icon aria-hidden="true"></span>{{t(fa,en)}}{% if count %}<b id="{{count}}">—</b>{% endif %}</button>{% endif %}
 {% endmacro %}
 {% macro shortcut(view,target,fa,en) %}<button type="button" class="module-shortcut" data-module-view="{{view}}" data-module-target="{{target}}">{{t(fa,en)}}</button>{% endmacro %}
-<nav aria-label="{{t('ناوبری اصلی','Main navigation')}}" class="sq-full-nav module-navigation">
+<nav id="sq-primary-nav" aria-label="{{t('ناوبری اصلی','Main navigation')}}" class="sq-full-nav module-navigation">
 {% if can_view_section('live') or can_view_section('queues') or can_view_section('calls') or can_view_section('waiting') or can_view_section('wallboard') %}
 <details class="nav-module" data-module="monitoring" open><summary>{{t('پایش زنده','Live monitoring')}}</summary><div class="module-items">
 {{item('live','مرکز عملیات','Overview')}}{{item('queues','وضعیت صف‌ها','Queue status')}}{{item('calls','تماس‌های جاری','Active calls','calls-count')}}{{item('waiting','تماس‌های منتظر','Waiting calls','waiting-nav-count')}}{{item('wallboard','دیوار نمایش','Wallboard')}}
@@ -41,7 +41,7 @@
 {% if user_role in ('admin','supervisor') and can_view_section('audit') %}{{shortcut('reports','history-quality-section','کنترل کیفیت مکالمه','Call quality reviews')}}{% endif %}
 </details>
 </div></details>{% endif %}
-{% if can_view_section('surveys') %}<details class="nav-module" data-module="customer-surveys"><summary>{{t('صدای مشتری و رضایت','Customer satisfaction')}}</summary><div class="module-items">{{item('surveys','نظرسنجی کلیدی مشتری','Customer DTMF surveys')}}{% if user_role in ('admin','supervisor') %}<button type="button" class="nav-item" data-view="voice-feedback">{{t('بازخورد صوتی و پیگیری','Voice feedback & follow-up')}}</button>{% endif %}{% if user_role=='admin' %}{{shortcut('surveys','survey-design','طراحی فرم نظرسنجی','Survey form design')}}{% endif %}{{shortcut('surveys','survey-results','پاسخ‌ها و شاخص رضایت','Responses & satisfaction')}}</div></details>{% endif %}
+{% if can_view_section('surveys') %}<details class="nav-module" data-module="customer-surveys"><summary>{{t('صدای مشتری و رضایت','Customer satisfaction')}}</summary><div class="module-items">{{item('surveys','نظرسنجی کلیدی مشتری','Customer DTMF surveys')}}{% if user_role in ('admin','supervisor') %}<button type="button" class="nav-item" data-view="voice-feedback"><span data-nav-icon aria-hidden="true"></span>{{t('بازخورد صوتی و پیگیری','Voice feedback & follow-up')}}</button>{% endif %}{% if user_role=='admin' %}{{shortcut('surveys','survey-design','طراحی فرم نظرسنجی','Survey form design')}}{% endif %}{{shortcut('surveys','survey-results','پاسخ‌ها و شاخص رضایت','Responses & satisfaction')}}</div></details>{% endif %}
 {% if can_view_section('agents') or can_view_section('presence') or can_view_section('shifts') %}
 <details class="nav-module" data-module="team"><summary>{{t('کارشناسان و شیفت','Team & shifts')}}</summary><div class="module-items">
 {{item('agents','کارشناسان و عضویت صف','Agents & membership','agent-count')}}{{item('presence','داخلی‌ها و حضور','Extensions & presence')}}{{item('shifts','برنامه شیفت','Shift planning')}}
