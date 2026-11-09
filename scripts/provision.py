@@ -29,17 +29,34 @@ def run(args,**kwargs):
     return subprocess.run(args,check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=kwargs.pop('timeout',30),**kwargs)
 
 
-def private_permissions(path,uid,gid,mode):
+def set_private_permissions(descriptor,uid,gid,mode):
+    metadata=os.fstat(descriptor)
+    if not (stat.S_ISREG(metadata.st_mode) or stat.S_ISDIR(metadata.st_mode)):
+        raise ValueError('invalid_private_state_file')
+    os.fchown(descriptor,uid,gid)
+    os.fchmod(descriptor,mode)
+
+
+def private_permissions(path,uid,gid,mode,*,dir_fd=None):
     """Use one no-follow descriptor; Linux lchmod support is not required."""
-    descriptor=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    descriptor=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=dir_fd)
     try:
-        metadata=os.fstat(descriptor)
-        if not (stat.S_ISREG(metadata.st_mode) or stat.S_ISDIR(metadata.st_mode)):
-            raise ValueError('invalid_private_state_file')
-        os.fchown(descriptor,uid,gid)
-        os.fchmod(descriptor,mode)
+        set_private_permissions(descriptor,uid,gid,mode)
     finally:
         os.close(descriptor)
+
+
+def private_state_permissions(path,uid,gid):
+    """Apply permissions relative to opened directories under the state root."""
+    def raise_error(error):
+        raise error
+
+    for _,dirs,files,directory in os.fwalk(path,onerror=raise_error,follow_symlinks=False):
+        if any(stat.S_ISLNK(os.stat(name,dir_fd=directory,follow_symlinks=False).st_mode) for name in dirs+files):
+            raise ValueError('symlink_in_private_state_refused')
+        set_private_permissions(directory,uid,gid,0o750)
+        for name in files:
+            private_permissions(name,uid,gid,0o600,dir_fd=directory)
 
 
 def origin_default():
@@ -106,9 +123,12 @@ def main():
     old_physical=None
     created_control_link=False
     changed=[]
+    stop_attempted=[]
+    backup_complete=False
     try:
         for unit in ('sanequeue.service','sanequeue-collector.service','sanequeue-inventory.timer','sanequeue-fastagi.service','sanequeue-pbx-apply.timer','sanequeue-pbx-apply.service'):
             if active[unit] or (Path('/etc/systemd/system')/unit).exists():
+                stop_attempted.append(unit)
                 run(['systemctl','stop',unit])
         if etc.exists():shutil.copytree(etc,backup/'etc')
         if state.exists():shutil.copytree(state,backup/'state',symlinks=True)
@@ -117,6 +137,7 @@ def main():
         for unit in units:
             path=Path('/etc/systemd/system')/unit
             if path.exists():shutil.copy2(path,backup/unit)
+        backup_complete=True
         if subprocess.run(['id','sanequeue'],stdout=subprocess.PIPE,stderr=subprocess.PIPE).returncode:
             run(['useradd','--system','--home-dir',str(state),'--shell','/sbin/nologin','sanequeue'])
         owner=pwd.getpwnam('sanequeue');group=grp.getgrnam('sanequeue')
@@ -154,12 +175,7 @@ def main():
         if not (etc/'inventory.ini').exists():private(etc/'inventory.ini','[inventory]\ninternal_contexts=from-internal\n')
         private(etc/'gateway.env',f'SANEQUEUE_PUBLIC_ORIGINS={origin},http://127.0.0.1:5000\nSANEQUEUE_HTTPS={int(parsed.scheme=="https")}\nSANEQUEUE_CONTROL_MODE=rbac\nSANEQUEUE_ADVANCED_ACTIONS=transfer,attended_transfer,cancel_transfer,park,retrieve,pickup,dial,hangup_active\nSANEQUEUE_TRANSFER_CONTEXT=from-internal\nSANEQUEUE_PARKING_LOT=default\nSANEQUEUE_AUTO_EXTENSIONS=1\n')
         private(etc/'redis.conf',f'bind 127.0.0.1\nport 16379\nprotected-mode yes\nrequirepass {redis_secret}\nsave ""\nappendonly no\nmaxmemory 128mb\nmaxmemory-policy noeviction\ndaemonize no\n')
-        for root,dirs,files in os.walk(resolved_state):
-            if Path(root).is_symlink() or any((Path(root)/name).is_symlink() for name in dirs+files):raise ValueError('symlink_in_private_state_refused')
-            private_permissions(root,owner.pw_uid,group.gr_gid,0o750)
-            for name in files:
-                path=Path(root)/name
-                private_permissions(path,owner.pw_uid,group.gr_gid,0o600)
+        private_state_permissions(resolved_state,owner.pw_uid,group.gr_gid)
         if link.exists() and not link.is_symlink():
             if not link.resolve().is_relative_to(Path('/opt')):raise ValueError('unsafe_existing_source')
             old_physical=Path('/opt')/('sanequeue-before-'+stamp);link.rename(old_physical)
@@ -210,6 +226,15 @@ def main():
         print('Private rollback backup: '+str(backup))
         (backup/'result.json').write_text(json.dumps({'release':str(release),'previous_source':old_link,'origin':origin,'succeeded':True}))
     except Exception:
+        if not backup_complete:
+            for unit in stop_attempted:
+                if active[unit]:
+                    try:
+                        run(['systemctl','start',unit])
+                    except (OSError,subprocess.SubprocessError):
+                        print(f'Could not restart {unit} after backup failure.',file=sys.stderr)
+            print('Installation stopped before changing configuration. Backup is incomplete: '+str(backup),file=sys.stderr)
+            raise
         if created_control_link:
             control_link.unlink(missing_ok=True)
         for unit in units:subprocess.run(['systemctl','stop',unit],stdout=subprocess.PIPE,stderr=subprocess.PIPE)

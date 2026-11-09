@@ -38,3 +38,33 @@ class InstallerConfigurationTests(unittest.TestCase):
                 self.module.private_permissions(Path(folder),os.getuid(),os.getgid(),0o750)
                 with self.assertRaises(OSError):self.module.private_permissions(alias,os.getuid(),os.getgid(),0o777)
             self.assertEqual(stat.S_IMODE(target.stat().st_mode),0o600)
+
+    def test_state_permissions_stay_inside_open_directory(self):
+        import stat
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            state=root/'state'
+            nested=state/'nested'
+            nested.mkdir(parents=True)
+            (nested/'data').touch()
+            outside=root/'outside'
+            outside.mkdir()
+            outside_file=outside/'data'
+            outside_file.touch(mode=0o644)
+            outside_mode=stat.S_IMODE(outside_file.stat().st_mode)
+            walk=os.fwalk
+
+            def replace_path_after_open(*args,**kwargs):
+                for entry in walk(*args,**kwargs):
+                    if Path(entry[0])==nested:
+                        nested.rename(state/'moved')
+                        nested.symlink_to(outside,target_is_directory=True)
+                    yield entry
+
+            with patch.object(self.module.os,'fwalk',replace_path_after_open):
+                self.module.private_state_permissions(state,os.getuid(),os.getgid())
+            self.assertEqual(stat.S_IMODE(outside_file.stat().st_mode),outside_mode)
+            self.assertEqual(stat.S_IMODE((state/'moved'/'data').stat().st_mode),0o600)
