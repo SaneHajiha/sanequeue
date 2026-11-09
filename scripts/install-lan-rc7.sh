@@ -5,10 +5,12 @@ umask 077
 
 mode=${1:-install}
 assume_yes=0
+complete=0
 case "$#:$mode" in
   0:install|1:--preflight|1:--reports-status) ;;
   1:--yes) mode=install; assume_yes=1 ;;
-  *) printf 'Usage: bash %s [--yes | --preflight | --reports-status]\n' "${0##*/}" >&2; exit 2 ;;
+  1:--complete) mode=install; assume_yes=1; complete=1 ;;
+  *) printf 'Usage: bash %s [--complete | --yes | --preflight | --reports-status]\n' "${0##*/}" >&2; exit 2 ;;
 esac
 if [[ $(id -u) -ne 0 ]]; then
   exec sudo --preserve-env=SSH_CONNECTION bash "$0" "$@"
@@ -71,6 +73,30 @@ if [[ $mode == --reports-status ]]; then
   exit
 fi
 
+complete_reporting() {
+  if [[ -f /etc/sanequeue/reporting-sql.ini && ! -L /etc/sanequeue/reporting-sql.ini ]] &&
+     grep -Eq '^REPORTING_SQL_ARGS=.*--mysql-config([[:space:]]|=)' /etc/sanequeue/reporting.env; then
+    return 0
+  fi
+  local helper status=0
+  helper=$(mktemp /tmp/sanequeue-connect-cdr.XXXXXXXX) || return
+  curl --ipv4 --fail --show-error --silent --location --retry 2 --connect-timeout 8 --max-time 45 \
+    --proto '=https' --proto-redir '=https' -H 'Accept: application/vnd.github.raw+json' --output "$helper" \
+    'https://api.github.com/repos/SaneHajiha/sanequeue/contents/scripts/connect-cdr-rc7.sh?ref=90d844bc019a8b173f3a047d9605e709e9aedde5' &&
+    printf '%s  %s\n' b09e2a3906db681970b44045bfa0bce39c1a6a1cabd9d18d34aefccf1e04c166 "$helper" | sha256sum --strict --check &&
+    bash "$helper" --auto || status=$?
+  rm -f -- "$helper"
+  return "$status"
+}
+
+finish_complete() {
+  if ! complete_reporting; then
+    reports_status || true
+    fail 'The panel is installed, but CDR/CEL setup did not finish. Review the SQL error above. A retry will keep the existing panel.'
+  fi
+  reports_status
+}
+
 [[ $(uname -m) == x86_64 ]] || fail 'SaneQueue RC7 requires x86_64.'
 . /etc/os-release
 [[ ${ID:-} == rocky && ${VERSION_ID:-} =~ ^8(\.|$) ]] || fail 'SaneQueue RC7 requires Rocky Linux 8.'
@@ -78,6 +104,13 @@ issabel=$(rpm -q --qf '%{VERSION}' issabel-system 2>/dev/null) || fail 'Issabel 
 [[ $issabel =~ ^5(\.|$) ]] || fail 'Issabel 5 is required.'
 asterisk_version=$(timeout 8 asterisk -rx 'core show version') || fail 'Could not check the running Asterisk service.'
 [[ $asterisk_version =~ Asterisk[[:space:]]20\. ]] || fail 'Asterisk 20 is required.'
+
+if (( complete )) && [[ -f /opt/sanequeue/VERSION ]]; then
+  [[ $(</opt/sanequeue/VERSION) == 2.1.0-rc.7 ]] || fail 'This launcher will only configure reporting on the installed RC7 release.'
+  systemctl is-active --quiet sanequeue.service || fail 'The installed RC7 panel service is inactive. Check the service before configuring reports.'
+  finish_complete
+  exit
+fi
 
 require_idle() {
   local channels
@@ -111,7 +144,7 @@ if [[ ${#packages[@]} -gt 0 ]]; then
 fi
 if [[ ${#packages[@]} -gt 0 ]]; then
   printf 'Required Rocky packages: %s\n' "${packages[*]}" >&2
-  if [[ $mode == --preflight || ! -t 0 ]]; then
+  if [[ $mode == --preflight || ( $complete == 0 && ! -t 0 ) ]]; then
     fail 'Run this installer in an interactive terminal to review and install the missing packages.'
   fi
   if [[ $assume_yes == 1 ]]; then
@@ -228,8 +261,11 @@ PY
     echo 'No private IPv4 address found. The panel will listen on localhost; use an SSH tunnel.'
   else
     mapfile -t choices <<< "$addresses"
-    if [[ ${#choices[@]} -eq 1 ]]; then
+    if [[ ${#choices[@]} -eq 1 || $complete == 1 ]]; then
       address=${choices[0]}
+      if [[ ${#choices[@]} -gt 1 ]]; then
+        printf 'Several private addresses were found. Using %s.\n' "$address"
+      fi
     else
       [[ -t 0 ]] || { echo 'Multiple private addresses found. Run the installer in an interactive SSH terminal.' >&2; exit 1; }
       PS3='Choose the private IP for the panel: '
@@ -250,6 +286,85 @@ export SANEQUEUE_WHEELHOUSE="$stage/wheelhouse"
 export SANEQUEUE_PUBLIC_ORIGIN="$origin"
 export SANEQUEUE_ACTIVATE_TELEPHONY=0
 require_idle
-bash "$installer"
+if (( complete )) && [[ ! -f /var/lib/sanequeue/local_accounts.json ]]; then
+  "$PYTHON" -I - "$installer" <<'PY'
+import errno
+import os
+import pty
+import re
+import secrets
+import stat
+import sys
+import termios
+
+credentials = "/root/.sanequeue-rc7-first-login"
+try:
+    descriptor = os.open(credentials, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+except FileExistsError:
+    descriptor = os.open(credentials, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600 or not stat.S_ISREG(info.st_mode):
+            raise SystemExit("The existing first-login credential file is not a private root-owned file.")
+        password = stream.read(64).rstrip(b"\n")
+    if not re.fullmatch(rb"[A-Za-z0-9_-]{43}", password):
+        raise SystemExit("The existing first-login credential file has an invalid format.")
+else:
+    password = secrets.token_urlsafe(32).encode("ascii")
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(password + b"\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+
+# The pinned RC7 installer accepts credentials through its terminal prompts.
+# Feed each answer only after its prompt, with terminal echo disabled.
+answers = iter((
+    (b"Administrator username [admin]:", b""),
+    (b"Choose administrator password (12-200 characters):", password),
+    (b"Repeat administrator password:", password),
+    (b"Administrator supervisor phone [none; can change in profile]:", b""),
+))
+pid, terminal = pty.fork()
+if pid == 0:
+    settings = termios.tcgetattr(0)
+    settings[3] &= ~(termios.ECHO | termios.ECHONL)
+    termios.tcsetattr(0, termios.TCSANOW, settings)
+    os.execl("/bin/bash", "bash", sys.argv[1])
+answer = next(answers, None)
+tail = b""
+try:
+    while True:
+        try:
+            chunk = os.read(terminal, 8192)
+        except OSError as exc:
+            if exc.errno == errno.EIO:  # Linux PTY after child exit.
+                break
+            raise
+        if not chunk:
+            break
+        sys.stdout.buffer.write(chunk)
+        sys.stdout.buffer.flush()
+        tail = (tail + chunk)[-1024:]
+        if answer is not None and answer[0] in tail:
+            os.write(terminal, answer[1] + b"\n")
+            answer = next(answers, None)
+            tail = b""
+finally:
+    os.close(terminal)
+    _, status = os.waitpid(pid, 0)
+if not os.WIFEXITED(status) or os.WEXITSTATUS(status):
+    raise SystemExit(os.WEXITSTATUS(status) if os.WIFEXITED(status) else 1)
+if answer is not None:
+    raise SystemExit("The installer did not complete the expected first-administrator setup.")
+print("Panel administrator: admin")
+print("First-login password file (root only): " + credentials)
+PY
+else
+  bash "$installer"
+fi
 printf '\n'
-reports_status || echo 'Reporting status is unavailable. Retry this launcher with --reports-status.' >&2
+if (( complete )); then
+  finish_complete
+else
+  reports_status || echo 'Reporting status is unavailable. Retry this launcher with --reports-status.' >&2
+fi
