@@ -26,6 +26,22 @@ class UnitAPITests(unittest.TestCase):
         result=self.admin.post('/api/organization/access',json=body,headers=self.header)
         self.assertEqual(result.status_code,201,result.get_data(as_text=True));return result.json['id']
 
+    def test_one_step_access_setup_keeps_csrf_and_existing_account_checks(self):
+        url='/api/organization/access'
+        body=dict(operation='configure_access',username='test',unit_id=None,
+                  new_unit=dict(name='Support',kind='organization',parent=None),
+                  endpoint='PJSIP/100',queue='8001',start_date='2026-10-24',
+                  capabilities=['summary','call_details','recording_play'])
+        self.assertEqual(self.admin.post(url,json=body).status_code,403)
+        self.assertEqual(self.admin.post(url,json=dict(body,username='missing'),headers=self.header).status_code,400)
+        unit=self.post(**body)
+        inventory=self.admin.get(url).json
+        self.assertEqual(inventory['units'][0]['id'],unit)
+        self.assertEqual({grant['capability'] for grant in inventory['grants']},set(body['capabilities']))
+        self.assertEqual(inventory['assignments'][0]['endpoint'],'PJSIP/100')
+        self.assertEqual(inventory['queue_assignments'][0]['queue'],'8001')
+        self.assertEqual(inventory['members'][0]['username'],'test')
+
     def test_management_is_restricted_and_scope_used_for_summary(self):
         url='/api/organization/access'
         self.assertEqual(self.case.client().get(url).status_code,403)

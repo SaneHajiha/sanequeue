@@ -53,6 +53,13 @@ class CDRTests(unittest.TestCase):
             self.assertNotIn(secret, encoded)
         self.assertFalse(page(self.archive, 100, 200)['audio_granted'])
 
+    def test_numeric_endpoint_filter_matches_observed_technologies_only(self):
+        self.inventory['endpoints'].append(dict(technology='SIP',endpoint='100',category='extension'))
+        self.seed(self.event('pjsip'),self.event('sip',channel='SIP/100-000000af'),
+                  self.event('caller-id-only',channel='SIP/200-000000bb',src='100'))
+        self.assertEqual({row['id'] for row in page(self.archive,100,200,{'endpoint':'۱۰۰'})['rows']},{'pjsip','sip'})
+        self.assertEqual({row['id'] for row in page(self.archive,100,200,{'endpoint':'PJSIP/100'})['rows']},{'pjsip'})
+
     def test_summary_endpoint_uses_observed_inventory_and_keeps_unknown(self):
         self.seed(self.event('known'), self.event('unknown', 160,
                   channel='PJSIP/not-in-inventory-000000ab', dstchannel=''))

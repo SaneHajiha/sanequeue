@@ -183,6 +183,23 @@ body .sidebar :is(button,a):focus-visible{outline-color:#8ce7e4!important}
 .access-recording-scope #user-recording-queues[hidden] { display:none; }
 #unit-access-panel>.access-section { margin-block:10px; }
 .access-section>summary { padding:6px; color:var(--ink); cursor:pointer; font-weight:700; }
+.access-workflow { display:grid; gap:12px; grid-template-columns:repeat(3,minmax(0,1fr)); padding:14px; background:var(--bg); border:1px solid var(--line); border-radius:14px; }
+.access-workflow-intro { grid-column:1/-1; }
+.access-workflow-intro h3 { margin:0; color:var(--ink); }
+.access-workflow-intro p { margin:.35rem 0; color:var(--muted); }
+.access-workflow fieldset { min-inline-size:0; margin:0; padding:12px; background:var(--card); border:1px solid var(--line); border-radius:10px; }
+.access-workflow legend { font-weight:700; }
+.access-workflow fieldset label { display:grid; gap:4px; margin-block:6px; color:var(--ink); }
+.access-workflow fieldset [hidden] { display:none; }
+.access-workflow input:not([type=checkbox]),.access-workflow select { width:100%; min-height:42px; }
+.access-workflow .access-workflow-checks label { display:flex; align-items:center; gap:8px; min-height:34px; }
+.access-workflow-checks input { inline-size:1rem; block-size:1rem; min-height:0; }
+.access-workflow>button { justify-self:start; }
+.access-workflow>p { grid-column:2/-1; margin:0; }
+@media(max-width:900px){
+ .access-workflow { grid-template-columns:minmax(0,1fr); }
+ .access-workflow>p { grid-column:1; }
+}
 @media(min-width:1000px) {
   .users-permissions { align-self:start; position:sticky; inset-block-start:84px; }
 }

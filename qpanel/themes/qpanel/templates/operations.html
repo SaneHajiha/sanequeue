@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="{{ theme_static('css/accessibility.css') }}?v={{ current_version() }}">
 <link rel="stylesheet" href="{{ theme_static('css/overview.css') }}?v={{ current_version() }}-command4">
 <link rel="stylesheet" href="{{ theme_static('css/reports.css') }}?v={{ current_version() }}-flow11"><link rel="stylesheet" href="{{ theme_static('css/navigation.css') }}?v={{ current_version() }}-light3"><link rel="stylesheet" href="{{ theme_static('css/context-help.css') }}?v=20261026-1">
-<link rel="stylesheet" href="{{ theme_static('css/report-charts.css') }}?v=20261028-2">
+<link rel="stylesheet" href="{{ theme_static('css/report-charts.css') }}?v={{ current_version() }}">
 <link rel="stylesheet" href="{{ theme_static('css/date-picker.css') }}?v=20261028-1">
 <link rel="stylesheet" href="{{ theme_static('css/report-date-range.css') }}?v=20261103-1">
 <link rel="stylesheet" href="{{ theme_static('css/sanequeue-design-system.css') }}?v={{ current_version() }}">
@@ -261,7 +261,7 @@
 {% if user_role == 'admin' %}
 <section id="users-view" class="view" hidden>
  <div class="detail-hero detail-hero--users"><div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol">♧</span><div><span class="hero-kicker">SANEQUEUE / ACCESS MANAGEMENT</span><h2>{{ t('مرکز کاربران و دسترسی‌ها','User and access center') }}</h2><p>{{ t('حساب، رمز، داخلی تلفن، صف‌های مجاز و سطح عملیات در یک صفحه','Manage account, phone, queue scope and action permissions together') }}</p></div></div><span class="source-pill">RBAC / ADMIN</span></div></div>
- <div class="users-intro panel"><div><strong>{{ t('مدیریت حساب‌ها','Accounts') }}</strong><p>{{ t('برای ویرایش روی نام کاربر در فهرست کلیک کن؛ رمز جدید برای ویرایش اختیاری است.','Select a user to edit. Leave password blank to keep existing password.') }}</p></div><button id="user-clear" type="button">{{ t('کاربر جدید','New user') }} +</button></div>
+ <div class="users-intro panel"><div><strong>{{ t('مدیریت حساب‌ها','Accounts') }}</strong><p>{{ t('برای ویرایش روی نام کاربر در فهرست کلیک کن؛ رمز جدید برای ویرایش اختیاری است.','Select a user to edit. Leave password blank to keep existing password.') }}</p></div><a class="access-workflow-link" href="#unit-access-panel">{{t('تعریف دسترسی سازمانی','Set up organization access')}}</a><button id="user-clear" type="button">{{ t('کاربر جدید','New user') }} +</button></div>
  <div class="users-layout">
   <div class="users-main">
   <section class="panel accounts-panel" id="accounts-admin-panel"><div class="panel-heading"><div><h2>{{ t('کاربران و داخلی‌های مجاز','Local users & phone mapping') }}</h2><p>{{ t('ایجاد حساب محلی با رمز هش‌شده؛ هر داخلی فقط به حساب مربوط متصل می‌شود. صف‌های مجاز در بخش قوانین تعریف می‌شوند.','Create hashed local accounts with their assigned phone. Queue grants are configured in policies.') }}</p></div></div>
@@ -323,6 +323,43 @@
   <h2>{{t('ساختار سازمان و دسترسی گزارش','Organization and report access')}}</h2>
   <p class="report-note">{{t('عضویت به‌تنهایی دسترسی نمی‌دهد. برای دیدن گزارش، مجوز جداگانه بدهید؛ دسترسی به زیرواحدها فقط با انتخاب صریح فعال می‌شود.','Membership alone grants no access. Grant report permissions separately; descendants require an explicit choice.')}}</p>
   <button type="button" id="unit-admin-refresh">{{t('دریافت ساختار','Load structure')}}</button><p id="unit-admin-feedback" role="status" aria-live="polite"></p>
+  <form id="unit-access-workflow" class="access-workflow">
+   <div class="access-workflow-intro">
+    <h3>{{t('تعریف یکجای دسترسی','Set up access in one place')}}</h3>
+    <p>{{t('کاربر، واحد و مجوزها را انتخاب کنید. در همین مرحله می‌توانید واحد بسازید یا داخلی و صف را به آن منتسب کنید.','Choose the account, unit and permissions. You can also create a unit or assign an extension or queue here.')}}</p>
+   </div>
+   <fieldset>
+    <legend>{{t('۱. کاربر و واحد','1. Account and unit')}}</legend>
+    <label>{{t('کاربر','Account')}}<select id="unit-workflow-user" name="username" required><option value="">{{t('انتخاب کاربر','Select an account')}}</option></select></label>
+    <label>{{t('روش انتخاب واحد','Unit selection')}}<select name="target_mode"><option value="existing">{{t('واحد موجود','Existing unit')}}</option><option value="new">{{t('ساخت واحد یا گروه سازمانی','Create a unit or organization')}}</option></select></label>
+    <label data-workflow-existing>{{t('واحد','Unit')}}<select name="unit_id" class="unit-select" required></select></label>
+    <div data-workflow-new hidden>
+     <label>{{t('نام واحد جدید','New unit name')}}<input name="unit_name" maxlength="120" required disabled></label>
+     <label>{{t('نوع واحد','Unit type')}}<select name="unit_kind" disabled><option value="organization">{{t('سازمان','Organization')}}</option><option value="department">{{t('دپارتمان','Department')}}</option><option value="unit">{{t('واحد','Unit')}}</option><option value="subunit">{{t('زیرواحد','Subunit')}}</option></select></label>
+     <label>{{t('والد','Parent')}}<select name="parent" class="unit-parent-select" disabled></select></label>
+    </div>
+   </fieldset>
+   <fieldset>
+    <legend>{{t('۲. محدوده و تاریخ عضویت','2. Scope and membership dates')}}</legend>
+    <label>{{t('داخلی جدید برای این واحد (اختیاری)','New extension assignment (optional)')}}<input name="endpoint" dir="ltr" list="unit-recording-endpoints" maxlength="54" placeholder="100"></label>
+    <label>{{t('صف جدید برای این واحد (اختیاری)','New queue assignment (optional)')}}<input name="queue" dir="ltr" maxlength="80"></label>
+    <label>{{t('از تاریخ','Start date')}}<input name="start" type="date" required></label>
+    <label>{{t('تا تاریخ، شامل همان روز (اختیاری)','End date, inclusive (optional)')}}<input name="end" type="date"></label>
+    <p class="report-note">{{t('مجوز به تمام عضویت‌های معتبر کاربر در واحد انتخابی اعمال می‌شود. انتساب و عضویت موجود با ثبت جدید حذف نمی‌شود.','Grants apply to the user’s valid memberships in this unit. Saving does not remove existing assignments or memberships.')}}</p>
+   </fieldset>
+   <fieldset>
+    <legend>{{t('۳. مجوزها','3. Permissions')}}</legend>
+    <div class="access-workflow-checks">
+     {% for capability,fa,en in [('summary','خلاصهٔ گزارش','Report summary'),('call_details','ریز تماس','Call details'),('full_numbers','شمارهٔ کامل','Full numbers'),('recording_play','پخش ضبط','Play recordings'),('recording_download','دانلود ضبط','Download recordings'),('export','خروجی گزارش','Export reports')] %}
+     <label><input type="checkbox" name="capability" value="{{capability}}">{{t(fa,en)}}</label>
+     {% endfor %}
+     <label><input type="checkbox" name="descendants">{{t('شامل زیرواحدها','Include descendants')}}</label>
+    </div>
+    <p class="report-note">{{t('پخش یا دانلود ضبط به مجوز ریز تماس نیاز دارد.','Playback or download also requires call-details access.')}}</p>
+   </fieldset>
+   <button type="submit" class="primary">{{t('ثبت دسترسی','Save access')}}</button>
+   <p id="unit-workflow-feedback" role="status"></p>
+  </form>
   <details class="access-section"><summary>{{t('واحدها و انتساب داخلی یا صف','Units, extension and queue assignments')}}</summary>
   <form id="unit-create-form" class="settings-grid"><h3>{{t('ساخت واحد','Create unit')}}</h3><label>{{t('نام','Name')}}<input name="name" maxlength="120" required></label><label>{{t('نوع','Type')}}<select name="kind"><option value="organization">{{t('سازمان','Organization')}}</option><option value="department">{{t('دپارتمان','Department')}}</option><option value="unit">{{t('واحد','Unit')}}</option><option value="subunit">{{t('زیرواحد','Subunit')}}</option></select></label><label>{{t('والد','Parent')}}<select name="parent" class="unit-parent-select"><option value="">{{t('بدون والد','No parent')}}</option></select></label><button>{{t('ساخت','Create')}}</button></form>
   <form id="unit-assign-form" class="settings-grid"><h3>{{t('انتساب داخلی','Assign extension')}}</h3><label>{{t('واحد','Unit')}}<select name="unit_id" class="unit-select" required></select></label><label>{{t('داخلی با فناوری','Extension with technology')}}<input name="endpoint" dir="ltr" list="unit-recording-endpoints" required placeholder="PJSIP/100"><datalist id="unit-recording-endpoints"></datalist></label><label>{{t('از تاریخ، شامل روز','Start date, inclusive')}}<input type="date" name="start" required></label><label>{{t('تا تاریخ، شامل روز؛ اختیاری','End date, inclusive; optional')}}<input type="date" name="end"></label><button>{{t('ثبت انتساب','Assign')}}</button></form>
@@ -527,9 +564,9 @@
 <script src="{{ theme_static('js/cdr-reason-analysis.js') }}?v=20261104-1" defer></script>
 <script src="{{ theme_static('js/pbx-aggregate-export.js') }}?v=20261104-1" defer></script>
 <script src="{{ theme_static('js/pbx-performance.js') }}?v={{ current_version() }}" defer></script>
-<script src="{{ theme_static('js/pbx-endpoint-picker.js') }}?v=20261104-1" defer></script>
+<script src="{{ theme_static('js/pbx-endpoint-picker.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/unit-reports.js') }}?v={{ current_version() }}" defer></script>
-<script src="{{ theme_static('js/unit-admin.js') }}?v=20261104-1" defer></script>
+<script src="{{ theme_static('js/unit-admin.js') }}?v={{ current_version() }}" defer></script>
 <script src="{{ theme_static('js/outbound-dashboard.js') }}?v=10&labels=2" defer></script>
 <script src="{{ theme_static('js/cdr-builder.js') }}?v=20261101-4&labels=2" defer></script>
 <script src="{{ theme_static('js/journey-reports.js') }}?v=20261102-1" defer></script>

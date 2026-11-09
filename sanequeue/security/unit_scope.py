@@ -4,7 +4,7 @@ This is a storage and policy primitive. It does not grant access to existing
 routes: consumers must apply a freshly resolved scope to every query and
 recheck the revision before returning data or publishing a background result.
 """
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import math
 import hashlib
 import os
@@ -191,12 +191,12 @@ class UnitScopeStore:
             db.commit()
         return result
 
-    def create_unit(self,name,kind,parent=None,*,actor=None):
+    def create_unit(self,name,kind,parent=None,*,actor=None,_transaction=None):
         name=_name(name)
         if kind not in KINDS:raise ValueError('invalid_unit_kind')
         if parent is not None:_id(parent)
         ident=uuid.uuid4().hex
-        with self._db(write=True) as db:
+        with (self._db(write=True) if _transaction is None else nullcontext(_transaction)) as db:
             previous=db.execute('SELECT kind FROM units WHERE pbx=? AND id=?',(self.pbx,parent)).fetchone() if parent else None
             if kind=='organization':
                 if parent is not None:raise ValueError('invalid_unit_parent')
@@ -204,13 +204,13 @@ class UnitScopeStore:
             db.execute('INSERT INTO units VALUES(?,?,?,?,?)',(self.pbx,ident,parent,kind,name));self._audit_change(db,actor,'create',ident);self._bump(db)
         return ident
 
-    def _interval(self,table,unit_id,value,start,end,actor):
+    def _interval(self,table,unit_id,value,start,end,actor,*,_transaction=None):
         _id(unit_id);start=_time(start);end=None if end is None else _time(end)
         if end is not None and end<=start:raise ValueError('invalid_unit_interval')
         column='endpoint' if table=='unit_assignments' else 'username'
         value=_endpoint(value) if column=='endpoint' else _user(value)
         ident=uuid.uuid4().hex
-        with self._db(write=True) as db:
+        with (self._db(write=True) if _transaction is None else nullcontext(_transaction)) as db:
             if not db.execute('SELECT 1 FROM units WHERE pbx=? AND id=?',(self.pbx,unit_id)).fetchone():raise ValueError('unknown_unit')
             # An endpoint has exactly one owner at any instant. Memberships
             # may overlap across units, but not duplicate in the same unit.
@@ -226,11 +226,11 @@ class UnitScopeStore:
     def assign_endpoint(self,unit_id,endpoint,start,end=None,*,actor=None):return self._interval('unit_assignments',unit_id,endpoint,start,end,actor)
     def add_member(self,unit_id,username,start,end=None,*,actor=None):return self._interval('unit_members',unit_id,username,start,end,actor)
 
-    def assign_queue(self,unit_id,queue,start,end=None,*,actor=None):
+    def assign_queue(self,unit_id,queue,start,end=None,*,actor=None,_transaction=None):
         _id(unit_id);start=_time(start);end=None if end is None else _time(end)
         if not isinstance(queue,str) or not _QUEUE.fullmatch(queue) or end is not None and end<=start:raise ValueError('invalid_unit_queue')
         ident=uuid.uuid4().hex
-        with self._db(write=True) as db:
+        with (self._db(write=True) if _transaction is None else nullcontext(_transaction)) as db:
             if not db.execute('SELECT 1 FROM units WHERE pbx=? AND id=?',(self.pbx,unit_id)).fetchone():raise ValueError('unknown_unit')
             if db.execute('SELECT 1 FROM unit_queue_assignments WHERE pbx=? AND queue=? AND (? IS NULL OR starts<?) AND (ends IS NULL OR ends>?)',
                           (self.pbx,queue,end,end,start)).fetchone():raise ScopeConflict('unit_queue_overlap')
@@ -266,14 +266,62 @@ class UnitScopeStore:
             if not row or row['ends'] is not None or end<=row['starts']:raise ScopeConflict('unit_interval_cannot_close')
             db.execute('UPDATE '+table+' SET ends=? WHERE pbx=? AND id=?',(end,self.pbx,ident));self._audit_change(db,actor,'close',ident);self._bump(db)
 
-    def grant(self,username,unit_id,capability,*,descendants=False,actor=None):
+    def grant(self,username,unit_id,capability,*,descendants=False,actor=None,_transaction=None):
         _user(username);_id(unit_id)
         if capability not in CAPABILITIES or type(descendants) is not bool:raise ValueError('invalid_unit_capability')
         ident=uuid.uuid4().hex
-        with self._db(write=True) as db:
+        with (self._db(write=True) if _transaction is None else nullcontext(_transaction)) as db:
             if not db.execute('SELECT 1 FROM units WHERE pbx=? AND id=?',(self.pbx,unit_id)).fetchone():raise ValueError('unknown_unit')
             db.execute('INSERT INTO unit_grants VALUES(?,?,?,?,?,?,1)',(self.pbx,ident,unit_id,username,capability,int(descendants)));self._audit_change(db,actor,'grant',ident);self._bump(db)
         return ident
+
+    def configure_access(self, *, username, unit_id, new_unit, endpoint, queue,
+                         start, end, capabilities, descendants=False, actor=None):
+        """Create or select a unit, attach scope and grant access in one transaction."""
+        _user(username)
+        if (not isinstance(capabilities,list) or not 1<=len(capabilities)<=len(CAPABILITIES)
+                or any(not isinstance(capability,str) or capability not in CAPABILITIES
+                       for capability in capabilities) or type(descendants) is not bool):
+            raise ValueError('invalid_unit_capability')
+        if (unit_id is None)==(new_unit is None):
+            raise ValueError('select_one_unit')
+        if new_unit is not None and (not isinstance(new_unit,dict) or
+                                     set(new_unit)!={'name','kind','parent'}):
+            raise ValueError('invalid_unit_request')
+        if new_unit is not None:
+            if new_unit['kind'] not in KINDS:raise ValueError('invalid_unit_kind')
+            if new_unit['parent'] is not None:_id(new_unit['parent'])
+        with self._db(write=True) as db:
+            if new_unit is not None:
+                if db.execute('SELECT 1 FROM units WHERE pbx=? AND parent IS ? AND kind=? AND name=?',
+                              (self.pbx,new_unit['parent'],new_unit['kind'],_name(new_unit['name']))).fetchone():
+                    raise ScopeConflict('unit_already_exists')
+                unit_id=self.create_unit(**new_unit,actor=actor,_transaction=db)
+            _id(unit_id)
+            start=_time(start)
+            end=None if end is None else _time(end)
+            if end is not None and end<=start:
+                raise ValueError('invalid_unit_interval')
+            if endpoint is not None and not db.execute('''SELECT 1 FROM unit_assignments
+                WHERE pbx=? AND unit_id=? AND endpoint=? AND starts=? AND ends IS ?''',
+                (self.pbx,unit_id,_endpoint(endpoint),start,end)).fetchone():
+                self._interval('unit_assignments',unit_id,endpoint,start,end,actor,_transaction=db)
+            if queue is not None and not db.execute('''SELECT 1 FROM unit_queue_assignments
+                WHERE pbx=? AND unit_id=? AND queue=? AND starts=? AND ends IS ?''',
+                (self.pbx,unit_id,queue,start,end)).fetchone():
+                self.assign_queue(unit_id,queue,start,end,actor=actor,_transaction=db)
+            covered=db.execute('''SELECT 1 FROM unit_members WHERE pbx=? AND unit_id=? AND username=?
+                AND starts<=? AND (ends IS NULL OR (? IS NOT NULL AND ends>=?))''',
+                (self.pbx,unit_id,username,start,end,end)).fetchone()
+            if not covered:
+                self._interval('unit_members',unit_id,username,start,end,actor,_transaction=db)
+            for capability in dict.fromkeys(capabilities):
+                existing=db.execute('''SELECT 1 FROM unit_grants WHERE pbx=? AND unit_id=? AND username=?
+                    AND capability=? AND descendants=? AND active=1''',
+                    (self.pbx,unit_id,username,capability,int(descendants))).fetchone()
+                if not existing:
+                    self.grant(username,unit_id,capability,descendants=descendants,actor=actor,_transaction=db)
+        return unit_id
 
     def revoke(self,ident,*,actor=None):
         _id(ident)

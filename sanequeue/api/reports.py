@@ -911,7 +911,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             day=datetime.fromisoformat(value).date()
             if following:day+=timedelta(days=1)
             return datetime.combine(day,datetime.min.time(),ZoneInfo('Asia/Tehran')).timestamp()
-        if op in ('assign','assign_queue','member') and ('start_date' in body or 'end_date' in body):
+        if op in ('assign','assign_queue','member','configure_access') and ('start_date' in body or 'end_date' in body):
             if 'start' in body or 'end' in body or not isinstance(body.get('start_date'),str):raise ValueError('invalid_unit_request')
             body=dict(body);body['start']=local_day(body.pop('start_date'))
             day=body.pop('end_date',None);body['end']=local_day(day,True) if day else None
@@ -924,6 +924,11 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             'assign_queue':({'operation','unit_id','queue','start','end'},lambda:unit_store.assign_queue(body.get('unit_id'),body.get('queue'),body.get('start'),body.get('end'),actor=owner)),
             'member':({'operation','unit_id','username','start','end'},lambda:unit_store.add_member(body.get('unit_id'),body.get('username'),body.get('start'),body.get('end'),actor=owner)),
             'grant':({'operation','unit_id','username','capability','descendants'},lambda:unit_store.grant(body.get('username'),body.get('unit_id'),body.get('capability'),descendants=body.get('descendants',False),actor=owner)),
+            'configure_access':({'operation','username','unit_id','new_unit','endpoint','queue','start','end','capabilities','descendants'},
+                lambda:unit_store.configure_access(username=body.get('username'),unit_id=body.get('unit_id'),
+                    new_unit=body.get('new_unit'),endpoint=body.get('endpoint'),queue=body.get('queue'),
+                    start=body.get('start'),end=body.get('end'),capabilities=body.get('capabilities'),
+                    descendants=body.get('descendants',False),actor=owner)),
             'revoke':({'operation','id'},lambda:unit_store.revoke(body.get('id'),actor=owner)),
             'close':({'operation','id','end','membership'},lambda:unit_store.close_interval(body.get('id'),body.get('end'),membership=body.get('membership',False),actor=owner)),
             'close_queue':({'operation','id','end'},lambda:unit_store.close_queue(body.get('id'),body.get('end'),actor=owner)),
@@ -932,7 +937,7 @@ def install(app, path, *, role, sections, can_queue, own_interfaces=lambda: (), 
             raise ValueError('invalid_unit_request')
         with account_guard():
             if unit_admin()!=owner:abort(403)
-            if op in ('grant','member') and not account_exists(body.get('username')):
+            if op in ('grant','member','configure_access') and (not isinstance(body.get('username'),str) or not account_exists(body['username'])):
                 raise ValueError('unknown_unit_user')
             ident=specs[op][1]()
         app.logger.info('organization access changed actor=%r operation=%s',owner,op)

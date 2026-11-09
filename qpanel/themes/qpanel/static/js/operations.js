@@ -775,6 +775,13 @@ $('test-controls-disable').onclick=async()=>{
  }
  function renderAccountList(){const list=$('account-list');if(!list)return;const grants=policyState?.supervisors||{};
   const entries=Object.entries(accountsCache);
+  const workflowUser=$('unit-workflow-user');
+  if(workflowUser){
+   const selected=workflowUser.value;
+   workflowUser.replaceChildren(new Option(t('انتخاب کاربر','Select an account'),''),
+    ...entries.map(([id,user])=>new Option(user.display_name&&user.display_name!==id?user.display_name+' · '+id:id,id)));
+   if(accountsCache[selected])workflowUser.value=selected;
+  }
   list.innerHTML=entries.map(([id,u])=>{const g=grants[id]||{};return `<div class="user-row-v14"><div class="user-identity"><span class="user-avatar">${esc(id[0]?.toUpperCase()||'?')}</span><div><strong>${esc(u.display_name||id)}</strong><small>${esc(id)} · ${esc(u.role||'viewer')} · <bdi dir="ltr">${esc(u.phone||t('بدون داخلی','No phone'))}</bdi></small></div></div><div><small>${t('صف‌های مجاز','Queues')}</small><strong>${u.role==='admin'?t('تمام صف‌ها','All queues'):esc((g.queues||[]).join('، ')||'—')}</strong></div><div><small>${t('عملیات','Permissions')}</small><span class="user-grant-tags">${u.role==='admin'?t('دسترسی مدیر','Administrator'):esc((g.actions||[]).join(' · ')||'—')}</span></div><div class="user-row-actions"><button type="button" data-edit-user="${esc(id)}">${t('ویرایش','Edit')}</button><button type="button" data-delete-user="${esc(id)}" ${id===cfg.logged_in_user?'disabled':''}>${t('حذف','Delete')}</button></div></div>`;}).join('')||`<p class="empty">${t('حسابی ثبت نشده','No accounts')}</p>`;
   const count=$('user-account-count');if(count)count.textContent=fmt(entries.length);
  }

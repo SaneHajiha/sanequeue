@@ -28,6 +28,24 @@ class UnitScopeTests(unittest.TestCase):
         self.assertEqual(self.store.resolve('manager','full_numbers',10,100)['assignments'],[])
         self.assertEqual(self.store.resolve('other','summary',10,100)['assignments'],[])
 
+    def test_access_workflow_is_atomic_and_retry_safe(self):
+        self.store.assign_endpoint(self.customer,'PJSIP/100',10,40)
+        before=self.store.inventory()
+        args=dict(username='employee',unit_id=None,
+                  new_unit=dict(name='Field support',kind='subunit',parent=self.unit),
+                  endpoint='PJSIP/100',queue='8001',start=10,end=40,
+                  capabilities=['call_details','recording_play'],actor='admin')
+        with self.assertRaises(ScopeConflict):
+            self.store.configure_access(**args)
+        self.assertEqual(self.store.inventory(),before)
+        args['endpoint']='SIP/200'
+        unit=self.store.configure_access(**args)
+        self.assertEqual([row['endpoint'] for row in self.store.resolve('employee','recording_play',10,40)['assignments']],['SIP/200'])
+        self.assertEqual(self.store.resolve('employee','recording_download',10,40)['assignments'],[])
+        after=self.store.inventory()
+        self.assertEqual(self.store.configure_access(**dict(args,unit_id=unit,new_unit=None)),unit)
+        self.assertEqual(self.store.inventory(),after)
+
     def test_historical_assignment_is_half_open_and_cannot_overlap(self):
         first=self.store.assign_endpoint(self.customer,'PJSIP/101',10)
         with self.assertRaises(ScopeConflict):self.store.assign_endpoint(self.agents,'PJSIP/101',20)

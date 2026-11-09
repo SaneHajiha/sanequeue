@@ -21,7 +21,17 @@
    const heads=[t('داخلی مشاهده‌شده','Observed extension'),t('بخش تماس','Segments'),t('پاسخ','Answered'),t('بی‌پاسخ و ناموفق','Unanswered and failed'),t('بدون پاسخ','No answer'),t('مشغول','Busy'),t('سایر ناموفق','Other failed'),t('نامعلوم','Unknown'),t('نرخ پاسخ وضعیت معلوم','Answer rate of known outcomes'),t('مجموع مکالمه','Talk total'),t('میانگین مکالمهٔ پاسخ‌داده','Average answered talk'),t('ریز تماس','Call details')];
    const table=node('table'),thead=node('thead'),header=node('tr');heads.forEach(x=>{const th=node('th',x);th.scope='col';header.append(th);});thead.append(header);table.append(thead);const body=node('tbody');
    for(const row of items){const tr=node('tr'),r=rate(row);[row.endpoint||t('نامعلوم','Unknown'),number(row.segments_started),number(row.answered_segments),number(row.unanswered_segments),number(row.no_answer_segments),number(row.busy_segments),number(row.other_failed_segments),number(row.unknown_disposition_segments),r==null?'—':number(r)+'%',duration(row.known_billsec_sum),duration(row.average_answered_billsec)].forEach(v=>tr.append(node('td',v)));const detail=node('td');if(row.endpoint&&/^(SIP|PJSIP)\/[A-Za-z0-9_.-]{1,48}$/.test(row.endpoint)){const link=node('button',t('نمایش','View'));link.type='button';link.dataset.endpoint=row.endpoint;detail.append(link);}else detail.textContent='—';tr.append(detail);body.append(tr);}table.append(body);host.append(table);
-   const top=items.filter(row=>row.endpoint).slice(0,20);window.SaneQueueReportCharts?.render(chart,{type:'bar',title:t('مقایسهٔ ۲۰ داخلی با بیشترین بخش تماس','Top 20 observed extensions by segments'),unit:t('بخش تماس','Segments'),labels:top.map(r=>r.endpoint),series:[{label:t('پاسخ‌داده','Answered'),values:top.map(r=>r.answered_segments)},{label:t('بی‌پاسخ','Unanswered'),values:top.map(r=>r.unanswered_segments)}]});
+   const top=items.filter(row=>row.endpoint).slice(0,20);
+   window.SaneQueueReportCharts?.render(chart,{type:'bar',layout:'ranking',stacked:true,compact:true,
+    title:t('مقایسهٔ داخلی‌ها بر اساس نتیجه','Compare extensions by outcome'),
+    subtitle:t('حداکثر ۲۰ داخلی بر اساس تعداد بخش تماس','Up to 20 extensions ranked by segment count'),
+    unit:t('بخش تماس','Segments'),labels:top.map(row=>row.endpoint),
+    palette:['#087d73','#a83e62','#636b82'],
+    series:[
+     {label:t('پاسخ‌داده','Answered'),values:top.map(row=>row.answered_segments)},
+     {label:t('بی‌پاسخ یا ناموفق','Unanswered or failed'),values:top.map(row=>row.unanswered_segments)},
+     {label:t('نتیجه نامعلوم','Unknown outcome'),values:top.map(row=>row.unknown_disposition_segments??null)}
+    ]});
    output.textContent=!data.can_search_numbers?t('برای مشاهدهٔ داخلی‌ها مجوز نمایش شماره لازم است.','Full-number permission is required to view endpoints.'):!items.length?t('داده‌ای در این بازه ثبت نشده است.','No data in this period.'):t('مرتب‌شده بر اساس تعداد بخش تماس؛ نمودار حداکثر ۲۰ داخلی را نشان می‌دهد.','Sorted by segments; chart shows at most 20 endpoints.');
    activeParams=p;runTrend();
   }catch{if(generation===serial)output.textContent=t('گزارش دریافت نشد؛ مجوز و بازه را بررسی کنید.','Report unavailable; check permissions and period.');}finally{$('pbx-performance-run').disabled=false;}}

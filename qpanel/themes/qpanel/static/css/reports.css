@@ -218,7 +218,16 @@ body[data-report-target="history-cdr-section"] .pbx-metric-explanation{font-size
 body[data-report-target="history-cdr-section"] .pbx-metric-explanation summary{cursor:pointer;padding:3px 0;color:var(--accent)}
 body[data-report-target="history-cdr-section"] .pbx-metric-explanation p{line-height:1.6;margin:4px 0}
 
-.pbx-endpoint-picker { min-width: 13rem; }
-.pbx-endpoint-picker > div { display: flex; flex-wrap: wrap; gap: .4rem .8rem; max-height: 12rem; overflow: auto; padding: .4rem; }
-.pbx-endpoint-picker > div > label { display: inline-flex; align-items: center; gap: .3rem; }
-.pbx-endpoint-picker input[type=checkbox] { width: auto; }
+.pbx-endpoint-picker { min-inline-size:0; position:relative; align-self:start; }
+.pbx-endpoint-picker>summary { cursor:pointer; padding:.55rem .7rem; color:var(--ink); background:var(--soft); border-radius:8px; }
+.pbx-endpoint-menu {
+  position:absolute; z-index:8; inset-inline-start:0; inline-size:min(18rem,80vw);
+  display:grid; gap:.55rem; padding:.7rem; background:var(--card);
+  border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 24px #0003;
+}
+.pbx-endpoint-picker:not([open]) .pbx-endpoint-menu { display:none; }
+.pbx-endpoint-menu>select { min-height:0; block-size:9rem; direction:ltr; }
+.pbx-endpoint-menu>p:empty { display:none; }
+@media(max-width:900px){
+ .pbx-endpoint-menu { position:static; inline-size:100%; box-shadow:none; }
+}

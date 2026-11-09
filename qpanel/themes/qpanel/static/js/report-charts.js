@@ -15,6 +15,11 @@ const effectiveWidth=host=>Math.max(320,Math.min(1000,Math.floor(host.clientWidt
 function watchSize(host){if(typeof ResizeObserver==='undefined')return;const resource={observer:null,frame:null};resource.observer=new ResizeObserver(()=>{if(resizers.get(host)!==resource)return;const record=state.get(host);if(!record||!current(host,record)){clear(host);return;}if(record.width===effectiveWidth(host))return;record.resizePending=true;if(resource.frame!==null)return;const redraw=()=>{resource.frame=null;if(resizers.get(host)!==resource)return;const latest=state.get(host);if(!latest||!current(host,latest)){clear(host);return;}if(latest.width!==effectiveWidth(host)){const active=document.activeElement,focusLabel=latest.navigationButtons?.includes(active)?active.textContent:undefined;latest.redraw(focusLabel);}else latest.resizePending=false;};if(window.requestAnimationFrame)resource.frame=window.requestAnimationFrame(redraw);else redraw();});resizers.set(host,resource);resource.observer.observe(host);}
 const format=n=>new Intl.NumberFormat(fa?'fa-IR':'en-US',{maximumFractionDigits:2}).format(n);
 const axisFormat=n=>new Intl.NumberFormat(fa?'fa-IR':'en-US',{maximumFractionDigits:1,notation:'compact'}).format(n);
+function axisTicks(maximum,whole){
+ const rough=Math.max(1e-9,(maximum||1)/4),power=10**Math.floor(Math.log10(rough));
+ const step=Math.max(whole?1:0,([1,2,5,10].find(value=>value>=rough/power)||10)*power);
+ return Array.from({length:Math.ceil((maximum||1)/step)+1},(_,index)=>index*step);
+}
 const text=(v,max=160)=>{if(typeof v!=='string'||v.length>max)throw Error('chart_label_invalid');return v;};
 const escape=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
 function download(host,record,blob,extension){if(!fresh(host,record)){if(state.get(host)===record&&!record.resizePending)clear(host);return;}const url=URL.createObjectURL(blob),a=node('a');a.href=url;a.download='sanequeue-report-chart.'+extension;document.body.append(a);try{a.click();}finally{a.remove();URL.revokeObjectURL(url);}}
@@ -32,16 +37,20 @@ try{
  const title=text(input.title),subtitle=text(input.subtitle||'',1000),unit=text(input.unit||'',40);
  let maximum=0;for(const s of series)for(const v of s.values)if(v!==null)maximum=Math.max(maximum,v);
  if(type==='column'||(type==='bar'&&input.stacked===true))for(let i=0;i<count;i++)maximum=Math.max(maximum,series.reduce((sum,item)=>sum+(item.values[i]??0),0));
- if(input.maximum!==undefined){if(typeof input.maximum!=='number'||!Number.isFinite(input.maximum)||input.maximum<0||input.maximum>1e12)throw Error('chart_maximum_invalid');maximum=Math.max(maximum,input.maximum);}const scale=maximum||1;
+ if(input.maximum!==undefined){if(typeof input.maximum!=='number'||!Number.isFinite(input.maximum)||input.maximum<0||input.maximum>1e12)throw Error('chart_maximum_invalid');maximum=Math.max(maximum,input.maximum);}
+ const scaleTicks=axisTicks(maximum,series.every(s=>s.values.every(value=>value===null||Number.isInteger(value))));
+ const scale=scaleTicks.at(-1);
+ const ranking=type==='bar'&&input.layout==='ranking'&&input.stacked===true;
  if(!count){host.append(node('p',t('داده‌ای در این بازه و محدوده ثبت نشده است.','No recorded data in this period and scope.')));return true;}
- const pageSize=type==='line'?60:type==='column'?24:input.compact===true?5:12,seriesLimited=input.series.length>4;let offset=0;
+ const pageSize=type==='line'?60:type==='column'?24:ranking?8:input.compact===true?5:12,seriesLimited=input.series.length>4;let offset=0;
  function draw(focusLabel){
   host.replaceChildren();const colors=theme(host);if(Array.isArray(input.palette))input.palette.slice(0,4).forEach((color,i)=>{if(typeof color==='string'&&/^#[0-9a-f]{6}$/i.test(color)&&contrast(color,colors.paper)>=3)colors.colors[i]=color;});const record={filters:filters(),theme:JSON.stringify(colors),redraw:draw},id='sq-report-chart-'+(++sequence),end=Math.min(count,offset+pageSize),figure=node('figure');figure.className='sq-report-chart';
   const caption=node('figcaption'),heading=node('strong',title),sub=node('span',subtitle);caption.append(heading,sub);figure.append(caption);
   const legend=node('ul');legend.className='sq-chart-legend';series.forEach((s,j)=>{const item=node('li'),swatch=node('span');swatch.className='sq-chart-swatch';swatch.style.backgroundColor=colors.colors[j];swatch.textContent=type==='line'?['●','◆','■','▲'][j]:'';item.append(swatch,node('span',s.label));legend.append(item);});figure.append(legend);
   const note=node('p',t('— داده نامعلوم · ۰ مقدار صفرِ ثبت‌شده','— Unknown evidence · 0 Recorded zero')+(unit?' · '+t('واحد: ','Unit: ')+unit:''));note.className='sq-chart-note';figure.append(note);
   if(seriesLimited){const warning=node('p',t('فقط ۴ سری نخست نمایش داده می‌شود؛ داده‌های دیگر در این نمودار نمایش داده نمی‌شوند.','Only the first 4 series are displayed; other series are not shown in this chart.'));warning.className='sq-chart-warning';figure.append(warning);}
-  const width=effectiveWidth(host),left=58,right=width-56,top=30,bottom=252,rowHeight=type==='bar'&&input.stacked===true?44:32+series.length*22,height=(type==='line'||type==='column')?310:48+(end-offset)*rowHeight;record.width=width;
+  if(ranking)figure.className+=' sq-report-ranking';
+  const width=effectiveWidth(host),left=58,right=width-56,top=30,bottom=252,rowHeight=ranking?60:type==='bar'&&input.stacked===true?44:32+series.length*22,height=(type==='line'||type==='column')?310:48+(end-offset)*rowHeight;record.width=width;
   const svg=svgNode('svg',{xmlns:NS,viewBox:`0 0 ${width} ${height}`,width,height,role:'group','aria-labelledby':id+'-title '+id+'-description'});
   svg.append(svgNode('title',{id:id+'-title'},title),svgNode('desc',{id:id+'-description'},subtitle+' '+series.map(s=>s.label).join(' · ')+' '+t('مقادیر دقیق در جدول همراه نمودار آمده است.','Exact values are available in the accompanying table.')),svgNode('rect',{width,height,fill:colors.paper}));
   const txt=(px,py,value,attrs={})=>svgNode('text',{x:px,y:py,fill:colors.ink,'font-family':'Vazirmatn, Tahoma, Arial, sans-serif','font-size':14,direction:'ltr','unicode-bidi':'isolate',...attrs},value);
@@ -51,17 +60,39 @@ try{
   function mark(shape,i,j){const label=describe(i,j);shape.setAttribute('tabindex',marks.length?'-1':'0');shape.setAttribute('role','img');shape.setAttribute('aria-label',label);shape.append(svgNode('title',{},label));shape.addEventListener('focus',()=>{tooltip.textContent=label;});shape.addEventListener('pointerenter',()=>{tooltip.textContent=label;});shape.addEventListener('keydown',event=>{if(event.key==='Escape'){tooltip.textContent='';return;}const delta=['ArrowRight','ArrowDown'].includes(event.key)?1:['ArrowLeft','ArrowUp'].includes(event.key)?-1:0;if(!delta)return;event.preventDefault();marks[focused].setAttribute('tabindex','-1');focused=(marks.indexOf(shape)+delta+marks.length)%marks.length;marks[focused].setAttribute('tabindex','0');marks[focused].focus?.();});marks.push(shape);svg.append(shape);}
   if(type==='line'){
    const px=i=>left+(x[i]-x[offset])/(x[end-1]-x[offset]||1)*(right-left),py=v=>bottom-v/scale*(bottom-top);
-   for(let k=0;k<=4;k++){const y=bottom-k*(bottom-top)/4;svg.append(svgNode('line',{x1:left,x2:right,y1:y,y2:y,stroke:colors.line,'stroke-dasharray':'3 4'}),txt(left-8,y+4,axisFormat(scale*k/4),{'text-anchor':'end',fill:colors.muted}));}
+   for(const value of scaleTicks){const y=py(value);svg.append(svgNode('line',{x1:left,x2:right,y1:y,y2:y,stroke:colors.line,'stroke-dasharray':'3 4'}),txt(left-8,y+4,axisFormat(value),{'text-anchor':'end',fill:colors.muted}));}
    const ticks=new Set([offset,end-1]);const tickCount=Math.max(1,Math.min(4,Math.floor((right-left)/160)));for(let k=1;k<tickCount;k++)ticks.add(offset+Math.round((end-offset-1)*k/tickCount));for(const i of ticks)svg.append(txt(px(i),bottom+23,labels[i].length>18?labels[i].slice(0,17)+'…':labels[i],{'text-anchor':i===offset?'start':i===end-1?'end':'middle',direction:'ltr',fill:colors.muted}));
    series.forEach((s,j)=>{let previous=null;for(let i=offset;i<end;i++){const value=s.values[i];if(value===null){previous=null;continue;}const point=[px(i),py(value)];if(previous&&!gaps[i])svg.append(svgNode('line',{x1:previous[0],y1:previous[1],x2:point[0],y2:point[1],stroke:colors.colors[j],'stroke-width':2.5,'stroke-dasharray':['','7 3','2 3','9 3 2 3'][j]}));mark(svgNode(j===2?'rect':'circle',j===2?{x:point[0]-4,y:point[1]-4,width:8,height:8,fill:colors.colors[j]}:{cx:point[0],cy:point[1],r:4,fill:colors.colors[j],stroke:colors.paper,'stroke-width':1}),i,j);previous=point;}});
   }else if(type==='column'){
    const px=i=>end-offset===1?(left+right)/2:left+(x[i]-x[offset])/(x[end-1]-x[offset])*(right-left),py=v=>bottom-v/scale*(bottom-top);
-   for(let k=0;k<=4;k++){const y=bottom-k*(bottom-top)/4;svg.append(svgNode('line',{x1:left,x2:right,y1:y,y2:y,stroke:colors.line,'stroke-dasharray':'3 4'}),txt(left-8,y+4,axisFormat(scale*k/4),{'text-anchor':'end',fill:colors.muted}));}
+   for(const value of scaleTicks){const y=py(value);svg.append(svgNode('line',{x1:left,x2:right,y1:y,y2:y,stroke:colors.line,'stroke-dasharray':'3 4'}),txt(left-8,y+4,axisFormat(value),{'text-anchor':'end',fill:colors.muted}));}
    const ticks=new Set([offset,end-1]);const tickCount=Math.max(1,Math.min(4,Math.floor((right-left)/160)));for(let k=1;k<tickCount;k++)ticks.add(offset+Math.round((end-offset-1)*k/tickCount));for(const i of ticks)svg.append(txt(px(i),bottom+23,labels[i].length>18?labels[i].slice(0,17)+'…':labels[i],{'text-anchor':i===offset?'start':i===end-1?'end':'middle',fill:colors.muted}));
    const barWidth=Math.max(4,Math.min(24,(right-left)/Math.max(1,end-offset)*.55));
    for(let i=offset;i<end;i++){let stacked=0;series.forEach((item,j)=>{const value=item.values[i];if(value===null)return;const next=stacked+value,height=Math.max(1,py(stacked)-py(next));mark(svgNode('rect',{x:px(i)-barWidth/2,y:py(next),width:barWidth,height,fill:colors.colors[j]}),i,j);stacked=next;});}
+  }else if(ranking){
+   const start=24,finish=width-24,span=finish-start;
+   const px=value=>fa?finish-value/scale*span:start+value/scale*span;
+   for(const value of scaleTicks)svg.append(txt(px(value),20,axisFormat(value),{'text-anchor':'middle',fill:colors.muted}));
+   for(let i=offset;i<end;i++){
+    const y=45+(i-offset)*rowHeight;
+    const limit=width<480?14:23;
+    const label=labels[i].length>limit?labels[i].slice(0,limit-1)+'…':labels[i];
+    svg.append(txt(fa?finish:start,y,label,{'text-anchor':fa?'end':'start','font-weight':700}));
+    let total=0;
+    const values=series.map(s=>s.values[i]);
+    const stats=values.map(value=>value===null?'—':format(value)).join(' / ');
+    svg.append(txt(fa?start:finish,y,stats,{'text-anchor':fa?'start':'end','font-weight':650,'font-size':12}),
+      svgNode('rect',{x:start,y:y+9,width:span,height:14,rx:5,fill:colors.line}));
+    series.forEach((s,j)=>{
+     const value=s.values[i];
+     if(value===null)return;
+     const from=px(total);total+=value;const to=px(total);
+     if(value===0)mark(svgNode('circle',{cx:from,cy:y+16,r:3,fill:colors.colors[j]}),i,j);
+     else mark(svgNode('rect',{x:Math.min(from,to),y:y+9,width:Math.abs(from-to),height:14,rx:3,fill:colors.colors[j]}),i,j);
+    });
+   }
   }else{
-   for(let k=0;k<=4;k++){const x=left+k*(right-left)/4;svg.append(svgNode('line',{x1:x,x2:x,y1:28,y2:height-12,stroke:colors.line,'stroke-dasharray':'3 4'}),txt(x,16,axisFormat(scale*k/4),{'text-anchor':'middle',fill:colors.muted}));}
+   for(const value of scaleTicks){const x=left+value/scale*(right-left);svg.append(svgNode('line',{x1:x,x2:x,y1:28,y2:height-12,stroke:colors.line,'stroke-dasharray':'3 4'}),txt(x,16,axisFormat(value),{'text-anchor':'middle',fill:colors.muted}));}
    for(let i=offset;i<end;i++){const y=40+(i-offset)*rowHeight;svg.append(txt(fa?right:left,y,labels[i].length>Math.floor((right-left)/8)?labels[i].slice(0,Math.max(5,Math.floor((right-left)/8)-1))+'…':labels[i],{'text-anchor':'start',direction:fa?'rtl':'ltr','font-weight':600}));let stacked=0;series.forEach((s,j)=>{const value=s.values[i],isStacked=input.stacked===true,barY=y+10+(isStacked?0:j*22),barX=left+(isStacked?stacked/scale*(right-left):0);if(value!==null){mark(value===0?svgNode('circle',{cx:barX,cy:barY+6,r:3,fill:colors.colors[j]}):svgNode('rect',{x:barX,y:barY,width:Math.max(1,value/scale*(right-left)),height:12,rx:3,fill:colors.colors[j]}),i,j);if(isStacked)stacked+=value;}if(!isStacked)svg.append(txt(right+8,barY+10,value===null?'—':format(value).length>7?axisFormat(value):format(value),{'font-size':12}));});if(input.stacked===true)svg.append(txt(right+8,y+20,series.some(s=>s.values[i]===null)?'—':format(stacked),{'font-size':12}));}
   }
   const viewport=node('div');viewport.className='sq-chart-viewport';viewport.append(svg);figure.append(viewport,tooltip);

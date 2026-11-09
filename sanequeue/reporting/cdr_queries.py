@@ -89,8 +89,20 @@ def _where(archive,start,end,filters,*,unit_scope=None,unit_capability=None):
         if not isinstance(value,str) or len(value)>1100:raise ValueError('invalid_cdr_endpoint_filter')
         parts=value.split(',')
         if not 1<=len(parts)<=20:raise ValueError('invalid_cdr_endpoint_filter')
-        endpoints=list(dict.fromkeys(_endpoint(part.strip()) for part in parts))
-        clean['endpoint']=','.join(endpoints)
+        tokens=[]
+        endpoints=[]
+        for part in parts:
+            token=part.strip()
+            digits=_phone(token)
+            if digits is not None and token.isdecimal():
+                tokens.append(digits)
+                endpoints.extend(('PJSIP/'+digits,'SIP/'+digits))
+            else:
+                token=_endpoint(token)
+                tokens.append(token)
+                endpoints.append(token)
+        endpoints=list(dict.fromkeys(endpoints))
+        clean['endpoint']=','.join(dict.fromkeys(tokens))
         clause+=' AND p.inventory_observed IS NOT NULL AND p.agent IN ('+','.join('?' for _ in endpoints)+')';args.extend(endpoints)
     for key in (*_NUMBER_FIELDS,'party'):
         if key not in clean:continue

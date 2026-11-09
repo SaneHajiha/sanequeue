@@ -8,3 +8,10 @@
 @media(max-width:600px){.sq-report-chart{padding:.65rem;border-radius:12px}.sq-chart-legend{gap:.5rem}.sq-chart-actions{justify-content:stretch}.sq-chart-actions button{flex:1}.sq-chart-note{margin:.4rem 0}}
 @media print{.sq-chart-actions,.sq-chart-navigation button{display:none}.sq-chart-viewport{overflow:visible}.sq-report-chart{break-inside:avoid}}
 
+.sq-report-chart { border-radius:14px; padding:clamp(.65rem,1.6vw,1.25rem); }
+.sq-report-chart figcaption strong { font-size:clamp(1rem,1.3vw,1.15rem); }
+.sq-chart-legend li { padding:.2rem .45rem; background:var(--soft); border-radius:6px; }
+.sq-chart-viewport svg { max-inline-size:1000px; margin-inline:auto; }
+.sq-report-ranking .sq-chart-viewport { border:1px solid var(--line); }
+.sq-report-ranking .sq-chart-note { margin-block:.45rem .75rem; }
+
