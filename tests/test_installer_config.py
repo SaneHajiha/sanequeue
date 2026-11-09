@@ -60,6 +60,37 @@ class InstallerConfigurationTests(unittest.TestCase):
     def test_optional_survey_writer_is_in_install_backup_and_rollback_unit_set(self):
         self.assertIn('sanequeue-surveys.service',self.module.REPORTING_UNITS)
 
+    def test_rollback_restores_snapshot_and_retains_post_snapshot_files(self):
+        import stat
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            backup, state = root/'backup', root/'state'
+            backup.mkdir(mode=0o750)
+            state.mkdir()
+            (backup/'history.sqlite3').write_text('snapshot')
+            (state/'history.sqlite3').write_text('new')
+            (state/'failed-only').write_text('retained')
+            self.module.restore_private_tree(backup, state)
+            self.assertEqual((state/'history.sqlite3').read_text(), 'snapshot')
+            self.assertFalse((state/'failed-only').exists())
+            self.assertEqual(stat.S_IMODE(state.stat().st_mode), 0o750)
+            preserved = next(root.glob('.state-rollback-*/failed-install'))
+            self.assertEqual((preserved/'history.sqlite3').read_text(), 'new')
+            self.assertEqual((preserved/'failed-only').read_text(), 'retained')
+
+    def test_rollback_rejects_directory_symlink(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            backup, state = root/'backup', root/'state'
+            backup.mkdir()
+            state.symlink_to(backup, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, 'unsafe_rollback_directory'):
+                self.module.restore_private_tree(backup, state)
+
     def test_state_permissions_stay_inside_open_directory(self):
         import stat
         import tempfile

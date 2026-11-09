@@ -4,6 +4,11 @@ on:
     branches: [master]
     paths: ['.github/releases/current.json']
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the validated prerelease from master
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -47,7 +52,8 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'],'a') as stream:
               stream.write(f'version={version}\ntag=v{version}\nnotes={notes}\n')
           PY
-      - run: pip install -r requirements/modern.txt pytest httpx2
+      - run: pip install -r requirements/modern.txt -r requirements/reporting.txt pytest httpx2
+      - run: python -m pip check
       - run: pybabel compile -d qpanel/translations
       - run: python -m pytest tests --ignore=tests/historical
       - run: node --check qpanel/themes/qpanel/static/js/operations.js
@@ -55,6 +61,7 @@ jobs:
       - run: node --check qpanel/themes/qpanel/static/js/activity.js
       - run: node --check qpanel/themes/qpanel/static/js/organization.js
   publish:
+    if: github.ref == 'refs/heads/master' && github.event_name == 'workflow_dispatch' && inputs.publish
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 5

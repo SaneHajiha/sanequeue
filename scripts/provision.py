@@ -2,6 +2,7 @@
 """Provision a single-node local Issabel/Asterisk install with reversible changes."""
 import argparse,configparser,getpass,grp,ipaddress,json,os,pwd,re,secrets,shutil,socket,subprocess,sys,time
 import stat
+import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
@@ -80,6 +81,30 @@ def prepare_state_permissions(root,uid,gid):
             private_permissions(name,uid,gid,0o600,dir_fd=directory)
 
 
+def restore_private_tree(backup, target):
+    """Restore a quiesced directory while retaining the failed install's data."""
+    backup, target = Path(backup), Path(target)
+    if backup.is_symlink() or target.is_symlink():
+        raise ValueError('unsafe_rollback_directory')
+    if not backup.exists() and not target.exists():
+        return
+    holding = Path(tempfile.mkdtemp(prefix=f'.{target.name}-rollback-', dir=target.parent))
+    replacement = holding/'replacement'
+    previous = holding/'failed-install'
+    if backup.exists():
+        run(['cp', '-a', '--', str(backup), str(replacement)], timeout=900)
+    if target.exists():
+        target.rename(previous)
+    try:
+        if replacement.exists():
+            replacement.rename(target)
+    except OSError:
+        if previous.exists():
+            previous.rename(target)
+        raise
+    print('Preserved rollback directory: '+str(holding))
+
+
 def validate_origin(value):
     parsed=urlparse(value)
     if any(ord(c)<33 for c in value) or parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or parsed.password or parsed.path not in ('','/') or parsed.query or parsed.fragment:
@@ -125,6 +150,9 @@ def main():
     state=Path('/var/lib/sanequeue');etc=Path('/etc/sanequeue');link=Path('/opt/sanequeue')
     resolved_state=state.resolve()
     if resolved_state.parent!=Path('/var/lib') or not resolved_state.name.startswith('sanequeue'):raise ValueError('unsafe_private_state_target')
+    if etc.is_symlink():raise ValueError('unsafe_configuration_directory')
+    activate_requested=os.getenv('SANEQUEUE_ACTIVATE_TELEPHONY','0')
+    if activate_requested not in ('0','1'):raise ValueError('invalid_telephony_activation_flag')
     existing=read_accounts(state/'local_accounts.json')
     username=password=phone=None
     if not existing:
@@ -143,6 +171,9 @@ def main():
     except ValueError:pass
     web_port=parsed.port or 5000 if parsed.scheme=='http' and bind!='127.0.0.1' else 5000
     if not 1024<=web_port<=65535 or web_port in (5038,5060,5061,16379):raise ValueError('choose_a_non_pbx_web_port')
+    channel_count=run([asterisk,'-rx','core show channels count']).stdout.decode(errors='replace')
+    if not re.search(r'(?m)^0 active channels?\s*$',channel_count):
+        raise RuntimeError('installation_requires_idle_pbx')
     probe=socket.socket();occupied=probe.connect_ex(('127.0.0.1',16379))==0;probe.close()
     if occupied and subprocess.run(['systemctl','is-active','--quiet','sanequeue-redis']).returncode:
         raise RuntimeError('private_redis_port_in_use_by_another_service')
@@ -151,6 +182,7 @@ def main():
     os.chmod(backup,0o700)
     units=('sanequeue.service','sanequeue-collector.service','sanequeue-redis.service','sanequeue-inventory.service','sanequeue-inventory.timer','sanequeue-fastagi.service','sanequeue-pbx-apply.service','sanequeue-pbx-apply.timer')+REPORTING_UNITS
     active={unit:subprocess.run(['systemctl','is-active','--quiet',unit]).returncode==0 for unit in units}
+    enabled={unit:subprocess.run(['systemctl','is-enabled','--quiet',unit]).returncode==0 for unit in units}
     old_link=str(link.resolve()) if link.exists() else None
     old_physical=None
     created_control_link=False
@@ -162,10 +194,10 @@ def main():
             if active[unit] or (Path('/etc/systemd/system')/unit).exists():
                 stop_attempted.append(unit)
                 run(['systemctl','stop',unit])
-        if etc.exists():shutil.copytree(etc,backup/'etc')
-        if state.exists():shutil.copytree(state,backup/'state',symlinks=True)
-        shutil.copy2(manager,backup/'manager.conf')
-        if custom.exists():shutil.copy2(custom,backup/'manager_custom.conf')
+        if etc.exists():run(['cp','-a','--',str(etc),str(backup/'etc')],timeout=900)
+        if resolved_state.exists():run(['cp','-a','--',str(resolved_state),str(backup/'state')],timeout=900)
+        run(['cp','-a','--',str(manager),str(backup/'manager.conf')])
+        if custom.exists():run(['cp','-a','--',str(custom),str(backup/'manager_custom.conf')])
         for unit in units:
             path=Path('/etc/systemd/system')/unit
             if path.exists():shutil.copy2(path,backup/unit)
@@ -294,8 +326,13 @@ MediaJobs(s).initialize()
             if gateway_ready:break
             time.sleep(1)
         if not gateway_ready:raise RuntimeError('gateway_acceptance_failed')
-        (backup/'result.json').write_text(json.dumps({'release':str(release),'previous_source':old_link,'origin':origin,'succeeded':True,'telephony_apply':'pending_separate_stage'}))
-        telephony=activate_telephony(run,state)
+        telephony={'state':'pending','reason':'activation_requires_operator'}
+        if activate_requested=='1':
+            telephony=activate_telephony(run,state)
+        elif active['sanequeue-pbx-apply.timer']:
+            run(['systemctl','start','sanequeue-pbx-apply.timer'])
+            telephony={'state':'previous_timer_restored','reason':'verify_pbx_adapter_status'}
+        (backup/'result.json').write_text(json.dumps({'release':str(release),'previous_source':old_link,'origin':origin,'succeeded':True,'telephony_apply':telephony['state']}))
         print('SaneQueue installed. Open '+origin+'/operations')
         print('Telephone integration: '+json.dumps(telephony)+'; verify PBX adapter status. Busy calls defer dialplan changes; the timer retries when idle.')
         print('Queues and internal phones are discovered automatically. No default administrator password exists.')
@@ -314,22 +351,25 @@ MediaJobs(s).initialize()
             control_link.unlink(missing_ok=True)
         for unit in units:
             if unit=='sanequeue-fastagi.service' and active[unit]:continue
-            subprocess.run(['systemctl','stop',unit],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            if active[unit] or (Path('/etc/systemd/system')/unit).exists():
+                run(['systemctl','stop',unit])
+            if not enabled[unit] and subprocess.run(['systemctl','is-enabled','--quiet',unit]).returncode==0:
+                run(['systemctl','disable',unit])
         if link.is_symlink():link.unlink()
         if old_physical and old_physical.exists():old_physical.rename(link)
         elif old_link:link.symlink_to(old_link,target_is_directory=True)
         for path,name in ((manager,'manager.conf'),(custom,'manager_custom.conf')):
-            if (backup/name).exists():shutil.copy2(backup/name,path)
+            if (backup/name).exists():run(['cp','-aT','--remove-destination','--',str(backup/name),str(path)])
             elif path==custom and path.exists():path.unlink()
         for unit in units:
             target=Path('/etc/systemd/system')/unit
             if (backup/unit).exists():shutil.copy2(backup/unit,target)
             elif target.exists():target.unlink()
-        if (backup/'etc').exists():shutil.copytree(backup/'etc',etc,dirs_exist_ok=True)
-        if (backup/'state').exists():shutil.copytree(backup/'state',state,dirs_exist_ok=True,symlinks=True)
+        restore_private_tree(backup/'etc',etc)
+        restore_private_tree(backup/'state',resolved_state)
         run([asterisk,'-rx','manager reload']);run(['systemctl','daemon-reload'])
         for unit,was_active in active.items():
-            if was_active:subprocess.run(['systemctl','start',unit],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            if was_active:run(['systemctl','start',unit])
         print('Installation failed; previous source/configuration/services restored. Backup: '+str(backup),file=sys.stderr)
         raise
 
