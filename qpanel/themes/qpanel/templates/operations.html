@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="{{ theme_static('css/date-picker.css') }}?v=20261028-1">
 <link rel="stylesheet" href="{{ theme_static('css/report-date-range.css') }}?v=20261103-1">
 <link rel="stylesheet" href="{{ theme_static('css/sanequeue-design-system.css') }}?v={{ current_version() }}">
+{% if user_role == 'admin' %}<link rel="stylesheet" href="{{ theme_static('css/access-center.css') }}?v={{ current_version() }}">{% endif %}
 </head>
 <body data-view="live">
 <a class="skip" href="#main">{{ t('رفتن به محتوا','Skip to content') }}</a>
@@ -260,23 +261,59 @@
  </section>
 {% if user_role == 'admin' %}
 <section id="users-view" class="view" hidden>
- <div class="detail-hero detail-hero--users"><div class="detail-hero-top"><div class="hero-identity"><span class="hero-symbol">♧</span><div><span class="hero-kicker">SANEQUEUE / ACCESS MANAGEMENT</span><h2>{{ t('مرکز کاربران و دسترسی‌ها','User and access center') }}</h2><p>{{ t('حساب، رمز، داخلی تلفن، صف‌های مجاز و سطح عملیات در یک صفحه','Manage account, phone, queue scope and action permissions together') }}</p></div></div><span class="source-pill">RBAC / ADMIN</span></div></div>
- <div class="users-intro panel"><div><strong>{{ t('مدیریت حساب‌ها','Accounts') }}</strong><p>{{ t('برای ویرایش روی نام کاربر در فهرست کلیک کن؛ رمز جدید برای ویرایش اختیاری است.','Select a user to edit. Leave password blank to keep existing password.') }}</p></div><a class="access-workflow-link" href="#unit-access-panel">{{t('تعریف دسترسی سازمانی','Set up organization access')}}</a><button id="user-clear" type="button">{{ t('کاربر جدید','New user') }} +</button></div>
- <div class="users-layout">
-  <div class="users-main">
-  <section class="panel accounts-panel" id="accounts-admin-panel"><div class="panel-heading"><div><h2>{{ t('کاربران و داخلی‌های مجاز','Local users & phone mapping') }}</h2><p>{{ t('ایجاد حساب محلی با رمز هش‌شده؛ هر داخلی فقط به حساب مربوط متصل می‌شود. صف‌های مجاز در بخش قوانین تعریف می‌شوند.','Create hashed local accounts with their assigned phone. Queue grants are configured in policies.') }}</p></div></div>
-    <form id="account-create-form" class="account-grid">
-      <label>{{ t('نام کاربری','Username') }}<input id="account-user" autocomplete="off" required pattern="[A-Za-z0-9_.@-]{2,64}"></label>
-      <label>{{ t('نقش','Role') }}<select id="account-role"><option value="supervisor">Supervisor</option><option value="agent">Agent</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select></label>
+ <nav class="access-switch" aria-label="{{t('بخش‌های مدیریت دسترسی','Access management sections')}}">
+  <button type="button" data-access-section="accounts" aria-pressed="true" aria-controls="accounts-admin-panel">{{t('کاربران','Users')}}</button>
+  <button type="button" data-access-section="organization" aria-pressed="false" aria-controls="unit-access-panel">{{t('واحدها و دسترسی سازمانی','Units and organization access')}}</button>
+ </nav>
+ <section class="panel accounts-panel access-directory" id="accounts-admin-panel" aria-labelledby="account-directory-title">
+  <header class="access-directory-header">
+   <div><div class="access-title"><h2 id="account-directory-title">{{t('فهرست کاربران','User directory')}}</h2><span id="user-account-count" class="access-pill" role="status">—</span></div><p>{{t('حساب‌ها، نقش‌ها و محدودهٔ دسترسی به صف‌ها را از اینجا مدیریت کنید.','Manage accounts, roles and queue access here.')}}</p></div>
+   <button id="user-clear" class="primary" type="button" aria-haspopup="dialog"><span aria-hidden="true">＋</span> {{t('ساخت کاربر','Create user')}}</button>
+  </header>
+  <div class="access-directory-tools">
+   <label>{{t('جست‌وجوی کاربران','Search users')}}<input id="account-query" type="search" placeholder="{{t('نام، نام کاربری یا داخلی','Name, username or extension')}}" aria-controls="account-list"></label>
+   <label>{{t('نقش','Role')}}<select id="account-role-filter" aria-controls="account-list"><option value="">{{t('همهٔ نقش‌ها','All roles')}}</option><option value="admin">{{t('مدیر','Administrator')}}</option><option value="supervisor">{{t('سرپرست','Supervisor')}}</option><option value="agent">{{t('کارشناس','Agent')}}</option><option value="viewer">{{t('مشاهده‌گر','Viewer')}}</option></select></label>
+  </div>
+  <div class="access-directory-feedback"><p id="account-feedback" role="status" class="access-directory-status"></p><button id="account-saved-org" type="button" hidden>{{t('تنظیم دسترسی سازمانی این کاربر','Set this user’s organization access')}}</button></div>
+  <div id="account-list" class="account-list" aria-busy="true"><p class="access-empty">{{t('در حال دریافت کاربران…','Loading users…')}}</p></div>
+ </section>
+
+ <dialog id="account-dialog" class="access-dialog" aria-labelledby="account-editor-title">
+  <form id="account-create-form" novalidate>
+   <header class="access-dialog-header">
+    <div><p class="access-eyebrow">{{t('مدیریت حساب','Account management')}}</p><h2 id="account-editor-title">{{t('ساخت کاربر','Create user')}}</h2></div>
+    <button type="button" id="account-close" aria-label="{{t('بستن','Close')}}">×</button>
+   </header>
+   <ol class="access-steps" aria-label="{{t('مراحل ساخت و ویرایش کاربر','Account setup steps')}}">
+    <li aria-current="step"><span aria-hidden="true">{{t('۱','1')}}</span>{{t('حساب','Account')}}</li>
+    <li><span aria-hidden="true">{{t('۲','2')}}</span>{{t('دسترسی','Access')}}</li>
+    <li><span aria-hidden="true">{{t('۳','3')}}</span>{{t('مرور و ثبت','Review & save')}}</li>
+   </ol>
+   <div class="access-dialog-body">
+    <section data-account-step="0" aria-labelledby="account-identity-title">
+     <h3 id="account-identity-title" tabindex="-1">{{t('مشخصات حساب','Account details')}}</h3>
+     <p class="access-step-note">{{t('نام ورود، نقش و در صورت نیاز داخلی کاربر را مشخص کنید.','Set the sign-in name, role and, when needed, an extension.')}}</p>
+     <div class="account-grid access-identity-fields">
+      <label>{{ t('نام کاربری','Username') }}<input id="account-user" dir="ltr" spellcheck="false" autocapitalize="none" autocomplete="off" maxlength="64" required pattern="[A-Za-z0-9_.@\-]{2,64}"></label>
+      <label>{{ t('نقش','Role') }}<select id="account-role"><option value="viewer">{{t('مشاهده‌گر','Viewer')}}</option><option value="agent">{{t('کارشناس','Agent')}}</option><option value="supervisor">{{t('سرپرست','Supervisor')}}</option><option value="admin">{{t('مدیر','Administrator')}}</option></select><small id="account-role-help"></small></label>
       <label>{{ t('داخلی کاربر','Assigned phone') }}
        <select id="account-phone" dir="ltr" aria-describedby="account-phone-status user-catalog-info"><option value="">{{ t('انتخاب داخلی از ایزابل / AMI','Select extension from PBX') }}</option></select>
        <small id="account-phone-status" role="status">{{ t('ابتدا به AMI متصل شوید؛ فهرست داخلی‌ها خودکار خوانده می‌شود.','Connect AMI to load PBX extensions.') }}</small>
       </label>
-      <label>{{ t('رمز جدید؛ حداقل ۱۲ نویسه','New password (min 12 chars)') }}<input id="account-password" type="password" autocomplete="new-password" minlength="12"></label>
+      <label>{{ t('رمز جدید؛ حداقل ۱۲ نویسه','New password (min 12 chars)') }}<input id="account-password" type="password" autocomplete="new-password" minlength="12" maxlength="200" aria-describedby="account-password-help"><small id="account-password-help"></small></label>
+     </div>
+     <div class="access-catalog"><button type="button" id="refresh-user-catalog">{{t('بازخوانی داخلی‌ها و صف‌ها','Reload extensions and queues')}}</button><small id="user-catalog-info" role="status"></small></div>
+    </section>
+    <section data-account-step="1" aria-labelledby="account-scope-title" hidden>
+     <h3 id="account-scope-title" tabindex="-1">{{t('محدوده و مجوزها','Scope and permissions')}}</h3>
+     <p class="access-step-note">{{t('صف‌های مجاز را مشخص کنید. عملیات، ضبط مکالمه و بخش‌های پنل را در صورت نیاز باز کنید.','Choose permitted queues. Open the operation, recording and panel settings as needed.')}}</p>
+     <p id="account-admin-scope" class="access-info" hidden>{{t('نقش مدیر به همهٔ صف‌ها و عملیات مدیریتی دسترسی دارد. بخش‌های قابل مشاهدهٔ پنل در پایین قابل تنظیم‌اند.','Administrators have all-queue and management access. Visible panel sections can be configured below.')}}</p>
       <fieldset class="user-full-row sq-pick-field" id="user-queues-field"><legend>{{ t('انتخاب صف‌های مجاز','Choose permitted queues') }}</legend>
+      <label class="access-queue-search">{{t('جست‌وجوی صف','Find a queue')}}<input id="account-queue-query" type="search" placeholder="{{t('شماره یا نام صف','Queue number or name')}}" aria-controls="user-queues"></label>
       <div id="user-queues" class="sq-choice-grid"><span class="muted">{{ t('دریافت صف‌ها از AMI...','Loading queues...') }}</span></div>
       <small>{{ t('صف‌ها از اتصال زنده AMI خوانده می‌شوند؛ انتخاب چندتایی با تیک.','Queues are loaded from AMI; check one or more.') }}</small>
       </fieldset>
+      <details class="access-editor-detail" id="account-operations-detail"><summary><span>{{t('عملیات صف و ضبط مکالمه','Queue operations and recordings')}}</span><span id="account-operations-count" class="access-pill"></span></summary>
       <fieldset id="user-permission-select" class="user-permission-checks user-full-row"><legend>{{ t('مجوزهای این کاربر','Allowed operations') }}</legend>
        <div class="access-grant-group"><h3>{{ t('پایش و کنترل صف','Queue monitoring & control') }}</h3>
        <label><input type="checkbox" value="view" checked> {{ t('مشاهده','View') }}</label>
@@ -302,25 +339,29 @@
        <label><input type="checkbox" id="recording-limit-queues"> {{ t('پخش و دانلود را به صف‌های انتخابی محدود کن','Restrict playback and download to selected queues') }}</label>
        <div id="user-recording-queues" class="sq-choice-grid" hidden></div>
        <p class="report-note">{{ t('ابتدا مجوز پخش یا دانلود را انتخاب کنید. اگر محدودیت را فعال کنید و صفی تیک نزنید، هیچ ضبط صفی در دسترس نیست. برای تماس مستقیم داخلی‌ها، بخش دسترسی سازمانی را باز کنید.','Enable playback or download first. With restriction enabled and no queues selected, no queue recordings are accessible. Use organization access for direct extension calls.') }}</p>
-       <button type="button" data-open="users" data-scroll="unit-access-panel">{{ t('دسترسی ضبط تماس مستقیم داخلی‌ها','Direct extension recording access') }}</button>
       </fieldset>
 
-      <fieldset class="user-permission-checks user-full-row"><legend>{{ t('بخش‌های مجاز پنل','Allowed panel sections') }}</legend><div id="user-menu-select" class="user-permission-checks"></div><button type="button" id="user-menu-defaults">{{ t('انتخاب همهٔ بخش‌های مجاز نقش','Select all sections allowed by role') }}</button><p class="muted">{{ t('نقش سقف اختیار را تعیین می‌کند؛ منوها فقط در همان سقف قابل انتخاب‌اند. مجوز صف و عملیات نیز جداگانه بررسی می‌شود.','Role sets the permission ceiling. Sections stay within it; queue and action grants are checked separately.') }}</p></fieldset>
-      <button type="submit" class="primary">{{ t('ثبت یا به‌روزرسانی حساب','Create or update account') }}</button>
-    </form><div id="account-feedback" role="status"></div><div class="account-directory-head"><h3>{{ t('حساب‌های ثبت‌شده','Existing accounts') }}</h3><span id="user-account-count">—</span></div><div id="account-list" class="account-list"></div>
-  </section>
-
-</div>
-  <div class="users-permissions"><section class="panel sq-user-help">
-    <h3>{{ t('سه مرحله تعریف دسترسی','Three steps to assign access') }}</h3>
-    <p>{{ t('۱. حساب و نقش را انتخاب کن. ۲. داخلی را از لیست AMI انتخاب کن. ۳. صف‌ها و مجوزها را تیک بزن و یک‌بار ذخیره کن.','1. Choose account and role. 2. Pick an AMI extension. 3. Check queues and permissions, then save once.') }}</p>
-    <button type="button" id="refresh-user-catalog">↻ {{ t('بازخوانی داخلی‌ها و صف‌ها','Reload PBX extensions & queues') }}</button>
-    <p class="muted" id="user-catalog-info" role="status">{{ t('پس از اتصال AMI، فهرست‌ها آماده می‌شوند.','Lists load after AMI connection.') }}</p>
-    <p class="muted">{{ t('حساب admin به‌صورت ذاتی مدیر همه صف‌ها است. برای سرپرست، مجوز صف و عمل باید جداگانه انتخاب شود.','Admin has all-queue privileges; supervisors require explicit queue and action grants.') }}</p>
-   </section></div>
- </div>
- <section class="panel" id="unit-access-panel">
-  <h2>{{t('ساختار سازمان و دسترسی گزارش','Organization and report access')}}</h2>
+      </details>
+      <details class="access-editor-detail"><summary><span>{{t('بخش‌های قابل مشاهدهٔ پنل','Visible panel sections')}}</span><span id="account-menus-count" class="access-pill"></span></summary><fieldset class="user-permission-checks user-full-row"><legend>{{ t('بخش‌های مجاز پنل','Allowed panel sections') }}</legend><div id="user-menu-select" class="user-permission-checks"></div><button type="button" id="user-menu-defaults">{{ t('انتخاب همهٔ بخش‌های مجاز نقش','Select all sections allowed by role') }}</button><p class="muted">{{ t('نقش سقف اختیار را تعیین می‌کند؛ منوها فقط در همان سقف قابل انتخاب‌اند. مجوز صف و عملیات نیز جداگانه بررسی می‌شود.','Role sets the permission ceiling. Sections stay within it; queue and action grants are checked separately.') }}</p></fieldset></details>
+    </section>
+    <section data-account-step="2" aria-labelledby="account-review-title" hidden>
+     <h3 id="account-review-title" tabindex="-1">{{t('مرور پیش از ثبت','Review before saving')}}</h3>
+     <p class="access-step-note">{{t('خلاصهٔ دسترسی را بررسی کنید. برای اصلاح هر بخش می‌توانید به مرحلهٔ قبل برگردید.','Check the access summary. You can go back to make changes.')}}</p>
+     <dl id="account-review" class="access-review"></dl>
+    </section>
+   </div>
+   <footer class="access-dialog-footer">
+    <p id="account-editor-feedback" role="status"></p>
+    <div class="access-dialog-actions">
+     <button type="button" id="account-cancel">{{t('انصراف','Cancel')}}</button>
+     <button type="button" id="account-back" hidden>{{t('مرحلهٔ قبل','Back')}}</button>
+     <button type="submit" id="account-next" class="primary">{{t('ادامه','Continue')}}</button>
+    </div>
+   </footer>
+  </form>
+ </dialog>
+ <section class="panel access-organization" id="unit-access-panel" aria-labelledby="access-organization-title" hidden>
+  <h2 id="access-organization-title" tabindex="-1">{{t('واحدها و دسترسی سازمانی','Units and organization access')}}</h2>
   <p class="report-note">{{t('عضویت به‌تنهایی دسترسی نمی‌دهد. برای دیدن گزارش، مجوز جداگانه بدهید؛ دسترسی به زیرواحدها فقط با انتخاب صریح فعال می‌شود.','Membership alone grants no access. Grant report permissions separately; descendants require an explicit choice.')}}</p>
   <button type="button" id="unit-admin-refresh">{{t('دریافت ساختار','Load structure')}}</button><p id="unit-admin-feedback" role="status" aria-live="polite"></p>
   <form id="unit-access-workflow" class="access-workflow">
@@ -372,10 +413,9 @@
   <form id="unit-close-form" class="settings-grid"><h3>{{t('پایان عضویت یا انتساب باز','End an open membership or assignment')}}</h3><label>{{t('مورد باز','Open assignment')}}<select name="id" id="unit-open-interval" required></select></label><label>{{t('آخرین روز','Last day')}}<input type="date" name="end" required></label><button>{{t('ثبت پایان','End assignment')}}</button></form>
   <form id="unit-grant-form" class="settings-grid"><h3>{{t('دسترسی کاربر','User permission')}}</h3><label>{{t('واحد','Unit')}}<select name="unit_id" class="unit-select" required></select></label><label>{{t('نام کاربری','Username')}}<input name="username" dir="ltr" required maxlength="64"></label><label>{{t('مجوز','Permission')}}<select name="capability"><option value="summary">{{t('خلاصه گزارش','Summary')}}</option><option value="call_details">{{t('ریز تماس','Call details')}}</option><option value="full_numbers">{{t('شماره کامل','Full numbers')}}</option><option value="ai_report">{{t('گزارش هوشمند','AI report')}}</option><option value="recording_play">{{t('پخش صوت تماس مستقیم','Play direct-call audio')}}</option><option value="recording_download">{{t('دانلود صوت تماس مستقیم','Download direct-call audio')}}</option><option value="export">{{t('خروجی CSV، Excel و PDF','CSV, Excel and PDF export')}}</option><option value="report_builder">{{t('گزارش‌ساز (آماده‌سازی)','Report builder (reserved)')}}</option><option value="schedule">{{t('زمان‌بندی (آماده‌سازی)','Scheduling (reserved)')}}</option><option value="api">{{t('API گزارش محدود','Limited reporting API')}}</option></select></label><label><input name="descendants" type="checkbox">{{t('شامل زیرواحدها','Include descendants')}}</label><button>{{t('ثبت مجوز','Grant')}}</button></form>
   </details>
-  <div id="unit-admin-list" class="table-wrap"></div>
-  <details><summary>{{t('تاریخچهٔ تغییر دسترسی','Access change history')}}</summary><p class="report-note">{{t('ثبت‌ها از زمان فعال‌شدن این قابلیت شروع می‌شوند.','History begins when this feature is enabled.')}}</p><button type="button" id="unit-change-refresh">{{t('دریافت تاریخچه','Load history')}}</button><p id="unit-change-feedback" role="status" aria-live="polite"></p><div id="unit-change-list" class="table-wrap"></div></details>
+  <details class="access-section"><summary>{{t('مجوزها و انتساب‌های ثبت‌شده','Current permissions and assignments')}}</summary><div id="unit-admin-list" class="table-wrap"></div></details>
+  <details class="access-section"><summary>{{t('تاریخچهٔ تغییر دسترسی','Access change history')}}</summary><p class="report-note">{{t('ثبت‌ها از زمان فعال‌شدن این قابلیت شروع می‌شوند.','History begins when this feature is enabled.')}}</p><button type="button" id="unit-change-refresh">{{t('دریافت تاریخچه','Load history')}}</button><p id="unit-change-feedback" role="status" aria-live="polite"></p><div id="unit-change-list" class="table-wrap"></div></details>
  </section>
- <p class="users-caution">{{ t('مجوز مشاهده شماره مشتری جداگانه است. نقش و انتخاب صف در سمت سرور کنترل می‌شود؛ برای شنود داخلی اختصاصی سرپرست لازم است.','Caller detail is separately permissioned. Scope is enforced server-side; listening requires the supervisor’s own phone.') }}</p>
 </section>
 {% endif %}
 

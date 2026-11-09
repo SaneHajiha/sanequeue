@@ -9,6 +9,7 @@
  function render(data){inventory=data;const units=data.units||[],names=new Map(units.map(u=>[u.id,u.name]));
   panel.querySelectorAll('.unit-select,.unit-parent-select').forEach(select=>{const previous=select.value;select.replaceChildren();
    if(select.classList.contains('unit-parent-select'))select.append(new Option(t('بدون والد','No parent'),''));
+   if(select.form?.id==='unit-access-workflow'&&select.name==='unit_id')select.append(new Option(t('انتخاب واحد','Choose a unit'),''));
    for(const u of units){const label=(u.parent?(names.get(u.parent)||'')+' / ':'')+u.name;const option=new Option(label,u.id);option.dataset.kind=u.kind;select.append(option);}if([...select.options].some(o=>o.value===previous))select.value=previous;});
   const host=$('unit-admin-list'),fragment=document.createDocumentFragment();fragment.append(text('h3',t('مجوزهای فعال','Active permissions')));
   const list=document.createElement('ul');for(const g of (data.grants||[]).filter(g=>g.active)){const li=document.createElement('li');

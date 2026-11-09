@@ -716,7 +716,12 @@ $('test-controls-disable').onclick=async()=>{
 
 
 
- let accountsCache={}; let phoneInventory=[];
+ let accountsCache={},phoneInventory=[],accountsReady=false,accountsLoading=false,catalogLoading=false;
+ const roleNames={admin:t('مدیر','Administrator'),supervisor:t('سرپرست','Supervisor'),agent:t('کارشناس','Agent'),viewer:t('مشاهده‌گر','Viewer')};
+ const searchText=value=>String(value||'').toLowerCase().trim()
+  .replace(/[۰-۹]/g,digit=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+  .replace(/[٠-٩]/g,digit=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+  .replaceAll('ي','ی').replaceAll('ك','ک');
  function paintUserMenus(selected){
   const box=$('user-menu-select');if(!box)return;
   const allowed=cfg.role_sections?.[$('account-role').value]||[];
@@ -743,11 +748,30 @@ $('test-controls-disable').onclick=async()=>{
   holder.innerHTML=pickedQueues().map(id=>`<label class="sq-choice"><input type="checkbox" value="${esc(id)}" ${selection.includes(id)?'checked':''}><bdi dir="ltr">${esc(id)}</bdi></label>`).join('')
    ||`<p class="report-note">${t('ابتدا صف‌های مجاز کاربر را انتخاب کنید.','Choose the user’s permitted queues first.')}</p>`;
  }
+ function updateAccessCounts(){
+  if(!$('users-view'))return;
+  const count=selector=>fmt(document.querySelectorAll(selector).length)+t(' انتخاب',' selected');
+  $('account-operations-count').textContent=count('#user-permission-select input:checked');
+  $('account-menus-count').textContent=count('#user-menu-select input:checked');
+ }
+ function filterAccountQueues(){
+  const input=$('account-queue-query');if(!input)return;
+  const query=searchText(input.value),options=[...$('user-queues').querySelectorAll('.sq-choice')];
+  for(const option of options)option.hidden=!searchText(option.textContent).includes(query);
+  const empty=$('account-queue-empty');
+  if(empty)empty.hidden=!options.length||options.some(option=>!option.hidden);
+ }
  function renderQueueChoices(selection){
   const holder=$('user-queues');if(!holder)return;
   const chosen=new Set(selection||pickedQueues());
-  holder.innerHTML=policyAvailable.map(id=>`<label class="sq-choice"><input type="checkbox" value="${esc(id)}" ${chosen.has(id)?'checked':''}><span>صف <bdi dir="ltr">${esc(id)}</bdi>${queues[id]?.Name&&queues[id].Name!==id?` · ${esc(queues[id].Name)}`:''}</span></label>`).join('')||`<span class="muted">${t('هیچ صف مجازی از AMI دریافت نشد. اتصال را بررسی کن.','No authorized queues loaded from AMI.')}</span>`;
-  renderRecordingQueues();
+  const options=[...new Set([...policyAvailable,...chosen])];
+  holder.innerHTML=options.map(id=>{
+   const name=queues[id]?.Name||policyState?.queues?.[id]?.label;
+   const unavailable=policyAvailable.includes(id)?'':' · '+t('خارج از فهرست فعلی','Unavailable in current catalog');
+   return `<label class="sq-choice"><input type="checkbox" value="${esc(id)}" ${chosen.has(id)?'checked':''}><span>${t('صف','Queue')} <bdi dir="ltr">${esc(id)}</bdi>${name&&name!==id?' · '+esc(name):''}${unavailable}</span></label>`;
+  }).join('')||`<span class="muted">${t('صفی از مرکز تلفن دریافت نشد.','No queues were loaded from the PBX.')}</span>`;
+  if(options.length)holder.insertAdjacentHTML('beforeend',`<p id="account-queue-empty" hidden>${t('صفی با این جست‌وجو پیدا نشد.','No queues match your search.')}</p>`);
+  filterAccountQueues();renderRecordingQueues();
  }
  const normalizePhone=s=>String(s||'').trim();
  const phoneFromMember=s=>{const found=String(s||'').match(/^(PJSIP|SIP)\/([A-Za-z0-9_.-]+)$/i);return found?found[1].toUpperCase()+'/'+found[2]:'';};
@@ -759,56 +783,248 @@ $('test-controls-disable').onclick=async()=>{
   if(chosen&&!list.includes(chosen)){select.add(new Option(chosen+' '+t('(قبلاً ثبت‌شده)','(previously assigned)'),chosen));}
   select.value=chosen||'';
  }
- async function refreshUserCatalog(){if(!$('users-view'))return;
-  const previous=$('account-phone').value;
-  const fromQueue=knownPhones();
-  renderQueueChoices();renderPhoneOptions(fromQueue,previous);
-  const status=$('account-phone-status'),info=$('user-catalog-info');
-  status.textContent=t('در حال خواندن داخلی‌های PJSIP از AMI...','Reading PJSIP endpoints from AMI...');
-  try{const result=await fetchJSON('/api/pbx/health?kind=extensions');
-    if(!result.supported)throw Error(result.reason||'pjsip_inventory_unavailable');
-    const live=(result.data?.endpoints||[]).map(x=>String(x.technology||'PJSIP')+'/'+String(x.endpoint||'')).filter(x=>/^(SIP|PJSIP)\/\d{1,12}$/.test(x));
-    const all=[...new Set([...live,...fromQueue])];phoneInventory=all;renderPhoneOptions(all,previous);
-    status.textContent=t('داخلی‌های خوانده‌شده از PBX: ','PBX endpoints: ')+fmt(live.length)+(result.complete===false?t(' · فهرست جزئی؛ درایور داخلی را از روی Local حدس نمی‌زنیم.',' · Partial list; Local members do not establish the device driver.'):'');
-    if(info)info.textContent=t('صف‌های قابل انتخاب: ','Selectable queues: ')+fmt(policyAvailable.length)+' · '+t('داخلی‌ها: ','Extensions: ')+fmt(all.length);
-  }catch(error){status.textContent=t('لیست کامل PJSIP دردسترس نیست؛ داخلی‌های شناسایی‌شده از اعضای صف نمایش داده شدند.','Full PJSIP inventory unavailable; using queue member extensions.');if(info)info.textContent=t('دریافت لیست کامل نیازمند مجوز PJSIPShowEndpoints است.','Full list needs PJSIPShowEndpoints permission.')+' ('+esc(error.message)+')';}
+ async function refreshUserCatalog(){
+  if(!$('users-view')||catalogLoading)return;
+  catalogLoading=true;
+  const button=$('refresh-user-catalog'),status=$('account-phone-status'),info=$('user-catalog-info');
+  button.disabled=true;renderQueueChoices();
+  renderPhoneOptions([...phoneInventory,...knownPhones()]);
+  status.textContent=t('در حال خواندن داخلی‌ها از مرکز تلفن…','Reading extensions from the PBX…');
+  try{
+   const result=await fetchJSON('/api/pbx/health?kind=extensions');
+   if(!result.supported)throw Error(result.reason||'pjsip_inventory_unavailable');
+   const live=(result.data?.endpoints||[]).map(item=>String(item.technology||'PJSIP')+'/'+String(item.endpoint||'')).filter(item=>/^(SIP|PJSIP)\/\d{1,12}$/.test(item));
+   phoneInventory=[...new Set([...live,...knownPhones()])];renderPhoneOptions(phoneInventory);
+   status.textContent=t('داخلی‌های خوانده‌شده از مرکز تلفن: ','PBX endpoints: ')+fmt(live.length)+(result.complete===false?t(' · فهرست جزئی',' · Partial list'):'');
+   info.textContent=t('صف‌های قابل انتخاب: ','Selectable queues: ')+fmt(policyAvailable.length);
+  }catch{
+   status.textContent=t('فهرست کامل داخلی‌ها در دسترس نیست. داخلی‌های شناخته‌شده در انتخابگر می‌مانند.','The full extension catalog is unavailable. Known extensions remain selectable.');
+   info.textContent=t('برای تازه‌سازی فهرست، اتصال مرکز تلفن را بررسی کنید.','Check the PBX connection to refresh the catalog.');
+  }finally{catalogLoading=false;button.disabled=false;}
  }
- function renderAccountList(){const list=$('account-list');if(!list)return;const grants=policyState?.supervisors||{};
-  const entries=Object.entries(accountsCache);
+ function renderAccountList(){
+  const list=$('account-list');if(!list||!accountsReady)return;
+  const grants=policyState?.supervisors||{};
+  const entries=Object.entries(accountsCache).sort(([a],[b])=>a.localeCompare(b,undefined,{numeric:true}));
   const workflowUser=$('unit-workflow-user');
-  if(workflowUser){
-   const selected=workflowUser.value;
-   workflowUser.replaceChildren(new Option(t('انتخاب کاربر','Select an account'),''),
-    ...entries.map(([id,user])=>new Option(user.display_name&&user.display_name!==id?user.display_name+' · '+id:id,id)));
-   if(accountsCache[selected])workflowUser.value=selected;
-  }
-  list.innerHTML=entries.map(([id,u])=>{const g=grants[id]||{};return `<div class="user-row-v14"><div class="user-identity"><span class="user-avatar">${esc(id[0]?.toUpperCase()||'?')}</span><div><strong>${esc(u.display_name||id)}</strong><small>${esc(id)} · ${esc(u.role||'viewer')} · <bdi dir="ltr">${esc(u.phone||t('بدون داخلی','No phone'))}</bdi></small></div></div><div><small>${t('صف‌های مجاز','Queues')}</small><strong>${u.role==='admin'?t('تمام صف‌ها','All queues'):esc((g.queues||[]).join('، ')||'—')}</strong></div><div><small>${t('عملیات','Permissions')}</small><span class="user-grant-tags">${u.role==='admin'?t('دسترسی مدیر','Administrator'):esc((g.actions||[]).join(' · ')||'—')}</span></div><div class="user-row-actions"><button type="button" data-edit-user="${esc(id)}">${t('ویرایش','Edit')}</button><button type="button" data-delete-user="${esc(id)}" ${id===cfg.logged_in_user?'disabled':''}>${t('حذف','Delete')}</button></div></div>`;}).join('')||`<p class="empty">${t('حسابی ثبت نشده','No accounts')}</p>`;
-  const count=$('user-account-count');if(count)count.textContent=fmt(entries.length);
+  const selected=workflowUser.value;
+  workflowUser.replaceChildren(new Option(t('انتخاب کاربر','Select an account'),''),
+   ...entries.map(([id,user])=>new Option(user.display_name&&user.display_name!==id?user.display_name+' · '+id:id,id)));
+  if(Object.hasOwn(accountsCache,selected))workflowUser.value=selected;
+  const query=searchText($('account-query').value),role=$('account-role-filter').value;
+  const visible=entries.filter(([id,user])=>(!role||user.role===role)&&searchText([id,user.display_name,user.phone].join(' ')).includes(query));
+  const rows=visible.map(([id,user])=>{
+   const grant=grants[id]||{},isAdmin=user.role==='admin';
+   const scope=isAdmin?t('همهٔ صف‌ها','All queues'):(grant.queues||[]).length?fmt(grant.queues.length)+t(' صف',' queues'):t('بدون صف','No queues');
+   const actions=isAdmin?t('اختیار مدیریتی','Administrator access'):fmt((grant.actions||[]).length)+t(' مجوز عملیات',' operation grants');
+   const identity=esc(id),name=esc(user.display_name||id);
+   const detail=[user.display_name&&user.display_name!==id?`<bdi>${identity}</bdi>`:'',user.phone?`<bdi dir="ltr">${esc(user.phone)}</bdi>`:t('بدون داخلی','No extension')].filter(Boolean).join(' · ');
+   return `<article class="access-person">
+    <div class="user-identity"><span class="user-avatar" aria-hidden="true">${esc(id[0]?.toUpperCase()||'?')}</span><div><strong><bdi>${name}</bdi></strong><small>${detail}</small></div></div>
+    <div><span class="access-pill access-role" data-role="${esc(user.role)}">${esc(roleNames[user.role]||user.role)}</span></div>
+    <div class="access-person-scope"><strong>${scope}</strong><small>${actions}</small></div>
+    <div class="user-row-actions"><button type="button" data-edit-user="${identity}" aria-haspopup="dialog" aria-label="${t('ویرایش','Edit')} ${identity}">${t('ویرایش','Edit')}</button><button type="button" data-org-user="${identity}" aria-label="${t('دسترسی سازمانی','Organization access')} ${identity}">${t('دسترسی سازمانی','Organization access')}</button>${id===cfg.logged_in_user?'':`<button type="button" class="access-delete" data-delete-user="${identity}" aria-label="${t('حذف','Delete')} ${identity}">${t('حذف','Delete')}</button>`}</div>
+   </article>`;
+  });
+  list.innerHTML=rows.join('')||`<p class="access-empty">${entries.length?t('کاربری با این جست‌وجو پیدا نشد.','No users match your search.'):t('هنوز حسابی ثبت نشده است.','No accounts have been created.')}</p>`;
+  list.setAttribute('aria-busy','false');
+  $('user-account-count').textContent=visible.length===entries.length?fmt(entries.length)+t(' کاربر',' users'):fmt(visible.length)+t(' از ',' of ')+fmt(entries.length);
  }
- function clearUserEditor(){ $('account-create-form').reset();renderRecordingQueues([]);$('account-user').readOnly=false;$('account-feedback').textContent='';renderQueueChoices([]);renderPhoneOptions([...phoneInventory,...knownPhones()],'');$('user-permission-select').querySelectorAll('input').forEach(x=>x.checked=x.value==='view');paintUserMenus();clampRolePermissions(); }
- async function loadUsers(){if(!$('users-view'))return;
-  try{if(!policyState)await loadPolicyEditor();const result=await fetchJSON('/api/accounts');accountsCache=result.accounts||{};renderAccountList();renderQueueChoices();await refreshUserCatalog();}catch(error){$('account-feedback').textContent=t('دریافت کاربران انجام نشد: ','Could not load users: ')+error.message;}}
+ async function loadUsers(){
+  if(!$('users-view')||accountsLoading)return;
+  accountsLoading=true;
+  const list=$('account-list');list.setAttribute('aria-busy','true');
+  try{
+   if(!policyState)await loadPolicyEditor();
+   const result=await fetchJSON('/api/accounts');accountsCache=result.accounts||{};accountsReady=true;
+   renderAccountList();renderQueueChoices();await refreshUserCatalog();
+  }catch(error){
+   $('account-feedback').textContent=t('دریافت کاربران انجام نشد: ','Could not load users: ')+error.message;
+   if(!accountsReady)list.textContent=t('فهرست کاربران در دسترس نیست.','User directory unavailable.');
+  }finally{accountsLoading=false;list.setAttribute('aria-busy','false');}
+ }
  if($('users-view')){
- paintUserMenus();clampRolePermissions();
- $('recording-limit-queues')?.addEventListener('change',()=>renderRecordingQueues());
- $('user-queues')?.addEventListener('change',()=>renderRecordingQueues());
- $('account-role').onchange=()=>{paintUserMenus();clampRolePermissions();};if($('user-menu-defaults'))$('user-menu-defaults').onclick=()=>paintUserMenus();
- $('user-clear').onclick=clearUserEditor;
- $('refresh-user-catalog').onclick=()=>refreshUserCatalog();
- $('account-list').onclick=async e=>{const edit=e.target.closest('[data-edit-user]'),del=e.target.closest('[data-delete-user]');if(edit){const id=edit.dataset.editUser,u=accountsCache[id];if(!u)return;$('account-user').value=id;$('account-user').readOnly=true;$('account-role').value=u.role||'viewer';$('account-phone').value=u.phone||'';$('account-password').value='';const g=policyState?.supervisors?.[id]||{};renderQueueChoices(g.queues||[]);$('recording-limit-queues').checked=Array.isArray(g.recording_queues);renderRecordingQueues(g.recording_queues||[]);renderPhoneOptions([...phoneInventory,...knownPhones(),u.phone||''],u.phone||'');$('user-permission-select').querySelectorAll('input').forEach(x=>x.checked=(g.actions||['view']).includes(x.value));paintUserMenus(u.menus);clampRolePermissions();$('account-feedback').textContent=t('در حال ویرایش حساب ','Editing account ')+id;window.scrollTo({top:0,behavior:'smooth'});return;}
-   if(del){const id=del.dataset.deleteUser;if(!confirm(t('حساب '+id+' حذف شود؟','Delete '+id+'?')))return;try{const result=await fetchJSON('/api/accounts',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':cfg.csrf},body:JSON.stringify({action:'delete',username:id})});accountsCache=result.accounts||{};if(policyState?.supervisors?.[id]){delete policyState.supervisors[id];await savePolicyState();}clearUserEditor();renderAccountList();}catch(error){$('account-feedback').textContent=t('حذف ناموفق: ','Delete failed: ')+error.message;}}};
- $('account-create-form').onsubmit=async e=>{e.preventDefault();const save=$('account-create-form').querySelector('[type=submit]');save.disabled=true;
-  const id=$('account-user').value.trim(),qids=pickedQueues(),actions=[...$('user-permission-select').querySelectorAll('input:checked')].map(x=>x.value);
-  try{if(!id)throw Error('username_required');if(!policyState)await loadPolicyEditor();if(qids.some(q=>!policyAvailable.includes(q)))throw Error(t('شماره صف باید در فهرست صف‌های موجود باشد.','Queue must exist in AMI scope.'));if(qids.length&&!actions.length)throw Error(t('حداقل یک مجوز انتخاب کن.','Choose at least one grant.'));
-   const result=await fetchJSON('/api/accounts/with-grants',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':cfg.csrf},body:JSON.stringify({username:id,role:$('account-role').value,phone:$('account-phone').value,password:$('account-password').value,queues:qids,actions:actions,recording_queues:$('recording-limit-queues').checked?pickedRecordingQueues():null,menus:[...document.querySelectorAll('#user-menu-select input:checked')].map(x=>x.value)})});
-   accountsCache=result.accounts||{};
-   policyState=result.policies||policyState;
-   $('account-feedback').textContent=t('حساب، داخلی و دسترسی‌ها یکجا ذخیره شدند.','Account, extension and permissions saved together.');
-   renderAccountList();$('account-password').value='';$('account-user').readOnly=true;
-  }catch(error){$('account-feedback').textContent=t('ثبت ناموفق: ','Save failed: ')+error.message;}finally{save.disabled=false;}
- };
-
- } // admin-only account editor
+  const form=$('account-create-form'),dialog=$('account-dialog'),editorFeedback=$('account-editor-feedback');
+  const username=$('account-user'),role=$('account-role'),phone=$('account-phone'),password=$('account-password');
+  const scope=$('user-permission-select'),close=$('account-close'),cancel=$('account-cancel'),back=$('account-back'),next=$('account-next');
+  const accountStatus=$('account-feedback'),savedOrganization=$('account-saved-org');
+  const steps=[...dialog.querySelectorAll('[data-account-step]')],markers=[...dialog.querySelectorAll('.access-steps li')];
+  const accessTabs=[...$('users-view').querySelectorAll('[data-access-section]')];
+  let editing='',step=0,saving=false;
+  const roleHelp={
+   viewer:t('مشاهدهٔ صف‌های مجاز و گزارش‌های قابل دسترس.','View permitted queues and available reports.'),
+   agent:t('نقش کارشناس با داخلی اختصاصی و عملیات محدود صف.','Agent with a dedicated extension and limited queue actions.'),
+   supervisor:t('نظارت و عملیات روی صف‌هایی که مشخص می‌کنید. داخلی الزامی است.','Supervise and operate the queues you choose. An extension is required.'),
+   admin:t('مدیریت سامانه و دسترسی به همهٔ صف‌ها.','Manage the system with access to all queues.')
+  };
+  function showAccessSection(section,account){
+   const organization=section==='organization';
+   $('accounts-admin-panel').hidden=organization;
+   $('unit-access-panel').hidden=!organization;
+   for(const tab of accessTabs)tab.setAttribute('aria-pressed',String(tab.dataset.accessSection===section));
+   if(organization){
+    const workflow=$('unit-access-workflow'),fields=workflow.elements;
+    if(account&&fields.username.value!==account){
+     workflow.reset();fields.username.value=account;fields.target_mode.dispatchEvent(new Event('change'));
+     fields.end.dispatchEvent(new Event('change',{bubbles:true}));
+     $('unit-workflow-feedback').textContent='';
+    }
+    if(!fields.start.value){
+     const parts=new Intl.DateTimeFormat('en',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Tehran'}).formatToParts(new Date());
+     const date=Object.fromEntries(parts.map(part=>[part.type,part.value]));
+     fields.start.value=`${date.year}-${date.month}-${date.day}`;
+     fields.start.dispatchEvent(new Event('change',{bubbles:true}));
+    }
+    $('access-organization-title').focus();
+   }
+  }
+  function syncRole(){
+   const admin=role.value==='admin';
+   $('account-role-help').textContent=roleHelp[role.value];
+   $('account-admin-scope').hidden=!admin;
+   $('user-queues-field').hidden=admin;
+   $('account-operations-detail').hidden=admin;
+   phone.required=['agent','supervisor'].includes(role.value);
+   clampRolePermissions();
+   updateAccessCounts();
+  }
+  function editorPayload(){
+   const admin=role.value==='admin';
+   return {intent:editing?'edit':'create',username:username.value.trim(),role:role.value,phone:phone.value,password:password.value,
+    queues:admin?[]:pickedQueues(),actions:admin?[]:[...scope.querySelectorAll('input:checked')].map(input=>input.value),
+    recording_queues:!admin&&$('recording-limit-queues').checked?pickedRecordingQueues():null,
+    menus:[...document.querySelectorAll('#user-menu-select input:checked')].map(input=>input.value)};
+  }
+  function paintReview(){
+   const payload=editorPayload(),admin=payload.role==='admin',none=t('هیچ‌کدام','None');
+   const namesOf=selector=>[...form.querySelectorAll(selector)].map(input=>input.closest('label').textContent.trim()).join('، ');
+   const recordingEnabled=payload.queues.length&&payload.actions.some(action=>action==='recording_play'||action==='recording_download');
+   const recordings=admin?t('طبق اختیار مدیر','Administrator access'):!recordingEnabled?none:payload.recording_queues===null?t('صف‌های مجاز همین کاربر','This user’s permitted queues'):payload.recording_queues.join('، ')||none;
+   const rows=[
+    [t('نام کاربری','Username'),payload.username], [t('نقش','Role'),roleNames[payload.role]],
+    [t('داخلی','Extension'),payload.phone||t('بدون داخلی','No extension')],
+    [t('صف‌های مجاز','Permitted queues'),admin?t('همهٔ صف‌ها','All queues'):payload.queues.join('، ')||none],
+    [t('عملیات صف','Queue operations'),admin?t('اختیار مدیر','Administrator access'):payload.queues.length?namesOf('#user-permission-select input:checked')||none:none],
+    [t('دامنهٔ ضبط صف','Queue recording scope'),recordings],
+    [t('بخش‌های پنل','Panel sections'),namesOf('#user-menu-select input:checked')||none]
+   ];
+   $('account-review').replaceChildren(...rows.map(([title,value])=>{
+    const pair=document.createElement('div'),term=document.createElement('dt'),description=document.createElement('dd');
+    const isolatedValue=document.createElement('bdi');term.textContent=title;isolatedValue.textContent=value;
+    description.append(isolatedValue);pair.append(term,description);return pair;
+   }));
+  }
+  function showStep(index,focus=true){
+   step=index;
+   steps.forEach((panel,i)=>{panel.hidden=i!==step;});
+   markers.forEach((marker,i)=>{marker.toggleAttribute('data-complete',i<step);if(i===step)marker.setAttribute('aria-current','step');else marker.removeAttribute('aria-current');});
+   back.hidden=step===0;
+   next.textContent=step===2?(editing?t('ذخیرهٔ تغییرات','Save changes'):t('ساخت کاربر','Create user')):t('ادامه','Continue');
+   editorFeedback.textContent='';
+   if(step===2)paintReview();
+   dialog.querySelector('.access-dialog-body').scrollTop=0;
+   if(focus)steps[step].querySelector('h3').focus();
+  }
+  function openEditor(id=''){
+   const account=accountsCache[id],grant=policyState?.supervisors?.[id]||{};
+   if(id&&!account)return;
+   editing=id;form.reset();
+   username.value=id;username.readOnly=Boolean(id);
+   role.value=account?.role||'viewer';role.disabled=Boolean(id&&id===cfg.logged_in_user);
+   password.required=!id;
+   $('account-password-help').textContent=id?t('برای حفظ رمز فعلی خالی بگذارید.','Leave blank to keep the existing password.'):t('برای حساب جدید الزامی است.','Required for a new account.');
+   $('account-editor-title').textContent=id?t('ویرایش کاربر','Edit user')+' · '+id:t('ساخت کاربر','Create user');
+   $('recording-limit-queues').checked=Array.isArray(grant.recording_queues);
+   renderQueueChoices(grant.queues||[]);renderRecordingQueues(grant.recording_queues||[]);
+   renderPhoneOptions([...phoneInventory,...knownPhones()],account?.phone||'');
+   scope.querySelectorAll('input').forEach(input=>input.checked=(grant.actions||['view']).includes(input.value));
+   paintUserMenus(account?.menus);syncRole();
+   for(const details of dialog.querySelectorAll('details'))details.open=false;
+   showStep(0,false);dialog.showModal();(id?steps[0].querySelector('h3'):username).focus();
+  }
+  function validateAccount(){
+   username.value=username.value.trim();
+   if(!username.reportValidity()||!phone.reportValidity()||!password.reportValidity())return false;
+   if(!editing&&Object.keys(accountsCache).some(id=>id.toLowerCase()===username.value.toLowerCase())){
+    editorFeedback.textContent=t('این نام کاربری قبلاً ثبت شده است. برای تغییر آن، حساب را از فهرست ویرایش کنید.','This username already exists. Edit the account from the directory.');
+    username.focus();return false;
+   }
+   return true;
+  }
+  function validateScope(payload){
+   if(!policyState)return t('فهرست سیاست‌های صف در دسترس نیست. دوباره تلاش کنید.','Queue policies are unavailable. Try again.');
+   if(payload.queues.some(queue=>!policyAvailable.includes(queue)))return t('یکی از صف‌های انتخابی در فهرست فعلی مرکز تلفن نیست. فهرست را بازخوانی کنید یا آن صف را از انتخاب خارج کنید.','A selected queue is unavailable. Reload the catalog or deselect that queue.');
+   if(payload.queues.length&&!payload.actions.includes('view')){
+    $('account-operations-detail').open=true;
+    return t('برای دادن دسترسی به صف، مجوز «مشاهده» را انتخاب کنید.','Select the View operation to grant queue access.');
+   }
+   if(editing===cfg.logged_in_user&&!['users','settings'].every(section=>payload.menus.includes(section)))
+    return t('دسترسی حساب فعلی به کاربران و تنظیمات باید فعال بماند.','Keep Users and Settings available to your current account.');
+   return '';
+  }
+  const failureText={
+   username_already_exists:t('این نام کاربری قبلاً ثبت شده است.','This username already exists.'),
+   phone_already_assigned:t('این داخلی قبلاً به حساب دیگری واگذار شده است.','This extension already belongs to another account.'),
+   extension_inventory_unavailable:t('فهرست داخلی‌های مرکز تلفن در دسترس نیست. فهرست را بازخوانی کنید.','The PBX extension catalog is unavailable. Reload the catalog.'),
+   select_a_discovered_internal_phone:t('داخلی را از فهرست مرکز تلفن انتخاب کنید.','Select a discovered PBX extension.'),
+   unknown_user:t('این حساب دیگر موجود نیست. فهرست کاربران را بازخوانی کنید.','This account no longer exists. Reload the directory.')
+  };
+  for(const tab of accessTabs)tab.addEventListener('click',()=>showAccessSection(tab.dataset.accessSection));
+  $('account-query').addEventListener('input',renderAccountList);
+  username.addEventListener('input',()=>{editorFeedback.textContent='';});
+  $('account-role-filter').addEventListener('change',renderAccountList);
+  $('recording-limit-queues').addEventListener('change',()=>renderRecordingQueues());
+  $('user-queues').addEventListener('change',()=>renderRecordingQueues());
+  $('account-queue-query').addEventListener('input',filterAccountQueues);
+  form.addEventListener('change',updateAccessCounts);
+  role.onchange=()=>{
+   const selected=[...document.querySelectorAll('#user-menu-select input:checked')].map(input=>input.value);
+   paintUserMenus(editing?selected:undefined);syncRole();
+  };
+  $('user-menu-defaults').onclick=()=>{paintUserMenus();updateAccessCounts();};
+  $('user-clear').onclick=()=>openEditor();
+  $('refresh-user-catalog').onclick=async()=>{await loadPolicyEditor();await refreshUserCatalog();};
+  savedOrganization.onclick=()=>showAccessSection('organization',savedOrganization.dataset.username);
+  close.onclick=cancel.onclick=()=>{if(!saving)dialog.close();};
+  back.onclick=()=>showStep(step-1);
+  dialog.addEventListener('cancel',event=>{if(saving)event.preventDefault();});
+  dialog.addEventListener('close',()=>{password.value='';});
+  $('account-list').onclick=async event=>{
+   const edit=event.target.closest('[data-edit-user]'),organization=event.target.closest('[data-org-user]'),remove=event.target.closest('[data-delete-user]');
+   if(edit){openEditor(edit.dataset.editUser);return;}
+   if(organization){showAccessSection('organization',organization.dataset.orgUser);return;}
+   if(!remove)return;
+   const id=remove.dataset.deleteUser;
+   if(!confirm(t('حساب '+id+' حذف شود؟','Delete '+id+'?')))return;
+   remove.disabled=true;
+   try{
+    const result=await fetchJSON('/api/accounts',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':cfg.csrf},body:JSON.stringify({action:'delete',username:id})});
+    accountsCache=result.accounts||{};
+    if(policyState?.supervisors?.[id])delete policyState.supervisors[id];
+    if(policyState)renderSupervisorGrants();
+    savedOrganization.hidden=true;accountStatus.textContent=t('حساب حذف شد.','Account deleted.');renderAccountList();$('user-clear').focus();
+   }catch(error){accountStatus.textContent=t('حذف ناموفق: ','Delete failed: ')+error.message;}
+   finally{remove.disabled=false;}
+  };
+  form.onsubmit=async event=>{
+   event.preventDefault();if(saving)return;
+   if(step===0){if(validateAccount())showStep(1);return;}
+   const payload=editorPayload(),issue=validateScope(payload);
+   if(issue){editorFeedback.textContent=issue;return;}
+   if(step===1){showStep(2);return;}
+   saving=true;for(const button of [next,back,close,cancel])button.disabled=true;
+   editorFeedback.textContent=t('در حال ذخیره…','Saving…');
+   try{
+    const result=await fetchJSON('/api/accounts/with-grants',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':cfg.csrf},body:JSON.stringify(payload)});
+    accountsCache=result.accounts||{};accountsReady=true;policyState=result.policies||policyState;
+    renderSupervisorGrants();
+    accountStatus.textContent=(editing?t('تغییرات ذخیره شد.','Changes saved.'):t('کاربر ساخته شد.','User created.'))+' '+payload.username;
+    savedOrganization.dataset.username=payload.username;savedOrganization.hidden=false;
+    renderAccountList();dialog.close();savedOrganization.focus();
+   }catch(error){editorFeedback.textContent=failureText[error.message]||t('ثبت ناموفق بود: ','Save failed: ')+error.message;}
+   finally{saving=false;for(const button of [next,back,close,cancel])button.disabled=false;}
+  };
+ }
  async function loadProfile(open=false){
   try{
    const profile=await fetchJSON('/api/profile');

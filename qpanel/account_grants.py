@@ -21,6 +21,9 @@ def save_account_with_grants(path, store, visible_queues, obj):
     password = obj.get('password') or None
     qids = obj.get('queues', [])
     actions = obj.get('actions', [])
+    intent = obj.get('intent')
+    if intent not in (None, 'create', 'edit'):
+        raise ValueError('invalid_account_intent')
     validate_identity(username, role, phone)
     if not isinstance(qids, list) or not isinstance(actions, list):
         raise ValueError('invalid_grant_format')
@@ -42,6 +45,10 @@ def save_account_with_grants(path, store, visible_queues, obj):
         actions = []
     with _SAVE_LOCK,LOCK:
         previous_accounts = read_accounts(path)
+        if intent == 'create' and any(name.casefold() == username.casefold() for name in previous_accounts):
+            raise ValueError('username_already_exists')
+        if intent == 'edit' and username not in previous_accounts:
+            raise ValueError('unknown_user')
         if not password and username not in previous_accounts:
             raise ValueError('new_account_requires_password')
         if password and not 12 <= len(password) <= 200:

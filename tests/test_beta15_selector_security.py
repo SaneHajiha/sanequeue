@@ -45,6 +45,17 @@ class Beta15Test(unittest.TestCase):
   self.assertEqual(before,read_accounts(self.accounts)['superA']['password_hash'])
   self.assertTrue(self.store.access('superA','supervisor','8002','view'))
   self.assertFalse(self.store.access('superA','supervisor','8001','view'))
+ def test_create_and_edit_intents_cannot_overwrite_or_recreate_an_account(self):
+  self.save(intent='create')
+  before=read_accounts(self.accounts)
+  with self.assertRaisesRegex(ValueError,'username_already_exists'):
+   self.save(intent='create',queues=['8002'])
+  with self.assertRaisesRegex(ValueError,'username_already_exists'):
+   self.save(intent='create',username='SUPERA',queues=['8002'])
+  with self.assertRaisesRegex(ValueError,'unknown_user'):
+   self.save(intent='edit',username='missing',phone='PJSIP/271')
+  self.assertEqual(read_accounts(self.accounts),before)
+  self.assertEqual(self.store.export()['supervisors']['superA']['queues'],['8001'])
  def test_admin_intrinsic_scope_and_no_false_explicit_grant(self):
   self.save(username='admin2',role='admin',phone='',queues=[],actions=[])
   self.assertTrue(self.store.access('admin2','admin','8002','view'))

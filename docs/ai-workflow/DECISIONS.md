@@ -65,3 +65,7 @@ The user explicitly authorized installation on the existing test server at `192.
 ## RC6 report and access refinement
 
 The user requested more legible charts, number-only extension search, a dropdown for long extension lists, and a single organizational access panel. The extension chart uses a stacked result bar and a labeled total. A number matches only observed SIP/PJSIP endpoints with that exact number. The picker can distinguish both technologies when necessary. The access form reuses the existing scoped permission model and commits organization, membership, assignment and grant changes together. Retain standalone revocation and assignment history under the supplementary controls.
+
+## RC7 access center
+
+The user requested a simpler design for creating accounts and granting access, with examples from other products. Use a directory-first layout and a three-step account editor. Keep organizational membership separately reviewable and hand off the selected account to that workflow. Use the existing permission ceilings and transaction boundaries. The previous authorization for installation on the existing test server applies to the reviewed access center update.
