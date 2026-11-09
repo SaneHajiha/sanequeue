@@ -26,7 +26,7 @@ function setup(file,withCharts=false){
   FormData:class{constructor(form){this.rows=Object.entries(form.elements||{}).map(([k,v])=>[k,v.value||'']);}[Symbol.iterator](){return this.rows[Symbol.iterator]();}},
   MutationObserver:class{constructor(callback){observers.push(callback);}observe(){}},CustomEvent:class{constructor(type){this.type=type;}},
   fetch(url,options={}){return new Promise((resolve,reject)=>pending.push({url,options,signal:options.signal,resolve:data=>resolve({ok:true,redirected:false,headers:{get:()=> 'application/json'},json:async()=>data}),reject}));},
-  console,setTimeout,URL,crypto:require('node:crypto').webcrypto};
+  console,setTimeout,queueMicrotask,URL,crypto:require('node:crypto').webcrypto};
  for(const script of ['report-duration.js',file])
   vm.runInNewContext(fs.readFileSync(path.join(root,'qpanel/themes/qpanel/static/js',script),'utf8'),context,{filename:script});
  assert.equal(context.window.SaneQueueReportDuration(9932),'2:45:32');
