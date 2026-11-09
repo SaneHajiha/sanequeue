@@ -47,11 +47,12 @@ def install(app,accounts_path,state_dir,sync_accounts):
         account=read_accounts(accounts_path).get(username)
         if account is None:abort(403)
         if request.method=='GET':
-            available=phones(username)
+            can_change_phone=account['role']=='admin'
+            available=phones(username) if can_change_phone else None
             response=jsonify(username=username,role=account['role'],phone=account.get('phone',''),
                              first_name=account.get('first_name',''),last_name=account.get('last_name',''),
                              display_name=account.get('display_name',''),available_phones=available or [],
-                             inventory_available=available is not None,avatar_url='/api/profile/avatar' if avatar_path(username).exists() else None,
+                             can_change_phone=can_change_phone,inventory_available=available is not None,avatar_url='/api/profile/avatar' if avatar_path(username).exists() else None,
                              dial_options=(app.config.get('SANEQUEUE_PROFILE_DIAL_OPTIONS') or (lambda:dict(queues=[],extensions=[])))())
             response.headers['Cache-Control']='no-store';return response
         if not session.get('csrf_token') or not hmac.compare_digest(request.headers.get('X-CSRF-Token',''),session['csrf_token']):abort(403)
@@ -67,12 +68,13 @@ def install(app,accounts_path,state_dir,sync_accounts):
         password=request.form.get('new_password','')
         old=request.form.get('current_password','')
         if len(name)>65 or any(not c.isprintable() for c in name):return jsonify(error='invalid_display_name'),400
+        if phone!=account.get('phone','') and account['role']!='admin':
+            return jsonify(error='extension_assignment_requires_admin'),403
         sensitive=bool(password) or phone!=account.get('phone','')
         if sensitive and (not 1<=len(old)<=200 or not check_password_hash(account['password_hash'],old)):
             return jsonify(error='current_password_required'),403
         if password and not 12<=len(password)<=200:return jsonify(error='password_length_must_be_12_to_200'),400
         if phone!=account.get('phone',''):
-            if not phone and account['role'] in ('agent','supervisor'):return jsonify(error='assigned_phone_required'),400
             if phone:
                 available=phones(username)
                 if available is None:return jsonify(error='extension_inventory_unavailable'),503

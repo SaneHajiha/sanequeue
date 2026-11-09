@@ -25,7 +25,7 @@
   return {key:'offline',label:t('خارج از دسترس','Unavailable')};};
  const stateChip=m=>{const d=memberDetail(m);return `<span class="sq-state sq-state--${d.key}"><i></i>${esc(d.label)}</span>`;};
 
- let samples=[], sampledSource='', currentDataSource='sample-data', livePolicyAlerts=[];
+ let samples=[], sampledSource='', sampledScope='', currentDataSource='sample-data', livePolicyAlerts=[];
  let observedToday={}, kpiPeriod='today', serverEpoch=0, serverClockAnchor=0;
  const serverNow=()=>serverEpoch?serverEpoch+performance.now()-serverClockAnchor:Date.now();
  let queues={}, lastSuccess=0, lastReceipt=0, pending=false, timer, sound=false, audioContext=null, lastSound=0, minimumReady=0, minimumPercent=0;
@@ -113,18 +113,29 @@
   }
  }
  if($('kpi-period')){kpiPeriod=storage.get('kpi-period')==='pbx'?'pbx':'today';$('kpi-period').value=kpiPeriod;$('kpi-period').onchange=()=>{kpiPeriod=$('kpi-period').value;storage.set('kpi-period',kpiPeriod);updateKpiPeriod();render();};}
- function updateSamples(source){
+ function updateSamples(source,recordHistory=false){
   const items=selected();let waiting=0,ready=0,busy=0,paused=0,offline=0;
   for(const [,q] of items){waiting+=n(q.Calls);for(const m of Object.values(q.members||{})){const state=status(m);if(state==='ready')ready++;else if(state==='busy')busy++;else if(state==='paused')paused++;else offline++;}}
-  if(source!==sampledSource){samples=[];queueHistory.clear();sampledSource=source;}
-  const now=serverNow(); if(!samples.length||now-samples[samples.length-1].ts>1500)samples.push({ts:now,waiting,ready,busy,paused,offline});
-  samples=samples.slice(-60);
+  const scope=JSON.stringify(items.map(([name])=>name).sort());
+  if(source!==sampledSource||scope!==sampledScope)samples=[];
+  if(source!==sampledSource)queueHistory.clear();
+  sampledSource=source;sampledScope=scope;
+  const now=serverNow();
+  if(items.length&&lastReceipt&&source!=='stale'&&(!samples.length||recordHistory&&now-samples.at(-1).ts>1500)){
+   samples.push({ts:now,waiting,ready,busy,paused,offline});
+   samples=samples.slice(-60);
+  }
   for(const key of queueHistory.keys())if(!queues[key])queueHistory.delete(key);
-  for(const [name,q] of items){const history=queueHistory.get(name)||[];if(!history.length||now-(q._lastSparkAt||0)>1500){history.push(n(q.Calls));q._lastSparkAt=now;}queueHistory.set(name,history.slice(-60));}
+  if(recordHistory)for(const [name,q] of Object.entries(queues)){
+   const history=queueHistory.get(name)||[];
+   history.push(n(q.Calls));
+   queueHistory.set(name,history.slice(-60));
+  }
   updateCharts({waiting,ready,busy,paused,offline});
  }
  function drawTrend(container,key,color){
   if(!container)return;
+  if(!samples.length){container.textContent=t('برای این انتخاب نمونه‌ای در دسترس نیست.','No samples for this selection.');return;}
   const values=samples.map(d=>Math.max(0,n(d[key]))),max=Math.max(1,Math.ceil(Math.max(0,...values)));
   const w=Math.max(300,Math.min(900,container.clientWidth||500)),h=230,left=48,right=w-20,top=18,bottom=h-36;
   const x=i=>values.length===1?(left+right)/2:left+i/(Math.max(1,values.length-1))*(right-left),y=value=>bottom-value/max*(bottom-top);
@@ -394,7 +405,7 @@
    }
    updateAmiQueueSelect();updateAdvancedQueues();
    journeyFeed=result.call_journeys||{connected:false,records:[],complete_history:false};
-   livePolicyAlerts=Array.isArray(result.policy_alerts)?result.policy_alerts:[];lastSuccess=(result.data_source==='ami-live'&&Number.isFinite(Number(result.observed_at))&&Number(result.observed_at)>0)?Math.round(Number(result.observed_at)*1000):Date.now();$('connection').className='badge';$('connection').textContent=result.data_source==='ami-live'?t('AMI زنده','Live AMI'):(cfg.demo_mode?t('پیش‌نمایش آفلاین · داده ساختگی','Offline demo · sample data'):t('متصل به مرکز تلفن','PBX connected'));$('error').hidden=true;$('updated').textContent=new Date(lastSuccess).toLocaleTimeString(fa?'fa-IR':'en-GB');updateSamples(currentDataSource);render();
+   livePolicyAlerts=Array.isArray(result.policy_alerts)?result.policy_alerts:[];lastSuccess=(result.data_source==='ami-live'&&Number.isFinite(Number(result.observed_at))&&Number(result.observed_at)>0)?Math.round(Number(result.observed_at)*1000):Date.now();$('connection').className='badge';$('connection').textContent=result.data_source==='ami-live'?t('AMI زنده','Live AMI'):(cfg.demo_mode?t('پیش‌نمایش آفلاین · داده ساختگی','Offline demo · sample data'):t('متصل به مرکز تلفن','PBX connected'));$('error').hidden=true;$('updated').textContent=new Date(lastSuccess).toLocaleTimeString(fa?'fa-IR':'en-GB');updateSamples(currentDataSource,true);render();
   document.body.dataset.transport=socket&&socket.readyState===WebSocket.OPEN?'websocket':'http';
   if(document.body.dataset.transport==='websocket')$('connection').textContent+=' · WebSocket';
  }
@@ -414,8 +425,10 @@
   }catch(error){markStale(error);}
   finally{pending=false;$('refresh').disabled=false;if(!socket||socket.readyState!==WebSocket.OPEN)timer=setTimeout(refresh,document.hidden?Math.max(cfg.interval,15000):cfg.interval);}
  }
- $('refresh').onclick=refresh;$('search').oninput=render;$('status-filter').onchange=render;
- $('queue-filter').onchange=()=>{updateSamples(currentDataSource+'|'+$('queue-filter').value);render();};
+ $('refresh').onclick=refresh;$('status-filter').onchange=render;
+ function updateQueueScope(){updateSamples(currentDataSource);render();}
+ $('search').oninput=updateQueueScope;
+ $('queue-filter').onchange=updateQueueScope;
  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('refresh').hidden)refresh();});
  
  async function chooseAgentPauseReason(options){
@@ -560,8 +573,8 @@
  document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement){document.body.classList.remove('wallboard');$('wallboard-fullscreen').textContent=t('⛶ تمام‌صفحه','⛶ Fullscreen');}});
  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('wallboard')&&!document.fullscreenElement)exitWallboard();});
 
- $('queue-focus-cards').addEventListener('click',event=>{const button=event.target.closest('[data-focus]');if(!button)return;$('queue-filter').value=button.dataset.focus;render();showView('calls');});
- $('queue-cards').addEventListener('click',event=>{const button=event.target.closest('.queue-focus-link');if(!button)return;$('queue-filter').value=button.dataset.focus;render();showView('queues');});
+ $('queue-focus-cards').addEventListener('click',event=>{const button=event.target.closest('[data-focus]');if(!button)return;$('queue-filter').value=button.dataset.focus;updateQueueScope();showView('calls');});
+ $('queue-cards').addEventListener('click',event=>{const button=event.target.closest('.queue-focus-link');if(!button)return;$('queue-filter').value=button.dataset.focus;updateQueueScope();showView('queues');});
  document.addEventListener('keydown',event=>{if(event.altKey||event.ctrlKey||event.metaKey||/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)||$('action-dialog').open)return;if(event.key==='/'){event.preventDefault();$('search').focus();}if(event.key.toLowerCase()==='r'){event.preventDefault();refresh();}});
 
  document.querySelector('.brand')?.setAttribute('title','SaneQueue — ' + cfg.build_version);
@@ -752,14 +765,14 @@ $('test-controls-disable').onclick=async()=>{
    if(!open)return;
    $('profile-form').reset();$('profile-name').value=profile.display_name||'';$('profile-first-name').value=profile.first_name||'';$('profile-last-name').value=profile.last_name||'';if(!profile.first_name&&!profile.last_name)$('profile-first-name').value=profile.display_name||'';
    const phones=[...new Set([...(profile.available_phones||[]),profile.phone].filter(Boolean))];
-   $('profile-phone').innerHTML=(['admin','viewer'].includes(profile.role)?`<option value="">${t('بدون داخلی','No phone')}</option>`:'')+phones.map(phone=>`<option value="${esc(phone)}">${esc(phone)}</option>`).join('');
+   $('profile-phone').innerHTML=`<option value="">${t('بدون داخلی','No phone')}</option>`+phones.map(phone=>`<option value="${esc(phone)}">${esc(phone)}</option>`).join('');
    $('profile-phone').value=profile.phone||'';
    const dial=profile.dial_options||{queues:[],extensions:[]};
    $('profile-dial-queue').innerHTML=dial.queues.map(q=>`<option value="${esc(q)}">${esc(q)}</option>`).join('');
    $('profile-dial-extension').innerHTML=dial.extensions.filter(e=>e!==String(profile.phone||'').split('/')[1]).map(e=>`<option value="${esc(e)}">${esc(e)}</option>`).join('');
    $('profile-dial').disabled=!profile.phone||!dial.queues.length||!$('profile-dial-extension').value;$('profile-dial-feedback').textContent=!dial.queues.length?t('مجوز Dial برای صف‌های شما فعال نیست یا ارتباط زنده قطع است.','No Dial grant for your queues, or live connection unavailable.'):'';
-   $('profile-feedback').textContent=profile.inventory_available?'':t('فهرست داخلی‌ها فعلاً قابل بررسی نیست؛ تغییر داخلی غیرفعال است.','Extension inventory unavailable; phone changes are unavailable.');
-   $('profile-phone').disabled=!profile.inventory_available&&!['admin','viewer'].includes(profile.role);if(!profile.inventory_available&&['admin','viewer'].includes(profile.role))$('profile-feedback').textContent=t('فهرست داخلی‌ها در دسترس نیست؛ فقط حفظ یا حذف داخلی فعلی ممکن است.','Inventory unavailable; you can retain or clear the current phone.');
+   $('profile-phone').disabled=!profile.can_change_phone;
+   $('profile-feedback').textContent=!profile.can_change_phone?t('برای تغییر داخلی اختصاص‌یافته، با مدیر سیستم تماس بگیرید.','Contact your administrator to change your assigned extension.'):profile.inventory_available?'':t('فهرست داخلی‌ها در دسترس نیست. می‌توانید داخلی فعلی را نگه دارید یا حذف کنید.','Inventory unavailable. You can retain or clear your current extension.');
    $('profile-status').innerHTML=`<h3>${t('وضعیت من در صف‌ها','My queue status')}</h3><div class="own-status-list">${Object.entries(queues).flatMap(([name,q])=>Object.entries(q.members||{}).filter(([key,m])=>(cfg.own_interfaces||[]).includes(m.Location||key)).map(([key,m])=>`<div class="own-status-row"><b>${esc(name)}</b>${stateChip(m)}<button type="button" class="pause-agent" data-queue="${esc(name)}" data-agent="${esc(m.Location||key)}" data-paused="${bool(m.Paused)?'false':'true'}">${bool(m.Paused)?t('آماده دریافت تماس','Ready for calls'):t('تغییر وضعیت','Change status')}</button></div>`)).join('')||`<p>${t('داخلی شما عضو صف قابل مشاهده نیست.','Your extension is not a member of a visible queue.')}</p>`}</div>`;updateActionAvailability();$('profile-dialog').showModal();
   }catch(error){if(open)alert(t('دریافت پروفایل ناموفق: ','Could not load profile: ')+error.message);}
  }

@@ -179,6 +179,21 @@ body .wallboard-stage :is(.sq-state--ready,.sq-state--talking,.sq-state--paused,
 .queue-alert{border-color:#d43c4d!important;box-shadow:inset 4px 0 0 #d43c4d!important;background:color-mix(in srgb,var(--card) 93%,#d43c4d)!important}
 #wallboard-stage:fullscreen,body.wallboard #wallboard-stage{position:fixed;inset:0;z-index:1000;width:100vw;height:100vh;max-height:none;overflow:auto;border-radius:0;margin:0;padding:24px;background:#071c30}
 body.wallboard #context-help,body.wallboard .page-heading,body.wallboard .toolbar,body.wallboard .monitor-options{display:none!important}
+
+@media (max-width:600px) {
+  body .sidebar {
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);
+    align-items:center;
+    gap:10px;
+  }
+  .sidebar .brand {min-width:0;padding:0;gap:8px}
+  .sidebar .brand > span:last-child {min-width:0}
+  .sidebar .brand b {display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sidebar .mobile-view-jump {margin-top:0}
+  body .toolbar label.search {flex-wrap:nowrap}
+  body .toolbar label.search input {min-width:0;flex:1}
+}
 .wallboard-private-control{display:flex;align-items:center;gap:10px;color:#c7dced;font-size:14px}
 .wallboard-private-control input{width:20px;height:20px;min-height:20px}
 .wb-page-note{grid-column:1/-1;color:#bbd2e2;font-size:12px;margin-top:8px}

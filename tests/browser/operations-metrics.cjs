@@ -87,6 +87,10 @@ async function main() {
         await waitText(page, level, '0%');
         await waitText(page, '#queue-cards .queue-service-ring b', '0%');
         await page.locator('#queue-filter').selectOption('');
+        await page.locator('#search').fill('no synthetic queue matches this');
+        await waitText(page, '#trend-wait', 'No samples for this selection.');
+        await page.locator('#search').fill('');
+        await waitText(page, '#trend-wait .chart-reading strong', '3');
         observedToday.queues[names[2]] = { answered: 1, abandoned: 0, sla_known: 0, sla_met: 0 };
         await refresh();
         await waitText(page, level, '—');
@@ -102,12 +106,17 @@ async function main() {
         await waitText(page, abandon, '—');
         assert.equal(await page.locator('body').evaluate(element => element.classList.contains('dark')), true);
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+        assert.ok(await page.locator('#metrics .metric b').first().evaluate(
+            element => element.getBoundingClientRect().bottom <= window.innerHeight));
         await capture(page, '03-fixed-fa-dark-mobile.png');
         await page.locator('#view-jump').selectOption('wallboard');
         await waitText(page, wallboardAbandon, '—');
         assert.equal(await page.locator('#wallboard-view').isVisible(), true);
+        await page.locator('#wallboard-stage').scrollIntoViewIfNeeded();
         await capture(page, '04-fixed-fa-dark-wallboard-mobile.png');
-        console.log('Passed: missing coverage, observed zero, abandon-only and weighted service level, unknown threshold, queue dialog, wallboard, two locales and themes.');
+        await page.getByRole('button', { name: 'خروج', exact: true }).click();
+        await page.waitForURL('**/login');
+        console.log('Passed: missing coverage, observed zero, abandon-only and weighted service level, unknown threshold, filter-scoped trends, queue dialog, wallboard, two locales and themes, sign-out.');
     } finally {
         await browser.close();
     }
