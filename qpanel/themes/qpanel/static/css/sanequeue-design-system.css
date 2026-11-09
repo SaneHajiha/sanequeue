@@ -109,6 +109,7 @@ body .toolbar :is(input,select){min-height:42px}
 body :is(.toolbar,.report-filters,.settings-form,.monitor-options) label{line-height:1.5}
 body :is(button,select,input,textarea){border-radius:9px}
 body .primary{background:var(--accent);border-color:var(--accent)}
+body.dark .primary{color:#112535}
 body .primary:hover{filter:brightness(1.08)}
 body .badge{min-height:30px;align-items:center}
 body .badge.pending{color:var(--sq-warning)}
@@ -140,6 +141,38 @@ body #live-view .queue-cards{gap:11px}
 body #live-view .ref-waiting .table-wrap{max-height:500px;overflow:auto}
 body :is(.queue-identity-badge,.queue-focus-link,bdi){unicode-bidi:isolate}
 body .sidebar :is(button,a):focus-visible{outline-color:#8ce7e4!important}
+
+.heading-actions { flex-wrap:wrap; }
+#screen-search-open { display:inline-flex; align-items:center; gap:12px; color:var(--ink); background:var(--card); border:1px solid var(--line); }
+#screen-search-open[hidden] { display:none; }
+#screen-search-open kbd { padding:2px 6px; border:1px solid var(--line); border-radius:6px; color:var(--muted); font-size:.72rem; }
+#screen-search {
+  width:min(34rem,calc(100% - 24px)); max-height:min(40rem,calc(100dvh - 24px));
+  padding:20px; border:1px solid var(--line); border-radius:16px;
+  background:var(--card); color:var(--ink); box-shadow:var(--shadow);
+}
+#screen-search::backdrop { background:#071522b8; }
+.screen-search-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.screen-search-heading h2 { margin:0; font-size:1.25rem; }
+.screen-search-heading p, #screen-search [role=status] { margin-block:5px 10px; color:var(--muted); }
+#screen-search label { display:block; margin-block-start:14px; font-weight:700; }
+#screen-search input { width:100%; min-height:44px; margin-block-start:5px; }
+#screen-search ul { list-style:none; padding:0; margin:0; max-height:min(22rem,43dvh); overflow:auto; }
+#screen-search li button {
+  display:grid; gap:2px; width:100%; min-height:44px; text-align:start;
+  padding:8px 12px; margin-block:3px; background:var(--soft); color:var(--ink);
+}
+#screen-search li small { color:var(--muted); }
+#clear-live-filters { align-self:center; min-height:40px; white-space:nowrap; }
+#queues-view .queue-focus-card.stale { opacity:1; }
+#queues-view .queue-focus-card .focus-top h3 { color:var(--ink); }
+#queues-view .queue-focus-card .health-pill.stale {
+  background:var(--card); color:var(--ink); border:1px dashed var(--muted);
+}
+body.dark #test-controls-enable { background:#a52e43; color:#fff; }
+body [role=region][tabindex="0"]:focus-visible {
+  outline:2px solid var(--accent); outline-offset:2px;
+}
 body .sq-nav-category:first-of-type{margin-top:10px}
 @media(min-width:1450px){
   body #live-view .metrics{grid-template-columns:repeat(6,minmax(0,1fr))}

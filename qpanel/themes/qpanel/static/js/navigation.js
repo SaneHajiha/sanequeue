@@ -8,6 +8,8 @@
  const title=document.getElementById('view-title');
  const savedKey='sanequeue.navigation';
  const report=document.getElementById('reports-view');
+ const browser=typeof window!=='undefined'&&window.history&&window.location?window:null;
+ let restoring=false;
  let reportPicker=null;
  function reportSection(target='history-summary-section'){
   if(!report)return;
@@ -67,6 +69,35 @@
   reportSection();
  }
  const remember=(view,target='')=>{try{sessionStorage.setItem(savedKey,JSON.stringify({view,target}));}catch{}};
+ function destination(view,target=''){
+  return [...nav.querySelectorAll('button[data-module-view],button[data-view]')].find(button=>
+   target?button.dataset.moduleView===view&&button.dataset.moduleTarget===target:button.dataset.view===view);
+ }
+ function address(view,target=''){
+  if(!browser||restoring)return;
+  const url=new URL(browser.location.href);
+  if(url.searchParams.get('sq_view')===view&&(url.searchParams.get('sq_section')||'')===target)return;
+  url.searchParams.set('sq_view',view);
+  if(target)url.searchParams.set('sq_section',target);else url.searchParams.delete('sq_section');
+  browser.history.pushState(null,'',url);
+ }
+ function restoreAddress(useDefault=false){
+  if(!browser)return false;
+  const url=new URL(browser.location.href);
+  const params=url.searchParams;
+  const view=params.get('sq_view');
+  if(!view&&!useDefault)return false;
+  const target=params.get('sq_section')||'';
+  const button=destination(view,target)||destination(view)||destination('live');
+  restoring=true;
+  try{button?.click();}finally{restoring=false;}
+  if(view&&button&&(view!==(button.dataset.moduleView||button.dataset.view)||target!==(button.dataset.moduleTarget||''))){
+   params.set('sq_view',button.dataset.moduleView||button.dataset.view);
+   if(button.dataset.moduleTarget)params.set('sq_section',button.dataset.moduleTarget);else params.delete('sq_section');
+   browser.history.replaceState(null,'',url);
+  }
+  return true;
+ }
  groups.forEach(group=>group.addEventListener('toggle',()=>{
   if(group.open)groups.forEach(other=>{if(other!==group)other.open=false;});
  }));
@@ -84,18 +115,23 @@
   if(link){
    const button=[...nav.querySelectorAll('button[data-view]')].find(b=>b.dataset.view===link.dataset.moduleView);
    if(!button)return;
-   if(document.body.dataset.view!==link.dataset.moduleView)button.click();
+   if(document.body.dataset.view!==link.dataset.moduleView){
+    const wasRestoring=restoring;
+    restoring=true;
+    try{button.click();}finally{restoring=wasRestoring;}
+   }
    if(link.dataset.moduleView==='reports')reportSection(link.dataset.moduleTarget);
+   if(link.dataset.moduleView==='reports'&&title)title.textContent=link.textContent.trim();
    remember(link.dataset.moduleView,link.dataset.moduleTarget);
+   address(link.dataset.moduleView,link.dataset.moduleTarget);
    nav.querySelectorAll('.module-shortcut').forEach(item=>{if(item===link)item.setAttribute('aria-current','location');else item.removeAttribute('aria-current');});
    requestAnimationFrame(()=>{
     const target=document.getElementById(link.dataset.moduleTarget);
     if(target){
-     // The CDR section uses display:contents so the filter, cards and charts
-     // can share the report grid. Scroll to the page top instead of trying
-     // to scroll a boxless section past the page heading.
-     const cdr=link.dataset.moduleTarget==='history-cdr-section',focusTarget=cdr?(document.getElementById('history-cdr-heading')||target):target;
-     (cdr?(document.querySelector('.topbar')||focusTarget):focusTarget).scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+     // Show the shared date and scope controls before the results.
+     const isReport=link.dataset.moduleView==='reports';
+     const focusTarget=isReport?(document.querySelector('.page-heading h1')||target):target;
+     (isReport?(document.querySelector('.topbar')||focusTarget):focusTarget).scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
      focusTarget.tabIndex=-1;focusTarget.focus({preventScroll:true});
     }
    });
@@ -104,6 +140,7 @@
   if(view){
    if(view.dataset.view==='reports')reportSection();
    activate(view.dataset.view);remember(view.dataset.view);
+   address(view.dataset.view);
    nav.querySelectorAll('.module-shortcut').forEach(item=>item.removeAttribute('aria-current'));
    document.querySelector('.topbar')?.scrollIntoView({block:'start',behavior:'instant'});
   }
@@ -129,6 +166,7 @@
   jump.value=selected;
   jump.onchange=()=>{
    const option=jump.selectedOptions[0];
+   if(!option)return;
    const selector=option.dataset.target?'[data-module-target="'+option.dataset.target+'"]':'[data-view="'+option.dataset.view+'"]';
    nav.querySelector(selector)?.click();
    jump.value=option.value;
@@ -138,11 +176,11 @@
  observer.observe(document.body,{attributes:true,attributeFilter:['data-view']});
  activate(document.body.dataset.view);
  try{
-  const saved=JSON.parse(sessionStorage.getItem(savedKey)||'null');
-  if(saved){
-   const destination=[...nav.querySelectorAll('button[data-module-view],button[data-view]')].find(button=>
-    saved.target?button.dataset.moduleView===saved.view&&button.dataset.moduleTarget===saved.target:button.dataset.view===saved.view);
-   destination?.click();
+  browser?.addEventListener('popstate',()=>restoreAddress(true));
+  if(!restoreAddress()){
+   const saved=JSON.parse(sessionStorage.getItem(savedKey)||'null');
+   restoring=true;
+   try{if(saved)destination(saved.view,saved.target)?.click();}finally{restoring=false;}
   }
  }catch{/* Navigation preferences never prevent access to the default view. */}
  if(title)title.setAttribute('aria-live','polite');

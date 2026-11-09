@@ -91,9 +91,14 @@
  }
  const serviceWeight=q=>kpiPeriod==='today'?n(q.Completed)+n(q.Abandoned):n(q.Completed);
  const hasServiceLevel=q=>serviceWeight(q)>0&&countValue(q.ServicelevelPerf)!==null;
+ const liveSearchKey=value=>String(value).normalize('NFKD').toLocaleLowerCase()
+  .replace(/\p{M}|\u0640/gu,'').replace(/[يى]/g,'ی').replace(/ك/g,'ک')
+  .replace(/[۰-۹]/g,digit=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+  .replace(/[٠-٩]/g,digit=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+  .replace(/[\u200c\u200d]/g,' ').replace(/\s+/g,' ').trim();
  function selected(){
-  const filter=$('queue-filter').value,search=$('search').value.trim().toLocaleLowerCase();
-  return Object.entries(queues).filter(([name,q])=>(!filter||name===filter)&&(!search||name.toLocaleLowerCase().includes(search)||Object.entries(q.members||{}).some(([key,m])=>(key+' '+(m.Name||'')).toLocaleLowerCase().includes(search)))).map(([name,q])=>{
+  const filter=$('queue-filter').value,search=liveSearchKey($('search').value);
+  return Object.entries(queues).filter(([name,q])=>(!filter||name===filter)&&(!search||liveSearchKey(name).includes(search)||Object.entries(q.members||{}).some(([key,m])=>liveSearchKey(key+' '+(m.Name||'')).includes(search)))).map(([name,q])=>{
    if(kpiPeriod!=='today')return [name,{...q,Completed:countValue(q.Completed),Abandoned:countValue(q.Abandoned)}];
    const m=observedToday.queues?.[name]||{};
    const answered=observedToday.available?n(m.answered):null,abandoned=observedToday.available?n(m.abandoned):null;
@@ -232,7 +237,7 @@
    const agents=members.map(([key,m])=>`<div class="wb-agent"><span class="wb-agent-title">${esc(m.Name||key)}<small dir="ltr">${esc(key)}</small></span>${stateChip(m)}</div>`).join('')||`<p class="wb-empty">${t('بدون کارشناس','No agents')}</p>`;
    const pageSize=12,page=Math.floor(Date.now()/15000)%Math.max(1,Math.ceil(calls.length/pageSize)),start=page*pageSize;
    const callerRows=(calls.slice(start,start+pageSize).map(x=>`<div class="wb-caller"><b>${wallboardPrivate?`<bdi dir="ltr">${esc(x.CallerIDNum||x.CallerIDName||'—')}</bdi>`:t('نفر','Position')+' '+fmt(x.Position)}</b><span class="wb-wait">${duration(x.Wait)}</span><small>${n(x.Wait)>=n($('threshold').value)?t('انتظار طولانی','Long wait'):t('در انتظار','Waiting')}</small></div>`).join('')||`<p class="wb-empty">${t('تماس منتظر وجود ندارد','No callers waiting')}</p>`)+(calls.length>pageSize?`<p class="wb-page-note">${fmt(start+1)}–${fmt(Math.min(start+pageSize,calls.length))} / ${fmt(calls.length)} · ${t('چرخش خودکار ۱۵ ثانیه','Rotates every 15 seconds')}</p>`:'');
-   return `<article style="--queue-accent:${queueAccent(name)}" class="wallboard-v14-card ${n(q.Calls)>0&&c.ready===0?'urgent':''} ${livePolicyAlerts.some(alert=>alert.queue===name)?'queue-alert':''}"><div class="wb-card-header"><div><small>${t('صف تماس','CALL QUEUE')} <bdi dir="ltr">${esc(name)}</bdi></small><h3>${esc(queueName)}</h3></div><span class="wb-queue-status">${(n(q.Calls)>0&&c.ready===0)||livePolicyAlerts.some(alert=>alert.queue===name)?t('نیازمند توجه','Attention'):t('آنلاین','Live')}</span></div><div class="wb-hero-numbers"><div class="wb-big-wait"><strong>${fmt(q.Calls)}</strong><span>${t('تماس منتظر','Waiting now')}</span></div><div class="wb-big-waittime"><strong>${duration(longest)}</strong><span>${t('بیشترین انتظار فعلی','Longest live wait')}</span></div></div><div class="wb-queue-stats"><div><small>${t('پاسخ‌داده','Answered')}</small><b>${fmt(q.Completed)}</b></div><div><small>${t('رهاشده','Abandoned')}</small><b>${fmt(q.Abandoned)}</b></div><div><small>${t('آماده','Ready')}</small><b>${fmt(c.ready)} / ${fmt(members.length)}</b></div><div><small>${t('سطح خدمت','Service level')}</small><b>${sl}</b></div><div><small>${t('میانگین انتظار','Avg hold')}</small><b dir="ltr">${queueMean(q,'Holdtime')}</b></div><div><small>${t('میانگین مکالمه','Avg talk')}</small><b dir="ltr">${queueMean(q,'TalkTime')}</b></div></div><div class="wb-two-cols"><div><h4>${t('کارشناسان','Agents')} <em>${members.length}</em></h4><div class="wb-agents">${agents}</div></div><div><h4>${t('تماس‌های منتظر','Waiting room')} <em>${calls.length}</em></h4><div class="wb-callers">${callerRows}</div></div></div></article>`;
+   return `<article style="--queue-accent:${queueAccent(name)}" class="wallboard-v14-card ${n(q.Calls)>0&&c.ready===0?'urgent':''} ${livePolicyAlerts.some(alert=>alert.queue===name)?'queue-alert':''}"><div class="wb-card-header"><div><small>${t('صف تماس','CALL QUEUE')} <bdi dir="ltr">${esc(name)}</bdi></small><h3>${esc(queueName)}</h3></div><span class="wb-queue-status">${(n(q.Calls)>0&&c.ready===0)||livePolicyAlerts.some(alert=>alert.queue===name)?t('نیازمند توجه','Attention'):t('آنلاین','Live')}</span></div><div class="wb-hero-numbers"><div class="wb-big-wait"><strong>${fmt(q.Calls)}</strong><span>${t('تماس منتظر','Waiting now')}</span></div><div class="wb-big-waittime"><strong>${duration(longest)}</strong><span>${t('بیشترین انتظار فعلی','Longest live wait')}</span></div></div><div class="wb-queue-stats"><div><small>${t('پاسخ‌داده','Answered')}</small><b>${fmt(q.Completed)}</b></div><div><small>${t('رهاشده','Abandoned')}</small><b>${fmt(q.Abandoned)}</b></div><div><small>${t('آماده','Ready')}</small><b>${fmt(c.ready)} / ${fmt(members.length)}</b></div><div><small>${t('سطح خدمت','Service level')}</small><b>${sl}</b></div><div><small>${t('میانگین انتظار','Avg hold')}</small><b dir="ltr">${queueMean(q,'Holdtime')}</b></div><div><small>${t('میانگین مکالمه','Avg talk')}</small><b dir="ltr">${queueMean(q,'TalkTime')}</b></div></div><div class="wb-two-cols"><div><h4>${t('کارشناسان','Agents')} <em>${members.length}</em></h4><div class="wb-agents" role="region" tabindex="0" aria-label="${t('کارشناسان','Agents')}">${agents}</div></div><div><h4>${t('تماس‌های منتظر','Waiting room')} <em>${calls.length}</em></h4><div class="wb-callers">${callerRows}</div></div></div></article>`;
   }).join('')||`<div class="wb-empty-state">${t('برای وال‌برد یک یا چند صف را انتخاب کنید.','Select queues for this wallboard.')}</div>`;
   $('wallboard-summary').innerHTML=[
     [t('صف‌های انتخابی','Selected queues'),fmt(chosen.length)],
@@ -352,8 +357,8 @@
   renderWallboard(data,alerts);
   calls.sort((a,b)=>n(b.c.Wait)-n(a.c.Wait));
   $('call-rows').innerHTML=calls.map(({name,c})=>`<tr><td><bdi>${esc(c.CallerIDName||masked(c.CallerIDNum)||'—')}</bdi>${c.CallerIDName?`<small> · <bdi>${esc(masked(c.CallerIDNum))}</bdi></small>`:''}</td><td>${queueBadge(name)}</td><td><bdi dir="ltr">${esc(trunkLabel(c))}</bdi></td><td>${fmt(c.Position)}</td><td><span class="timer ltr ${n(c.Wait)>=threshold?'overdue':''}">${duration(c.Wait)}</span></td><td>${fmt(c.Priority)}${supervisor?`<div class="row-actions"><button data-action="first" data-queue="${esc(name)}" data-channel="${esc(c.Channel)}">${t('ابتدای صف','Move to front')}</button><button data-action="priority" data-queue="${esc(name)}" data-channel="${esc(c.Channel)}">${t('اولویت','Priority')}</button><button data-action="hangup" data-queue="${esc(name)}" data-channel="${esc(c.Channel)}">${t('قطع','Hang up')}</button></div>`:''}</td></tr>`).join('')||empty(t('در حال حاضر تماسی در انتظار نیست.','No calls waiting right now.'),6);
-  const stateFilter=$('status-filter').value,search=$('search').value.trim().toLocaleLowerCase();
-  const shown=agents.filter(a=>(!stateFilter||a.state===stateFilter)&&(!search||(a.name+' '+a.key+' '+(a.m.Name||'')).toLocaleLowerCase().includes(search)));
+  const stateFilter=$('status-filter').value,search=liveSearchKey($('search').value);
+  const shown=agents.filter(a=>(!stateFilter||a.state===stateFilter)&&(!search||liveSearchKey(a.name+' '+a.key+' '+(a.m.Name||'')).includes(search)));
   // Removed survey-only feature. Ordinary, user-defined Pause reasons remain.
 
   $('agent-rows').innerHTML=shown.map(({name,key,m,state})=>`<tr class="agent-table-row"><td><div class="agent-name-cell"><span class="agent-avatar">${esc((m.Name||key).slice(0,1))}</span><div><b>${esc(m.Name||key)}</b><small class="ltr">${esc(key)}</small></div></div></td><td>${queueBadge(name)}</td><td><span class="status"><i class="dot ${state}"></i>${esc(state==='busy'?(bool(m.InCall)?t('در مکالمه','In call'):[6,7].includes(n(m.Status))?t('زنگ می‌خورد','Ringing'):labels[state]):labels[state])}</span>${state==='paused'&&m.PausedReason?`<small class="pause-reason-display">${esc((policyState?.queues?.[name]?.pause_reasons||defaultPauseReasons).find(r=>r.id===m.PausedReason)?.label||m.PausedReason)}</small>`:''}</td><td>${fmt(m.CallsTaken)}</td><td>${m.LiveDuration?`<span class="ltr timer">${esc(m.LiveDuration)}</span><small class="ltr"> ${esc(masked(m.LiveCaller||''))}</small>`:esc(m.LastCallAgo||'—')}</td><td class="agent-actions-cell">${(supervisor||(cfg.role==='agent'&&cfg.own_interfaces.includes(m.Location||key)))?`<div class="agent-actions-shell"><button class="pause-agent agent-primary-action" data-queue="${esc(name)}" data-agent="${esc(m.Location||key)}" data-paused="${state==='paused'?'false':'true'}"><span aria-hidden="true">${state==='paused'?'▶':'Ⅱ'}</span>${state==='paused'?t('ادامه کار','Resume'):t('توقف','Pause')}</button>${supervisor?`<div class="agent-action-grid">${['spy','whisper','barge','penalty','remove'].map(action=>`<button type="button" data-action="${action}" data-queue="${esc(name)}" data-agent="${esc(m.Location||key)}" class="agent-operation agent-operation--${action}" title="${esc(actionNames[action])}">${esc(actionNames[action])}</button>`).join('')}</div>`:''}</div>`:'—'}</td></tr>`).join('')||empty(t('کارشناسی با این فیلتر پیدا نشد.','No matching agents.'),6);
@@ -427,7 +432,15 @@
   finally{pending=false;$('refresh').disabled=false;if(!socket||socket.readyState!==WebSocket.OPEN)timer=setTimeout(refresh,document.hidden?Math.max(cfg.interval,15000):cfg.interval);}
  }
  $('refresh').onclick=refresh;$('status-filter').onchange=render;
- function updateQueueScope(){updateSamples(currentDataSource);render();}
+ const clearFilters=$('clear-live-filters');
+ function updateQueueScope(){
+  if(clearFilters)clearFilters.hidden=!($('search').value.trim()||$('queue-filter').value);
+  updateSamples(currentDataSource);render();
+ }
+ if(clearFilters)clearFilters.onclick=()=>{
+  $('search').value='';$('queue-filter').value='';
+  updateQueueScope();$('search').focus();
+ };
  $('search').oninput=updateQueueScope;
  $('queue-filter').onchange=updateQueueScope;
  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('refresh').hidden)refresh();});
@@ -586,7 +599,7 @@
 
  $('queue-focus-cards').addEventListener('click',event=>{const button=event.target.closest('[data-queue-view]');if(!button)return;const target=button.dataset.queueView;if(!['calls','waiting','agents'].includes(target)||(cfg.allowed_sections||[]).includes(target)===false)return;$('queue-filter').value=button.dataset.queue;updateQueueScope();showView(target);});
  $('queue-cards').addEventListener('click',event=>{const button=event.target.closest('.queue-focus-link');if(!button)return;$('queue-filter').value=button.dataset.focus;updateQueueScope();showView('queues');});
- document.addEventListener('keydown',event=>{if(event.altKey||event.ctrlKey||event.metaKey||/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)||$('action-dialog').open)return;if(event.key==='/'){event.preventDefault();$('search').focus();}if(event.key.toLowerCase()==='r'){event.preventDefault();refresh();}});
+ document.addEventListener('keydown',event=>{if(event.altKey||event.ctrlKey||event.metaKey||/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)||document.activeElement?.isContentEditable||document.querySelector('dialog[open]'))return;if(event.key==='/'&&$('search').getClientRects().length){event.preventDefault();$('search').focus();}if(event.key.toLowerCase()==='r'){event.preventDefault();refresh();}});
 
  document.querySelector('.brand')?.setAttribute('title','SaneQueue — ' + cfg.build_version);
 
